@@ -100,6 +100,8 @@ proc get_symbol*(i: int64): string {.inline.}
 
 proc str*(v: Value): string
 
+proc to_value*(v: char): Value
+
 #################### Common ######################
 
 proc todo*() =
