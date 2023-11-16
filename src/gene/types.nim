@@ -98,6 +98,8 @@ proc `$`*(self: Reference): string
 proc to_ref*(v: Value): Reference
 proc get_symbol*(i: int64): string {.inline.}
 
+proc str*(v: Value): string
+
 #################### Common ######################
 
 proc todo*() =
