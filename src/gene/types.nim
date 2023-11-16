@@ -245,7 +245,10 @@ proc `[]`*(self: Value, i: int): Value {.inline.} =
     of GENE_PREFIX:
       todo("VkGene")
     of SHORT_STR_PREFIX, LONG_STR_PREFIX:
-      todo("VkString")
+      if i >= self.str().len:
+        return NIL
+      else:
+        return self.str()[i].to_value()
     of SYMBOL_PREFIX:
       todo("VkSymbol")
     else:
