@@ -95,12 +95,13 @@ const EMPTY_SYMBOL = 0xFFFA_0000_0000_0000u64
 
 proc `$`*(self: Value): string
 proc `$`*(self: Reference): string
+
 proc to_ref*(v: Value): Reference
+
+proc str*(v: Value): string {.inline.}
+proc to_value*(v: char): Value {.inline.}
+
 proc get_symbol*(i: int64): string {.inline.}
-
-proc str*(v: Value): string
-
-proc to_value*(v: char): Value
 
 #################### Common ######################
 

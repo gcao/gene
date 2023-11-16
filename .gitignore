@@ -18,3 +18,4 @@ build/
 *.dylib
 callgrind.out*
 scratch*
+.aider*
