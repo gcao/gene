@@ -73,13 +73,14 @@ const GENE_PREFIX = 0x7FF8
 const GENE_MASK = 0x7FF8_0000_0000_0000u64
 
 const OTHER_PREFIX = 0x7FFE
-const OTHER_MASK = 0x7FFE_FF00_0000_0000u64
 
 const VOID* = cast[Value](0x7FFE_0000_0000_0000u64)
 const PLACEHOLDER* = cast[Value](0x7FFE_0100_0000_0000u64)
 
-const CHAR_PREFIX = 0xFFFE
-const CHAR_MASK = 0xFFFE_0000_0000_0000u64
+const CHAR_MASK = 0x7FFE_0200_0000_0000u64
+const CHAR2_MASK = 0x7FFE_0300_0000_0000u64
+const CHAR3_MASK = 0x7FFE_0400_0000_0000u64
+const CHAR4_MASK = 0x7FFE_0500_0000_0000u64
 
 const SHORT_STR_PREFIX  = 0xFFF8
 const LONG_STR_PREFIX = 0xFFF9
@@ -100,6 +101,7 @@ proc to_ref*(v: Value): Reference
 
 proc str*(v: Value): string {.inline.}
 proc to_value*(v: char): Value {.inline.}
+converter to_value*(v: Rune): Value {.inline.}
 
 proc get_symbol*(i: int64): string {.inline.}
 
@@ -167,21 +169,30 @@ proc kind*(v: Value): ValueKind {.inline.} =
       return r.kind
     of GENE_PREFIX:
       return VkGene
-    of CHAR_PREFIX:
-      return VkChar
+    # of CHAR_PREFIX:
+    #   return VkChar
     of SHORT_STR_PREFIX, LONG_STR_PREFIX:
       return VkString
     of SYMBOL_PREFIX:
       return VkSymbol
     of OTHER_PREFIX:
-      let other_info = cast[Value](bitand(v1, OTHER_MASK))
-      case other_info:
-        of VOID:
+      case cast[int64](v1.shl(16).shr(56)):
+        of 0x00:
           return VkVoid
-        of PLACEHOLDER:
+        of 0x01:
           return VkPlaceholder
+        of 0x02, 0x03, 0x04, 0x05:
+          return VkChar
         else:
           todo()
+      # let other_info = cast[Value](bitand(v1, OTHER_MASK))
+      # case other_info:
+      #   of VOID:
+      #     return VkVoid
+      #   of PLACEHOLDER:
+      #     return VkPlaceholder
+      #   else:
+      #     todo()
     else:
       if bitand(v1, I64_MASK) == 0:
         return VkInt
@@ -250,10 +261,17 @@ proc `[]`*(self: Value, i: int): Value {.inline.} =
     of GENE_PREFIX:
       todo("VkGene")
     of SHORT_STR_PREFIX, LONG_STR_PREFIX:
-      if i >= self.str().len:
-        return NIL
-      else:
-        return self.str()[i].to_value()
+      var j = 0
+      # TODO: optimize
+      for r in self.str().runes:
+        if i == j:
+          return r
+        j.inc()
+      # return self.str().rune_at(i).to_value()
+      # if i >= self.str().len:
+      #   return NIL
+      # else:
+      #   return self.str()[i].to_value()
     of SYMBOL_PREFIX:
       todo("VkSymbol")
     else:
@@ -276,7 +294,7 @@ proc size*(self: Value): int {.inline.} =
     of GENE_PREFIX:
       todo("VkGene")
     of SHORT_STR_PREFIX, LONG_STR_PREFIX:
-      todo("VkString")
+      return self.str().to_runes().len
     of SYMBOL_PREFIX:
       todo("VkSymbol")
     else:
@@ -380,9 +398,15 @@ proc to_value*(v: string): Value {.inline.} =
       return cast[Value](bitor(LONG_STR_MASK, i))
 
 converter to_value*(v: Rune): Value {.inline.} =
-  let prefix = 0x7FFC_0800_0000_0000'u64
-  let runeValue = v.ord.uint64
-  cast[Value](bitor(prefix, runeValue))
+  let rune_value = v.ord.uint64
+  if rune_value > 0xFF_FFFF:
+    return cast[Value](bitor(CHAR4_MASK, rune_value))
+  elif rune_value > 0xFFFF:
+    return cast[Value](bitor(CHAR3_MASK, rune_value))
+  elif rune_value > 0xFF:
+    return cast[Value](bitor(CHAR2_MASK, rune_value))
+  else:
+    return cast[Value](bitor(CHAR_MASK, rune_value))
 
 #################### Symbol #####################
 

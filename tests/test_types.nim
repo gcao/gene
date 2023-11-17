@@ -17,6 +17,7 @@ test "Value kind":
   check a.addr.to_value().kind == VkPointer
 
   check 'a'.to_value().kind == VkChar
+  check  "你".rune_at(0).to_value().kind == VkChar
 
   check "".to_value().kind == VkString
   check "a".to_value().kind == VkString
@@ -73,9 +74,10 @@ test "Value conversion":
 
 test "String / char":
   check "abc".to_value()[0] == 'a'.to_value()
-  # check "你".to_value()[0] == "你".rune_at(0)
-  # check "你从哪里来？".to_value()[0] == "你".rune_at(0)
-  # check "你从哪里来？".to_value()[1] == "从".rune_at(0)
+  check "你".to_value()[0] == "你".rune_at(0)
+  check "你从哪里来？".to_value()[0] == "你".rune_at(0)
+  check "你从哪里来？".to_value()[1] == "从".rune_at(0)
+  check "你".to_value().size == 1
 
 test "Array":
   check new_array().size == 0
