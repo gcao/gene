@@ -380,7 +380,9 @@ proc to_value*(v: string): Value {.inline.} =
       return cast[Value](bitor(LONG_STR_MASK, i))
 
 converter to_value*(v: Rune): Value {.inline.} =
-  todo()
+  let prefix = 0x7FFC_0800_0000_0000'u64
+  let runeValue = v.ord.uint64
+  cast[Value](bitor(prefix, runeValue))
 
 #################### Symbol #####################
 
