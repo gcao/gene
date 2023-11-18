@@ -20,6 +20,9 @@ converter seq_to_gene*(self: seq[string]): Value =
     r.arr.add(item.to_value())
   result = r.to_value()
 
+converter to_value*(self: openArray[(string, Value)]): Value =
+  new_map(self.to_table())
+
 proc cleanup*(code: string): string =
   result = code
   result.stripLineEnd

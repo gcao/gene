@@ -112,8 +112,8 @@ test_parser "+foo+", to_symbol("+foo+")
 #   new_gene_datetime(init_date_time(02, cast[Month](12), 2020, 10, 11, 12, utc()))
 # test_parser "10:11:12", new_gene_time(10, 11, 12)
 
-# test_parser "{}", Table[string, Value]()
-# test_parser "{^a 1}", {"a": new_gene_int(1)}.toTable
+test_parser "{}", new_map(Table[string, Value]())
+test_parser "{^a 1}", {"a": 1.to_value()}.to_value()
 
 # test_parser "{^a^b 1}", {"a": new_gene_map({"b": new_gene_int(1)}.toTable)}.toTable
 # test_parser "{^a^^b}", {"a": new_gene_map({"b": new_gene_bool(true)}.toTable)}.toTable
@@ -130,7 +130,7 @@ test_parser "+foo+", to_symbol("+foo+")
 #   assert r.gene_props["a"].map["b"] == new_gene_bool(true)
 #   assert r.gene_children[0] == 1
 
-# test_parser "[]", new_gene_vec()
+test_parser "[]", @[]
 # test_parser "[,]", new_gene_vec()
 # test_parser "[1 2]", new_gene_vec(new_gene_int(1), new_gene_int(2))
 # test_parser "[1, 2]", new_gene_vec(new_gene_int(1), new_gene_int(2))

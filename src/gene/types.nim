@@ -109,6 +109,9 @@ const EMPTY_SYMBOL = 0xFFFA_0000_0000_0000u64
 
 #################### Definitions #################
 
+proc kind*(v: Value): ValueKind {.inline.}
+proc `==`*(a, b: Value): bool {.no_side_effect.}
+
 proc `$`*(self: Value): string
 proc `$`*(self: Reference): string
 
@@ -142,6 +145,24 @@ proc to_binstr*(v: int64): string =
 
 var REFS*: ManagedReferences
 
+proc `==`*(a, b: Reference): bool =
+  if a.is_nil:
+    return b.is_nil
+
+  if b.is_nil:
+    return false
+
+  if a.kind != b.kind:
+    return false
+
+  case a.kind:
+    of VkArray:
+      return a.arr == b.arr
+    of VkMap:
+      return a.map == b.map
+    else:
+      todo()
+
 proc `$`*(self: Reference): string =
   $self.kind
 
@@ -156,7 +177,8 @@ proc add_ref*(v: Reference): int64 =
     # echo REFS.data, " ", result
 
 proc get_ref*(i: int64): Reference =
-  REFS.data[i]
+  {.cast(no_side_effect).}:
+    REFS.data[i]
 
 proc free_ref*(i: int64) =
   REFS.data[i] = nil
@@ -172,8 +194,21 @@ converter to_value*(v: Reference): Value {.inline.} =
 
 #################### Value ######################
 
-proc `==`*(a, b: Value): bool {.inline.} =
-  cast[int64](a) == cast[int64](b)
+proc `==`*(a, b: Value): bool {.no_side_effect.} =
+  {.cast(gcsafe).}:
+    if cast[uint64](a) == cast[uint64](b):
+      return true
+
+    let v1 = cast[uint64](a)
+    let v2 = cast[uint64](b)
+    case cast[int64](v1.shr(48)):
+      of REF_PREFIX:
+        if cast[int64](v2.shr(48)) == REF_PREFIX:
+          return get_ref(cast[int64](bitand(v1, AND_MASK))) == get_ref(cast[int64](bitand(v2, AND_MASK)))
+      else:
+        discard
+
+  # Default to false
 
 proc kind*(v: Value): ValueKind {.inline.} =
   {.cast(gcsafe).}:
@@ -466,6 +501,10 @@ proc new_array*(v: varargs[Value]): Value =
 
 proc new_map*(): Value =
   let i = add_ref(Reference(kind: VkMap)).uint64
+  cast[Value](bitor(REF_MASK, i))
+
+proc new_map*(map: Table[string, Value]): Value =
+  let i = add_ref(Reference(kind: VkMap, map: map)).uint64
   cast[Value](bitor(REF_MASK, i))
 
 #################### Gene ########################
