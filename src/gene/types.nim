@@ -160,6 +160,8 @@ proc `==`*(a, b: Reference): bool =
       return a.arr == b.arr
     of VkMap:
       return a.map == b.map
+    of VkComplexSymbol:
+      return a.csymbol == b.csymbol
     else:
       todo()
 
@@ -259,6 +261,10 @@ proc kind*(v: Value): ValueKind {.inline.} =
 
 proc `$`*(self: Value): string =
   case self.kind:
+    of VkNil:
+      result = "nil"
+    of VkInt:
+      result = $(cast[int64](self))
     of VkString:
       result = $self.to_ref.str
     of VkSymbol:
@@ -534,7 +540,7 @@ converter to_value*(v: Gene): Value =
 
 proc new_gene*(): Value =
   {.cast(gcsafe).}:
-    let i = add_gene(Gene()).uint64
+    let i = add_gene(Gene(`type`: NIL)).uint64
     cast[Value](bitor(GENE_MASK, i))
 
 proc new_gene*(v: Value): Value =
@@ -542,6 +548,14 @@ proc new_gene*(v: Value): Value =
     let g = Gene(`type`: v)
     let i = add_gene(g).uint64
     cast[Value](bitor(GENE_MASK, i))
+
+proc gene*(self: Value): Gene =
+  {.cast(gcsafe).}:
+    let v = cast[uint64](self)
+    if cast[int64](v.shr(48)) == GENE_PREFIX:
+      return get_gene(cast[int64](bitand(v, AND_MASK)))
+    else:
+      not_allowed("Not a gene.")
 
 #################### Helpers #####################
 

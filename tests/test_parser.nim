@@ -78,10 +78,10 @@ test_parser "a#b", to_symbol("a#b")
 test_parser "a:b", to_symbol("a:b")
 test_parser "a\\ b", to_symbol("a b")
 test_parser "a\\/b", to_symbol("a/b")
-# test_parser "n/A", to_complex_symbol(@["n", "A"])
-# test_parser "n\\/A/B", to_complex_symbol(@["n/A", "B"])
-# test_parser "n/m/A", to_complex_symbol(@["n", "m", "A"])
-# test_parser "/A", to_complex_symbol(@["", "A"])
+test_parser "n/A", to_complex_symbol(@["n", "A"])
+test_parser "n\\/A/B", to_complex_symbol(@["n/A", "B"])
+test_parser "n/m/A", to_complex_symbol(@["n", "m", "A"])
+test_parser "/A", to_complex_symbol(@["", "A"])
 test_parser "^a", to_symbol("^a")
 test_parser "symbol-👋", to_symbol("symbol-👋")
 test_parser "+foo+", to_symbol("+foo+")
@@ -112,17 +112,17 @@ test_parser "+foo+", to_symbol("+foo+")
 #   new_gene_datetime(init_date_time(02, cast[Month](12), 2020, 10, 11, 12, utc()))
 # test_parser "10:11:12", new_gene_time(10, 11, 12)
 
-test_parser "{}", new_map(Table[string, Value]())
-test_parser "{^a 1}", {"a": 1.to_value()}.to_value()
+test_parser "{}", new_map()
+test_parser "{^a 1}", {"a": to_value(1)}.to_value()
 
-# test_parser "{^a^b 1}", {"a": new_gene_map({"b": new_gene_int(1)}.toTable)}.toTable
-# test_parser "{^a^^b}", {"a": new_gene_map({"b": new_gene_bool(true)}.toTable)}.toTable
-# test_parser "{^a^!b}", {"a": new_gene_map({"b": new_gene_bool(false)}.toTable)}.toTable
-# test_parser "{^a^b 1 ^a^c 2}", {"a": new_gene_map({"b": new_gene_int(1), "c": new_gene_int(2)}.toTable)}.toTable
-# test_parser "{^a^^b ^a^c 2}", {"a": new_gene_map({"b": new_gene_bool(true), "c": new_gene_int(2)}.toTable)}.toTable
-# # test_parser "{^a^b 1 ^a {^c 2}}", {"a": new_gene_map({"b": new_gene_int(1), "c": new_gene_int(2)}.toTable)}.toTable
-# test_parser_error "{^a^b 1 ^a 2}"
-# test_parser_error "{^a^b 1 ^a {^c 2}}"
+test_parser "{^a^b 1}", to_value({"a": to_value({"b": to_value(1)})})
+test_parser "{^a^^b}", to_value({"a": to_value({"b": TRUE})})
+test_parser "{^a^!b}", to_value({"a": to_value({"b": FALSE})})
+test_parser "{^a^b 1 ^a^c 2}", to_value({"a": to_value({"b": to_value(1), "c": to_value(2)})})
+test_parser "{^a^^b ^a^c 2}", to_value({"a": to_value({"b": TRUE, "c": to_value(2)})})
+# test_parser "{^a^b 1 ^a {^c 2}}", {"a": to_value({"b": to_value(1), "c": to_value(2)}.toTable)}.toTable
+test_parser_error "{^a^b 1 ^a 2}"
+test_parser_error "{^a^b 1 ^a {^c 2}}"
 
 # test_parser "(_ ^a^b 1)", proc(r: Value) =
 #   assert r.gene_props["a"].map["b"] == 1
@@ -131,23 +131,24 @@ test_parser "{^a 1}", {"a": 1.to_value()}.to_value()
 #   assert r.gene_children[0] == 1
 
 test_parser "[]", @[]
-# test_parser "[,]", new_gene_vec()
-# test_parser "[1 2]", new_gene_vec(new_gene_int(1), new_gene_int(2))
-# test_parser "[1, 2]", new_gene_vec(new_gene_int(1), new_gene_int(2))
+test_parser "[,]", @[]
+test_parser "[1 2]", new_array(to_value(1), to_value(2))
+test_parser "[1, 2]", new_array(to_value(1), to_value(2))
 
 # test_parser "#[]", new_gene_set()
 # # This should work
-# # test_parser "#[1 2]", new_gene_set(new_gene_int(1), new_gene_int(2))
+# # test_parser "#[1 2]", new_gene_set(to_value(1), to_value(2))
 
-# test_parser ",a", to_symbol("a")
-# test_parser "a,", to_symbol("a")
+test_parser ",a", to_symbol("a")
+test_parser "a,", to_symbol("a")
 
-# test_parser "1 2 3", 1
+test_parser "1 2 3", 1
 
-# test_parser "()", proc(r: Value) =
-#   check r.gene_type == nil
-#   check r.gene_props.len == 0
-#   check r.gene_children.len == 0
+test_parser "()", proc(r: Value) =
+  let gene = r.gene
+  check gene.type == NIL
+  check gene.props.len == 0
+  check gene.children.len == 0
 
 # test_parser "(())", proc(r: Value) =
 #   check r.kind == VkGene
@@ -171,12 +172,12 @@ test_parser "[]", @[]
 
 # test_parser "(1 ^a 2 3 4)", proc(r: Value) =
 #   check r.gene_type == 1
-#   check r.gene_props == {"a": new_gene_int(2)}.toTable
+#   check r.gene_props == {"a": to_value(2)}.toTable
 #   check r.gene_children == @[3, 4]
 
 # test_parser "(1 2 ^a 3 4)", proc(r: Value) =
 #   check r.gene_type == 1
-#   check r.gene_props == {"a": new_gene_int(3)}.toTable
+#   check r.gene_props == {"a": to_value(3)}.toTable
 #   check r.gene_children == @[2, 4]
 
 # test_parser "(1 ^^a 2 3)", proc(r: Value) =
@@ -363,7 +364,7 @@ test_parser "[]", @[]
 #   check r[0] == to_symbol("a")
 #   check r[1] == to_symbol("b")
 
-# test_read_all "1 2", @[new_gene_int(1), new_gene_int(2)]
+# test_read_all "1 2", @[to_value(1), to_value(2)]
 
 # test_parser """
 #   [

@@ -580,6 +580,7 @@ proc interpret_token(token: string): Value =
     return match_symbol(token)
 
 proc read_gene_type(self: var Parser): Value =
+  result = NIL
   var delimiter = ')'
   # the bufpos should be already be past the opening paren etc.
   while true:
@@ -768,7 +769,7 @@ proc add_line_col(self: var Parser, node: var Value) =
   # node.column = self.getColNumber(self.bufpos)
 
 proc read_gene(self: var Parser): Value {.gcsafe.} =
-  var gene = Gene()
+  var gene = Gene(`type`: NIL)
   #echo "line ", getCurrentLine(p), "lineno: ", p.line_number, " col: ", getColNumber(p, p.bufpos)
   #echo $get_current_line(p) & " LINENO(" & $p.line_number & ")"
   self.add_line_col(result)
