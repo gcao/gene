@@ -115,7 +115,8 @@ proc `$`*(self: Reference): string
 proc to_ref*(v: Value): Reference
 
 proc str*(v: Value): string {.inline.}
-proc to_value*(v: char): Value {.inline.}
+
+converter to_value*(v: char): Value {.inline.}
 converter to_value*(v: Rune): Value {.inline.}
 
 proc get_symbol*(i: int64): string {.inline.}
@@ -239,7 +240,7 @@ proc to_float*(v: Value): float64 {.inline.} =
   else:
     return cast[float64](v)
 
-proc to_value*(v: float64): Value {.inline.} =
+converter to_value*(v: float64): Value {.inline.} =
   if v == 0.0:
     return cast[Value](F64_ZERO)
   else:
@@ -248,7 +249,7 @@ proc to_value*(v: float64): Value {.inline.} =
 converter to_bool*(v: Value): bool {.inline.} =
   not (v == FALSE or v == NIL)
 
-proc to_value*(v: bool): Value {.inline.} =
+converter to_value*(v: bool): Value {.inline.} =
   if v:
     return TRUE
   else:
@@ -257,7 +258,7 @@ proc to_value*(v: bool): Value {.inline.} =
 proc to_pointer*(v: Value): pointer {.inline.} =
   cast[pointer](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
 
-proc to_value*(v: pointer): Value {.inline.} =
+converter to_value*(v: pointer): Value {.inline.} =
   if v.is_nil:
     return NIL
   else:
@@ -346,7 +347,7 @@ proc new_str*(s: string): int64 =
 proc free_str*(i: int64) =
   free_ref(i)
 
-proc to_value*(v: char): Value {.inline.} =
+converter to_value*(v: char): Value {.inline.} =
   {.cast(gcsafe).}:
     cast[Value](bitor(CHAR_MASK, v.ord.uint64))
 
@@ -395,7 +396,7 @@ proc str*(v: Value): string {.inline.} =
       else:
         not_allowed(fmt"${v} is not a string.")
 
-proc to_value*(v: string): Value {.inline.} =
+converter to_value*(v: string): Value {.inline.} =
   case v.len:
     of 0:
       return cast[Value](EMPTY_STRING)
@@ -487,7 +488,7 @@ proc free_gene*(i: int64) =
   GENES.data[i] = nil
   GENES.free.add(i)
 
-proc to_value*(v: Gene): Value =
+converter to_value*(v: Gene): Value =
   {.cast(gcsafe).}:
     let i = add_gene(v).uint64
     cast[Value](bitor(GENE_MASK, i))

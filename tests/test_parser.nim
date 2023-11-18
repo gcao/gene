@@ -40,52 +40,51 @@ test_parser "nil", NIL
 test_parser "true", TRUE
 test_parser "false", FALSE
 
-# test_parser "10", 10
-# test_parser "-1", -1
-# test_parser "10e10", 10e10
-# test_parser "+5.0E5", +5.0E5
+test_parser "10", 10
+test_parser "-1", -1
+test_parser "10e10", 10e10
+test_parser "+5.0E5", +5.0E5
 
-# test_parser "\\\\", '\\'
-# test_parser "\\s", 's'
-# test_parser "\\space", ' '
-# test_parser "\\t", 't'
-# test_parser "\\tab", '\t'
-# test_parser "\\n", 'n'
-# test_parser "\\newline", '\n'
-# test_parser "\\r", 'r'
-# test_parser "\\return", '\r'
-# test_parser "\\f", 'f'
-# test_parser "\\formfeed", '\f'
-# test_parser "\\b", 'b'
-# test_parser "\\backspace", '\b'
-# test_parser "\\中", "中".runeAt(0)
+test_parser "\\\\", '\\'
+test_parser "\\s", 's'
+test_parser "\\space", ' '
+test_parser "\\t", 't'
+test_parser "\\tab", '\t'
+test_parser "\\n", 'n'
+test_parser "\\newline", '\n'
+test_parser "\\r", 'r'
+test_parser "\\return", '\r'
+test_parser "\\f", 'f'
+test_parser "\\formfeed", '\f'
+test_parser "\\b", 'b'
+test_parser "\\backspace", '\b'
+test_parser "\\中", "中".runeAt(0)
 
-# test_parser "\\\"nil\"", new_gene_symbol("nil")
-# test_parser "\\\"true\"", new_gene_symbol("true")
-# test_parser "\\\"false\"", new_gene_symbol("false")
-# test_parser "\\'nil'", new_gene_symbol("nil")
+test_parser "\\\"nil\"", to_symbol("nil")
+test_parser "\\\"true\"", to_symbol("true")
+test_parser "\\'nil'", to_symbol("nil")
 
-# test_parser "\"test\"", "test"
-# test_parser ",\"test\",", "test"
-# test_parser "'test'", "test"
-# test_parser ",'test',", "test"
+test_parser "\"test\"", "test"
+test_parser ",\"test\",", "test"
+test_parser "'test'", "test"
+test_parser ",'test',", "test"
 
-# test_parser "a", new_gene_symbol("a")
-# test_parser "A", new_gene_symbol("A")
-# test_parser "/", new_gene_symbol("/")
-# test_parser "+a", new_gene_symbol("+a")
-# test_parser "#a", new_gene_symbol("#a")
-# test_parser "a#b", new_gene_symbol("a#b")
-# test_parser "a:b", new_gene_symbol("a:b")
-# test_parser "a\\ b", new_gene_symbol("a b")
-# test_parser "a\\/b", new_gene_symbol("a/b")
-# test_parser "n/A", new_gene_complex_symbol(@["n", "A"])
-# test_parser "n\\/A/B", new_gene_complex_symbol(@["n/A", "B"])
-# test_parser "n/m/A", new_gene_complex_symbol(@["n", "m", "A"])
-# test_parser "/A", new_gene_complex_symbol(@["", "A"])
-# test_parser "^a", new_gene_symbol("^a")
-# test_parser "symbol-👋", new_gene_symbol("symbol-👋")
-# test_parser "+foo+", new_gene_symbol("+foo+")
+test_parser "a", to_symbol("a")
+test_parser "A", to_symbol("A")
+test_parser "/", to_symbol("/")
+test_parser "+a", to_symbol("+a")
+test_parser "#a", to_symbol("#a")
+test_parser "a#b", to_symbol("a#b")
+test_parser "a:b", to_symbol("a:b")
+test_parser "a\\ b", to_symbol("a b")
+test_parser "a\\/b", to_symbol("a/b")
+# test_parser "n/A", to_complex_symbol(@["n", "A"])
+# test_parser "n\\/A/B", to_complex_symbol(@["n/A", "B"])
+# test_parser "n/m/A", to_complex_symbol(@["n", "m", "A"])
+# test_parser "/A", to_complex_symbol(@["", "A"])
+test_parser "^a", to_symbol("^a")
+test_parser "symbol-👋", to_symbol("symbol-👋")
+test_parser "+foo+", to_symbol("+foo+")
 
 # test_parser "#/b/", proc(r: Value) =
 #   check r.kind == VkRegex
@@ -140,8 +139,8 @@ test_parser "false", FALSE
 # # This should work
 # # test_parser "#[1 2]", new_gene_set(new_gene_int(1), new_gene_int(2))
 
-# test_parser ",a", new_gene_symbol("a")
-# test_parser "a,", new_gene_symbol("a")
+# test_parser ",a", to_symbol("a")
+# test_parser "a,", to_symbol("a")
 
 # test_parser "1 2 3", 1
 
@@ -196,16 +195,16 @@ test_parser "false", FALSE
 
 # test_parser ":foo", proc(r: Value) =
 #   check r.kind == VkQuote
-#   check r.quote == new_gene_symbol("foo")
+#   check r.quote == to_symbol("foo")
 
 # test_parser "%foo", proc(r: Value) =
 #   check r.kind == VkUnquote
-#   check r.unquote == new_gene_symbol("foo")
+#   check r.unquote == to_symbol("foo")
 #   check r.unquote_discard == false
 
 # test_parser "%_foo", proc(r: Value) =
 #   check r.kind == VkUnquote
-#   check r.unquote == new_gene_symbol("foo")
+#   check r.unquote == to_symbol("foo")
 #   check r.unquote_discard == true
 
 # # TODO: %_ is not allowed on gene type and property value
@@ -361,8 +360,8 @@ test_parser "false", FALSE
 #   check r[1] == 2
 
 # test_read_all "a,b", proc(r: seq[Value]) =
-#   check r[0] == new_gene_symbol("a")
-#   check r[1] == new_gene_symbol("b")
+#   check r[0] == to_symbol("a")
+#   check r[1] == to_symbol("b")
 
 # test_read_all "1 2", @[new_gene_int(1), new_gene_int(2)]
 

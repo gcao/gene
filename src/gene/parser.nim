@@ -336,7 +336,7 @@ proc read_string(self: var Parser, start: char): Value =
     discard self.parse_string(start)
   if self.error != ErrNone:
     raise new_exception(ParseError, "read_string failure: " & $self.error)
-  result = self.str.to_value()
+  result = self.str
   self.str = ""
 
 proc read_string1(self: var Parser): Value =
@@ -396,7 +396,7 @@ proc read_string_interpolation(self: var Parser): Value {.gcsafe.} =
     discard self.parse_string('#', triple_mode)
     if self.error != ErrNone:
       raise new_exception(ParseError, "read_string_interpolation failure: " & $self.error)
-    gene.children.add(self.str.to_value())
+    gene.children.add(self.str)
     self.str = ""
     if self.buf[self.bufpos - 1] == '"':
       break
@@ -405,9 +405,9 @@ proc read_string_interpolation(self: var Parser): Value {.gcsafe.} =
     var s = ""
     for v in gene.children:
       s.add(v.str)
-    return s.to_value()
+    return s
   else:
-    return gene.to_value()
+    return gene
 
 proc read_unquoted(self: var Parser): Value =
   # Special logic for %_
@@ -420,7 +420,7 @@ proc read_unquoted(self: var Parser): Value =
     unquote: self.read(),
     unquote_discard: unquote_discard,
   )
-  result = r.to_value()
+  result = r
 
 proc skip_block_comment(self: var Parser) {.gcsafe.} =
   var pos = self.bufpos
@@ -497,27 +497,27 @@ proc read_character(self: var Parser): Value =
   else:
     let token = self.read_token(false)
     if token.len == 1:
-      return token[0].to_value()
+      return token[0]
 
     case token:
     of "newline":
-      result = '\n'.to_value()
+      result = '\n'
     of "space":
-      result = ' '.to_value()
+      result = ' '
     of "tab":
-      result = '\t'.to_value()
+      result = '\t'
     of "backspace":
-      result = '\b'.to_value()
+      result = '\b'
     of "formfeed":
-      result = '\f'.to_value()
+      result = '\f'
     of "return":
-      result = '\r'.to_value()
+      result = '\r'
     else:
       if token.startsWith("\\u"):
         # TODO: impl unicode char reading
         raise new_exception(ParseError, "Not implemented: reading unicode chars")
       elif token.runeLen == 1:
-        result = token.runeAt(0).to_value()
+        result = token.runeAt(0)
       else:
         raise new_exception(ParseError, "Unknown character: " & token)
 
@@ -669,7 +669,7 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
                 map = r.map.addr
               else:
                 var new_map = Reference(kind: VkMap)
-                map[][part] = new_map.to_value()
+                map[][part] = new_map
                 map = new_map.map.addr
             key = parts[^1]
             case key[0]:
@@ -779,22 +779,22 @@ proc read_gene(self: var Parser): Value {.gcsafe.} =
   if not gene.type.is_nil() and gene.type.kind == VkSymbol:
     if handlers.has_key(gene.type.str):
       let handler = handlers[gene.type.str]
-      result = gene.to_value()
+      result = gene
       return handler(self, result)
 
-  result = gene.to_value()
+  result = gene
 
 proc read_map(self: var Parser): Value {.gcsafe.} =
   Reference(
     kind: VkMap,
     map: self.read_map(MkMap),
-  ).to_value()
+  )
 
 proc read_vector(self: var Parser): Value {.gcsafe.} =
   Reference(
     kind: VkArray,
     arr: self.read_delimited_list(']', true).list,
-  ).to_value()
+  )
 
 proc read_set(self: var Parser): Value =
   let r = Reference(
@@ -804,7 +804,7 @@ proc read_set(self: var Parser): Value =
   let list_result = self.read_delimited_list(']', true)
   for item in list_result.list:
     r.set.incl(item)
-  result = r.to_value()
+  result = r
 
 proc read_regex(self: var Parser): Value =
   todo()
@@ -894,7 +894,7 @@ proc read_unmatched_delimiter(self: var Parser): Value =
 proc read_decorator(self: var Parser): Value =
   let gene = Gene(`type`: self.read())
   gene.children.add(self.read())
-  result = gene.to_value()
+  result = gene
 
 # proc read_star(self: var Parser): Value =
 #   return new_gene_gene(self.read())
@@ -1018,10 +1018,10 @@ proc init*() =
 
   INITIALIZED = true
   DEFAULT_UNITS = {
-    "m": 60.to_value(),        # m  = minute
-    "s": 1.to_value(),         # s  = second (default)
-    "ms": 0.001.to_value(),  # ms = millisecond
-    "ns": 1e-9.to_value(),   # ns = nanosecond
+    "m": 60.to_value(),       # m  = minute
+    "s": 1.to_value(),        # s  = second (default)
+    "ms": 0.001.to_value(),   # ms = millisecond
+    "ns": 1e-9.to_value(),    # ns = nanosecond
   }.to_table()
 
   HEX = {
@@ -1272,20 +1272,20 @@ proc read_number(self: var Parser): Value =
       if not isDigit(self.buf[self.bufpos+1]):
         let e = err_info(self)
         raise new_exception(ParseError, "Error reading a ratio: " & $e)
-      var numerator = parse_biggest_int(self.str).to_value()
+      var numerator = parse_biggest_int(self.str)
       inc(self.bufpos)
       self.str = ""
       var denom_tok = parse_number(self)
       if denom_tok == TkInt:
-        var denom = parse_biggest_int(self.str).to_value()
+        var denom = parse_biggest_int(self.str)
         todo("ratio")
         # result = new_gene_ratio(numerator.int, denom.int)
       else:
         raise new_exception(ParseError, "Error reading a ratio: " & self.str)
     else:
-      result = parse_biggest_int(self.str).to_value()
+      result = parse_biggest_int(self.str)
   of TkFloat:
-    result = parse_float(self.str).to_value()
+    result = parse_float(self.str)
   of TkError:
     raise new_exception(ParseError, "Error reading a number: " & self.str)
   of TkNumberWithUnit:
