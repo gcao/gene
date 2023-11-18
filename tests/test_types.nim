@@ -41,8 +41,8 @@ test "Value kind":
   check "你从哪里来？".to_symbol().kind == VkSymbol
 
 test "Value conversion":
-  check nil.to_value().is_nil() == true
-  check nil.to_value() == NIL
+  check nil.pointer.to_value().is_nil() == true
+  check nil.pointer.to_value() == NIL
 
   check true.to_value().to_bool() == true
   check false.to_value().to_bool() == false
