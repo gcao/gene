@@ -124,20 +124,20 @@ test_parser "{^a^^b ^a^c 2}", to_value({"a": to_value({"b": TRUE, "c": to_value(
 test_parser_error "{^a^b 1 ^a 2}"
 test_parser_error "{^a^b 1 ^a {^c 2}}"
 
-# test_parser "(_ ^a^b 1)", proc(r: Value) =
-#   assert r.gene_props["a"].map["b"] == 1
-# test_parser "(_ ^a^^b 1)", proc(r: Value) =
-#   assert r.gene_props["a"].map["b"] == new_gene_bool(true)
-#   assert r.gene_children[0] == 1
+test_parser "(_ ^a^b 1)", proc(r: Value) =
+  assert r.gene.props["a"].to_ref.map["b"] == 1
+test_parser "(_ ^a^^b 1)", proc(r: Value) =
+  assert r.gene.props["a"].to_ref.map["b"] == TRUE
+  assert r.gene.children[0] == 1
 
 test_parser "[]", @[]
 test_parser "[,]", @[]
 test_parser "[1 2]", new_array(to_value(1), to_value(2))
 test_parser "[1, 2]", new_array(to_value(1), to_value(2))
 
-# test_parser "#[]", new_gene_set()
-# # This should work
-# # test_parser "#[1 2]", new_gene_set(to_value(1), to_value(2))
+test_parser "#[]", new_set()
+# This should work
+# test_parser "#[1 2]", new_gene_set(to_value(1), to_value(2))
 
 test_parser ",a", to_symbol("a")
 test_parser "a,", to_symbol("a")
@@ -150,63 +150,64 @@ test_parser "()", proc(r: Value) =
   check gene.props.len == 0
   check gene.children.len == 0
 
-# test_parser "(())", proc(r: Value) =
-#   check r.kind == VkGene
-#   check r.gene_children.len == 0
-#   check r.gene_type.kind == VkGene
-#   check r.gene_type.gene_children.len == 0
+test_parser "(())", proc(r: Value) =
+  check r.kind == VkGene
+  let gene = r.gene
+  check gene.children.len == 0
+  check gene.type.kind == VkGene
+  check gene.type.gene.children.len == 0
 
-# test_parser "(1 2 3)", proc(r: Value) =
-#   check r.gene_type == 1
-#   check r.gene_children == @[2, 3]
+test_parser "(1 2 3)", proc(r: Value) =
+  check r.gene.type == 1
+  check r.gene.children == @[to_value(2), to_value(3)]
 
-# test_parser "(nil 2 3)", proc(r: Value) =
-#   check r.gene_type.kind == VkNil
-#   check r.gene_children == @[2, 3]
+test_parser "(nil 2 3)", proc(r: Value) =
+  check r.gene.type.kind == VkNil
+  check r.gene.children == @[to_value(2), to_value(3)]
 
-# test_parser """
-#   (_ 1 "test")
-# """, proc(r: Value) =
-#   check r.gene_children[0] == 1
-#   check r.gene_children[1] == "test"
+test_parser """
+  (_ 1 "test")
+""", proc(r: Value) =
+  check r.gene.children[0] == 1
+  check r.gene.children[1] == "test"
 
-# test_parser "(1 ^a 2 3 4)", proc(r: Value) =
-#   check r.gene_type == 1
-#   check r.gene_props == {"a": to_value(2)}.toTable
-#   check r.gene_children == @[3, 4]
+test_parser "(1 ^a 2 3 4)", proc(r: Value) =
+  check r.gene.type == 1
+  check r.gene.props == to_table({"a": to_value(2)})
+  check r.gene.children == @[to_value(3), to_value(4)]
 
-# test_parser "(1 2 ^a 3 4)", proc(r: Value) =
-#   check r.gene_type == 1
-#   check r.gene_props == {"a": to_value(3)}.toTable
-#   check r.gene_children == @[2, 4]
+test_parser "(1 2 ^a 3 4)", proc(r: Value) =
+  check r.gene.type == 1
+  check r.gene.props == to_table({"a": to_value(3)})
+  check r.gene.children == @[to_value(2), to_value(4)]
 
-# test_parser "(1 ^^a 2 3)", proc(r: Value) =
-#   check r.gene_type == 1
-#   check r.gene_props == {"a": new_gene_bool(true)}.toTable
-#   check r.gene_children == @[2, 3]
+test_parser "(1 ^^a 2 3)", proc(r: Value) =
+  check r.gene.type == 1
+  check r.gene.props == to_table({"a": TRUE})
+  check r.gene.children == @[to_value(2), to_value(3)]
 
-# test_parser "(1 ^!a 2 3)", proc(r: Value) =
-#   check r.gene_type == 1
-#   check r.gene_props == {"a": Value(kind: VkNil)}.toTable()
-#   check r.gene_children == @[2, 3]
+test_parser "(1 ^!a 2 3)", proc(r: Value) =
+  check r.gene.type == 1
+  check r.gene.props == to_table({"a": NIL})
+  check r.gene.children == @[to_value(2), to_value(3)]
 
-# test_parser "{^^x ^!y ^^z}", proc(r: Value) =
-#   check r.kind == VkMap
-#   check r.map == {"x": new_gene_bool(true), "y": Value(kind: VkNil), "z": new_gene_bool(true)}.toTable
+test_parser "{^^x ^!y ^^z}", proc(r: Value) =
+  check r.kind == VkMap
+  check r.to_ref.map == to_table({"x": TRUE, "y": NIL, "z": TRUE})
 
-# test_parser ":foo", proc(r: Value) =
-#   check r.kind == VkQuote
-#   check r.quote == to_symbol("foo")
+test_parser ":foo", proc(r: Value) =
+  check r.to_ref.kind == VkQuote
+  check r.to_ref.quote == to_symbol("foo")
 
-# test_parser "%foo", proc(r: Value) =
-#   check r.kind == VkUnquote
-#   check r.unquote == to_symbol("foo")
-#   check r.unquote_discard == false
+test_parser "%foo", proc(r: Value) =
+  check r.to_ref.kind == VkUnquote
+  check r.to_ref.unquote == to_symbol("foo")
+  check r.to_ref.unquote_discard == false
 
-# test_parser "%_foo", proc(r: Value) =
-#   check r.kind == VkUnquote
-#   check r.unquote == to_symbol("foo")
-#   check r.unquote_discard == true
+test_parser "%_foo", proc(r: Value) =
+  check r.to_ref.kind == VkUnquote
+  check r.to_ref.unquote == to_symbol("foo")
+  check r.to_ref.unquote_discard == true
 
 # # TODO: %_ is not allowed on gene type and property value
 # # (%_foo)         should throw error
@@ -305,115 +306,116 @@ test_parser "()", proc(r: Value) =
 # # test_parser """
 # #   1m30
 # # """, 90
-# # Support decorator from the parser. It can appear anywhere except property names.
-# # Pros:
-# #   Easier to write
-# # Cons:
-# #   Harder to read ?!
-# #
-# # #@f a       = (f a)
-# # (#@f a)     = ((f a))
-# # (#@f #@g a) = ((f (g a)))
-# # #@(f a) b   = (((f a) b))
-# # {^p #@f a}  = {^p (f a)}
+
+# Support decorator from the parser. It can appear anywhere except property names.
+# Pros:
+#   Easier to write
+# Cons:
+#   Harder to read ?!
+#
+# #@f a       = (f a)
+# (#@f a)     = ((f a))
+# (#@f #@g a) = ((f (g a)))
+# #@(f a) b   = (((f a) b))
+# {^p #@f a}  = {^p (f a)}
+
+test_parser """
+  #@f a
+""", proc(r: Value) =
+  check r.kind == VkGene
+  check r.gene.type.str == "f"
+  check r.gene.children[0].str == "a"
+
+test_parser """
+  #@f #@g a
+""", proc(r: Value) =
+  check r.kind == VkGene
+  check r.gene.type.str == "f"
+  check r.gene.children[0].kind == VkGene
+  check r.gene.children[0].gene.type.str == "g"
+  check r.gene.children[0].gene.children[0].str == "a"
 
 # test_parser """
-#   #@f a
+#   #*f
 # """, proc(r: Value) =
 #   check r.kind == VkGene
 #   check r.gene_type.str == "f"
-#   check r.gene_children[0].str == "a"
 
-# test_parser """
-#   #@f #@g a
-# """, proc(r: Value) =
-#   check r.kind == VkGene
-#   check r.gene_type.str == "f"
-#   check r.gene_children[0].kind == VkGene
-#   check r.gene_children[0].gene_type.str == "g"
-#   check r.gene_children[0].gene_children[0].str == "a"
+test_parser """
+  {^p #@f a}
+""", proc(r: Value) =
+  check r.to_ref.map["p"].kind == VkGene
+  check r.to_ref.map["p"].gene.type.str == "f"
+  check r.to_ref.map["p"].gene.children[0].str == "a"
 
-# # test_parser """
-# #   #*f
-# # """, proc(r: Value) =
-# #   check r.kind == VkGene
-# #   check r.gene_type.str == "f"
+test_read_all """
+  1 # comment
+  2
+""", proc(r: seq[Value]) =
+  check r[0] == 1
+  check r[1] == 2
 
-# test_parser """
-#   {^p #@f a}
-# """, proc(r: Value) =
-#   check r.map["p"].kind == VkGene
-#   check r.map["p"].gene_type.str == "f"
-#   check r.map["p"].gene_children[0].str == "a"
+test_read_all """
+  1 ##comment
+  2
+""", proc(r: seq[Value]) =
+  check r[0] == 1
+  check r[1] == 2
 
-# test_read_all """
-#   1 # comment
-#   2
-# """, proc(r: seq[Value]) =
-#   check r[0] == 1
-#   check r[1] == 2
+test_read_all "a,b", proc(r: seq[Value]) =
+  check r[0] == to_symbol("a")
+  check r[1] == to_symbol("b")
 
-# test_read_all """
-#   1 ##comment
-#   2
-# """, proc(r: seq[Value]) =
-#   check r[0] == 1
-#   check r[1] == 2
+test_read_all "1 2", @[to_value(1), to_value(2)]
 
-# test_read_all "a,b", proc(r: seq[Value]) =
-#   check r[0] == to_symbol("a")
-#   check r[1] == to_symbol("b")
+test_parser """
+  [
+    1 # test
+  ]
+""", @[1]
 
-# test_read_all "1 2", @[to_value(1), to_value(2)]
+test_parser """
+  #
+  # comment
+  #
+  1
+  #
+""", 1
 
-# test_parser """
-#   [
-#     1 # test
-#   ]
-# """, @[1]
+test_parser "[a/[1 2]]", proc(r: Value) =
+  check r.to_ref.arr[0].to_ref.csymbol[0] == "a"
+  check r.to_ref.arr[0].to_ref.csymbol[1] == ""
+  check r.to_ref.arr[1].to_ref.arr[0] == 1
+  check r.to_ref.arr[1].to_ref.arr[1] == 2
 
-# test_parser """
-#   #
-#   # comment
-#   #
-#   1
-#   #
-# """, 1
+test_parser """
+  #< comment ># 1
+""", 1
 
-# test_parser "[a/[1 2]]", proc(r: Value) =
-#   check r.vec[0].csymbol[0] == "a"
-#   check r.vec[0].csymbol[1] == ""
-#   check r.vec[1].vec[0] == 1
-#   check r.vec[1].vec[1] == 2
+test_parser """
+  #< #<< comment >># ># 1
+""", 1
 
-# test_parser """
-#   #< comment ># 1
-# """, 1
+test_parser """
+  #<
+  comment
+  #># 1
+""", 1
 
-# test_parser """
-#   #< #<< comment >># ># 1
-# """, 1
+test_parser """
+  #<
+  comment
+  #>## 1
+  2
+""", 2
 
-# test_parser """
-#   #<
-#   comment
-#   #># 1
-# """, 1
-
-# test_parser """
-#   #<
-#   comment
-#   #>## 1
-#   2
-# """, 2
-
-# test_parser """
-#   #<
-#   #<<
-#   comment
-#   #>>#
-#   #># 1
-# """, 1
+test_parser """
+  #<
+  #<<
+  comment
+  #>>#
+  #># 1
+""", 1
 
 # test_parse_document """
 #   ^name "Test document"
@@ -430,20 +432,20 @@ test_parser "()", proc(r: Value) =
 #   check r.props["name"] == "Test document"
 #   check r.children == @[1, 2]
 
-# test_parser "\"\"\"a\"\"\"", "a"
-# test_parser "[\"\"\"a\"\"\"]", proc(r: Value) =
-#   check r.kind == VkVector
-#   check r.vec.len == 1
-#   check r.vec[0] == "a"
+test_parser "\"\"\"a\"\"\"", "a"
+test_parser "[\"\"\"a\"\"\"]", proc(r: Value) =
+  check r.kind == VkArray
+  check r.to_ref.arr.len == 1
+  check r.to_ref.arr[0] == "a"
 
-# test_parser "\"\"\"a\"b\"\"\"", "a\"b"
+test_parser "\"\"\"a\"b\"\"\"", "a\"b"
 
-# # Trim whitespaces and new line after opening """
-# # E.g. """  \na""" => "a"
-# test_parser "\"\"\"  \na\"\"\"", "\na"
-# # Trim whitespaces before closing """
-# # E.g. """a\n   """ => "a\n"
-# test_parser "\"\"\"a\n   \"\"\"", "a\n"
+# Trim whitespaces and new line after opening """
+# E.g. """  \na""" => "a"
+test_parser "\"\"\"  \na\"\"\"", "\na"
+# Trim whitespaces before closing """
+# E.g. """a\n   """ => "a\n"
+test_parser "\"\"\"a\n   \"\"\"", "a\n"
 
 # test_parser """
 #   (#File "f" "abc")
@@ -580,27 +582,3 @@ test_parser "()", proc(r: Value) =
 #     (#Ref "x" 2) # Should trigger parser error
 #   ]
 # """
-
-# # test_parser """
-# #   #"#a/b#" # same as ("" a/b)
-# # """, "TODO"
-
-# # test_parser """
-# #   #"#1#" # same as ("" 1)
-# # """, "TODO"
-
-# # test_parser """
-# #   #"#true#" # same as ("" true)
-# # """, "TODO"
-
-# # test_parser """
-# #   #"a#(1 + 2)" # same as ("a" (1 + 2))
-# # """, "TODO"
-
-# # test_parser """
-# #   #"a#[1 2]" # same as ("a" [1 2])
-# # """, "TODO"
-
-# # test_parser """
-# #   #"a#{^a b}" # same as ("a" {^a b})
-# # """, "TODO"

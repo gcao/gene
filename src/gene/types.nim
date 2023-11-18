@@ -158,6 +158,8 @@ proc `==`*(a, b: Reference): bool =
   case a.kind:
     of VkArray:
       return a.arr == b.arr
+    of VkSet:
+      return a.set == b.set
     of VkMap:
       return a.map == b.map
     of VkComplexSymbol:
@@ -491,16 +493,22 @@ proc to_symbol*(s: string): Value {.inline.} =
       SYMBOLS.map[s] = SYMBOLS.store.len
       SYMBOLS.store.add(s)
 
-#################### ComplexSymbol ##############
+#################### ComplexSymbol ###############
 
 proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
   let r = Reference(kind: VkComplexSymbol, csymbol: parts)
   return r.to_value()
 
-#################### Array ######################
+#################### Array #######################
 
 proc new_array*(v: varargs[Value]): Value =
   let i = add_ref(Reference(kind: VkArray, arr: @v)).uint64
+  cast[Value](bitor(REF_MASK, i))
+
+#################### Set #########################
+
+proc new_set*(): Value =
+  let i = add_ref(Reference(kind: VkSet)).uint64
   cast[Value](bitor(REF_MASK, i))
 
 #################### Map #########################

@@ -1372,7 +1372,7 @@ proc read_all*(self: var Parser, buffer: string): seq[Value] =
   var s = new_string_stream(buffer)
   self.open(s, "<input>")
   defer: self.close()
-  self.read_document_properties()
+  # self.read_document_properties()
   var node = self.read()
   while node != nil:
     result.add(node)
