@@ -1,4 +1,6 @@
-import tables, sets, re, bitops, unicode, strformat
+import math, tables, sets, re, bitops, unicode, strformat
+import random
+import dynlib
 
 type
   ValueKind* = enum
@@ -22,14 +24,32 @@ type
     VkSet
     VkMap
     VkGene
+    VkStream
+    VkDocument
 
     VkQuote
     VkUnquote
+
+    VkApplication
+    VkPackage
+    VkModule
+    VkNamespace
+    VkFunction
+    VkMacro
+    VkBlock
+    VkClass
+    VkMethod
+    VkBoundMethod
+    VkInstance
+    VkNativeFn
+    VkNativeFn2
 
   Value* = distinct int64
 
   Reference* = ref object
     case kind*: ValueKind
+      of VkDocument:
+        doc*: Document
       of VkString, VkSymbol:
         str*: string
       of VkArray:
@@ -38,6 +58,10 @@ type
         set*: HashSet[Value]
       of VkMap:
         map*: Table[string, Value]
+      of VkStream:
+        stream*: seq[Value]
+        stream_index*: BiggestInt
+        stream_ended*: bool
       of VkComplexSymbol:
         csymbol*: seq[string]
       of VkQuote:
@@ -45,6 +69,33 @@ type
       of VkUnquote:
         unquote*: Value
         unquote_discard*: bool
+      of VkApplication:
+        app*: Application
+      of VkPackage:
+        pkg*: Package
+      of VkModule:
+        module*: Module
+      of VkNamespace:
+        ns*: Namespace
+      of VkFunction:
+        fn*: Function
+      of VkMacro:
+        `macro`*: Macro
+      of VkBlock:
+        `block`*: Block
+      of VkClass:
+        class*: Class
+      of VkMethod:
+        `method`*: Method
+      of VkBoundMethod:
+        bound_method*: BoundMethod
+      of VkInstance:
+        instance_class*: Class
+        instance_props*: Table[string, Value]
+      of VkNativeFn:
+        native_fn*: NativeFn
+      of VkNativeFn2:
+        native_fn2*: NativeFn2
       else:
         discard
 
@@ -52,6 +103,407 @@ type
     `type`*: Value
     props*: Table[string, Value]
     children*: seq[Value]
+
+  Document* = ref object
+    `type`: Value
+    props*: Table[string, Value]
+    children*: seq[Value]
+    # references*: References # Uncomment this when it's needed.
+
+  # index of a name in a scope
+  NameIndexScope* = distinct int
+
+  Scope* = ref object
+    parent*: Scope
+    parent_index_max*: NameIndexScope
+    members*:  seq[Value]
+    # Value of mappings is composed of two bytes:
+    #   first is the optional index in self.mapping_history + 1
+    #   second is the index in self.members
+    mappings*: Table[string, int]
+    mapping_history*: seq[seq[NameIndexScope]]
+
+  ## This is the root of a running application
+  Application* = ref object
+    name*: string         # Default to base name of command, can be changed, e.g. ($set_app_name "...")
+    pkg*: Package         # Entry package for the application
+    ns*: Namespace
+    cmd*: string
+    args*: seq[string]
+    main_module*: Module
+    # dep_root*: DependencyRoot
+    props*: Table[string, Value]  # Additional properties
+
+    global_ns*     : Value
+    gene_ns*       : Value
+    genex_ns*      : Value
+
+    object_class*   : Value
+    nil_class*      : Value
+    bool_class*     : Value
+    int_class*      : Value
+    float_class*    : Value
+    char_class*     : Value
+    string_class*   : Value
+    symbol_class*   : Value
+    complex_symbol_class*: Value
+    array_class*    : Value
+    map_class*      : Value
+    set_class*      : Value
+    gene_class*     : Value
+    stream_class*   : Value
+    document_class* : Value
+    regex_class*    : Value
+    range_class*    : Value
+    date_class*     : Value
+    datetime_class* : Value
+    time_class*     : Value
+    timezone_class* : Value
+    selector_class* : Value
+    exception_class*: Value
+    class_class*    : Value
+    mixin_class*    : Value
+    application_class*: Value
+    package_class*  : Value
+    module_class*   : Value
+    namespace_class*: Value
+    function_class* : Value
+    macro_class*    : Value
+    block_class*    : Value
+    future_class*   : Value
+    thread_class*   : Value
+    thread_message_class* : Value
+    thread_message_type_class* : Value
+    file_class*     : Value
+
+  Package* = ref object
+    dir*: string          # Where the package assets are installed
+    adhoc*: bool          # Adhoc package is created when package.gene is not found
+    ns*: Namespace
+    name*: string
+    version*: Value
+    license*: Value
+    globals*: seq[string] # Global variables defined by this package
+    # dependencies*: Table[string, Dependency]
+    homepage*: string
+    src_path*: string     # Default to "src"
+    test_path*: string    # Default to "tests"
+    asset_path*: string   # Default to "assets"
+    build_path*: string   # Default to "build"
+    load_paths*: seq[string]
+    init_modules*: seq[string]    # Modules that should be loaded when the package is used the first time
+    props*: Table[string, Value]  # Additional properties
+    # doc*: Document        # content of package.gene
+
+  SourceType* = enum
+    StFile
+    StVirtualFile # e.g. a file embeded in the source code or an archive file.
+    StInline
+    StRepl
+    StEval
+
+  Module* = ref object
+    source_type*: SourceType
+    source*: Value
+    pkg*: Package         # Package in which the module is defined
+    name*: string
+    ns*: Namespace
+    handle*: LibHandle    # Optional handle for dynamic lib
+    props*: Table[string, Value]  # Additional properties
+
+  Namespace* = ref object
+    module*: Module
+    parent*: Namespace
+    stop_inheritance*: bool  # When set to true, stop looking up for members from parent namespaces
+    name*: string
+    members*: Table[string, Value]
+    proxies*: Table[string, Value] # Ask the proxy to look it up instead of checking members and parent
+    on_member_missing*: seq[Value]
+
+  Class* = ref object
+    parent*: Class
+    name*: string
+    constructor*: Reference
+    methods*: Table[string, Method]
+    on_extended*: Value
+    # method_missing*: Value
+    ns*: Namespace # Class can act like a namespace
+    for_singleton*: bool # if it's the class associated with a single object, can not be extended
+
+  Method* = ref object
+    class*: Class
+    name*: string
+    callable*: Reference
+    # public*: bool
+    is_macro*: bool
+
+  BoundMethod* = object
+    self*: Value
+    class*: Class       # Note that class may be different from method.class
+    `method`*: Method
+
+  Function* = ref object
+    async*: bool
+    name*: string
+    ns*: Namespace
+    parent_scope*: Scope
+    parent_scope_max*: NameIndexScope
+    matcher*: RootMatcher
+    matching_hint*: MatchingHint
+    body*: seq[Value]
+    body_compiled*: CompilationUnit
+    # ret*: Expr
+
+  Macro* = ref object
+    ns*: Namespace
+    name*: string
+    parent_scope*: Scope
+    parent_scope_max*: NameIndexScope
+    matcher*: RootMatcher
+    matching_hint*: MatchingHint
+    body*: seq[Value]
+    body_compiled*: CompilationUnit
+
+  Block* = ref object
+    # frame*: Frame
+    ns*: Namespace
+    parent_scope*: Scope
+    parent_scope_max*: NameIndexScope
+    matcher*: RootMatcher
+    matching_hint*: MatchingHint
+    body*: seq[Value]
+    # body_compiled*: Expr
+    body_compiled*: CompilationUnit
+
+  MatchingMode* = enum
+    MatchArguments # (fn f [a b] ...)
+    MatchExpression # (match [a b] input): a and b will be defined
+    MatchAssignment # ([a b] = input): a and b must be defined first
+
+  # Match the whole input or the first child (if running in ArgumentMode)
+  # Can have name, match nothing, or have group of children
+  RootMatcher* = ref object
+    mode*: MatchingMode
+    children*: seq[Matcher]
+
+  MatchingHintMode* = enum
+    MhDefault
+    MhNone
+    MhSimpleData  # E.g. [a b]
+
+  MatchingHint* = object
+    mode*: MatchingHintMode
+
+  MatcherKind* = enum
+    MatchType
+    MatchProp
+    MatchData
+    MatchLiteral
+
+  Matcher* = ref object
+    root*: RootMatcher
+    kind*: MatcherKind
+    next*: Matcher  # if kind is MatchData and is_splat is true, we may need to check next matcher
+    name*: string
+    is_prop*: bool
+    literal*: Value # if kind is MatchLiteral, this is required
+    # match_name*: bool # Match symbol to name - useful for (myif true then ... else ...)
+    default_value*: Value
+    # default_value_expr*: Expr
+    is_splat*: bool
+    min_left*: int # Minimum number of args following this
+    children*: seq[Matcher]
+    # required*: bool # computed property: true if splat is false and default value is not given
+
+  MatchedFieldKind* = enum
+    MfMissing
+    MfSuccess
+    MfTypeMismatch # E.g. map is passed but array or gene is expected
+
+  MatchedField* = ref object
+    kind*: MatchedFieldKind
+    matcher*: Matcher
+    value*: Value
+
+  MatchResult* = ref object
+    fields*: Table[string, MatchedField]
+
+  Id* = uint64
+  Label* = uint64
+
+  Compiler* = ref object
+    output*: CompilationUnit
+    quote_level*: int
+
+  InstructionKind* = enum
+    IkNoop
+
+    IkStart   # start a compilation unit
+    IkEnd     # end a compilation unit
+
+    IkScopeStart
+    IkScopeEnd
+
+    IkPushValue   # push value to the next slot
+    IkPushNil
+    IkPop
+
+    IkVar
+    IkVarValue
+    IkAssign
+
+    IkJump        # unconditional jump
+    IkJumpIfFalse
+
+    IkJumpIfMatchSuccess  # Special instruction for argument matching
+
+    IkLoopStart
+    IkLoopEnd
+    IkContinue    # is added automatically before the loop end
+    IkBreak
+
+    IkAdd
+    IkAddValue    # args: literal value
+    IkSub
+    IkMul
+    IkDiv
+    IkPow
+
+    IkLt
+    IkLtValue
+    IkLe
+    IkGt
+    IkGe
+    IkEq
+    IkNe
+
+    IkAnd
+    IkOr
+
+    IkCompileInit
+
+    IkThrow
+
+    # IkApplication
+    # IkPackage
+    # IkModule
+
+    IkNamespace
+
+    IkFunction
+    IkReturn
+    IkCallFunction
+    IkCallFunctionNoArgs
+    IkCallSimple  # call class or namespace body
+
+    IkMacro
+    IkCallMacro
+
+    IkClass
+    IkSubClass
+    IkNew
+    IkResolveMethod
+    IkCallMethod
+    IkCallMethodNoArgs
+    IkCallInit
+
+    IkMapStart
+    IkMapSetProp        # args: key
+    IkMapSetPropValue   # args: key, literal value
+    IkMapEnd
+
+    IkArrayStart
+    IkArrayAddChild
+    IkArrayAddChildValue # args: literal value
+    IkArrayEnd
+
+    IkGeneStart
+    IkGeneStartDefault
+    IkGeneStartMacro
+    IkGeneStartMethod
+    IkGeneStartMacroMethod
+    IkGeneCheckType
+    IkGeneSetType
+    IkGeneSetProp
+    IkGeneSetPropValue        # args: key, literal value
+    IkGeneAddChild
+    IkGeneAddChildValue       # args: literal value
+    IkGeneEnd
+
+    IkResolveSymbol
+    IkSetMember
+    IkGetMember
+    IkSetChild
+    IkGetChild
+
+    IkSelf
+
+    IkYield
+    IkResume
+
+    IkInternal
+
+  Instruction* = object
+    kind*: InstructionKind
+    arg0*: Value
+    arg1*: Value
+    label*: Label
+
+  CompilationUnitKind* = enum
+    CkDefault
+    CkFunction
+    CkMacro
+    CkBlock
+    CkModule
+    CkInit      # namespace / class / object initialization
+    CkInline    # evaluation during execution
+
+  CompilationUnit* = ref object
+    id*: Id
+    kind*: CompilationUnitKind
+    matcher*: RootMatcher
+    instructions*: seq[Instruction]
+    labels*: Table[Label, int]
+    skip_return*: bool
+
+  Address* = object
+    id*: Id
+    pc*: int
+
+  VirtualMachineState* = enum
+    VmWaiting   # waiting for task
+    VmRunning
+    VmPaused
+
+  VirtualMachine* = ref object
+    state*: VirtualMachineState
+    data*: VirtualMachineData
+
+  VmCallback* = proc() {.gcsafe.}
+
+  VirtualMachineData* = ref object
+    is_main*: bool
+    cur_block*: CompilationUnit
+    pc*: int
+    registers*: Registers
+    code_mgr*: CodeManager
+
+  Registers* = ref object
+    caller*: Caller
+    ns*: Namespace
+    scope*: Scope
+    self*: Value
+    args*: Value
+    match_result*: MatchResult
+    data*: array[32, Value]
+    next_slot*: int
+
+  Caller* = ref object
+    address*: Address
+    registers*: Registers
+
+  CodeManager* = ref object
+    data*: Table[Id, CompilationUnit]
 
   # No symbols should be removed.
   ManagedSymbols = object
@@ -65,6 +517,17 @@ type
   ManagedGenes = object
     data: seq[Gene]
     free: seq[int64]
+
+  Exception* = object of CatchableError
+    instance*: Value  # instance of Gene exception class
+
+  NotDefinedException* = object of Exception
+
+  # Types related to command line argument parsing
+  ArgumentError* = object of Exception
+
+  NativeFn* = proc(vm_data: VirtualMachineData, args: Value): Value {.gcsafe, nimcall.}
+  NativeFn2* = proc(vm_data: VirtualMachineData, args: Value): Value {.gcsafe.}
 
 const I64_MASK = 0xC000_0000_0000_0000u64
 const F64_ZERO = 0x2000_0000_0000_0000u64
@@ -107,6 +570,15 @@ const EMPTY_STRING = 0xFFF8_0000_0000_0000u64
 const SYMBOL_PREFIX  = 0xFFFA
 const EMPTY_SYMBOL = 0xFFFA_0000_0000_0000u64
 
+const BIGGEST_INT = 2^61 - 1
+
+var VM* {.threadvar.}: VirtualMachine   # The current virtual machine
+var App* {.threadvar.}: Value
+
+var VmCreatedCallbacks*: seq[VmCallback] = @[]
+
+randomize()
+
 #################### Definitions #################
 
 proc kind*(v: Value): ValueKind {.inline.}
@@ -124,6 +596,11 @@ converter to_value*(v: Rune): Value {.inline.}
 
 proc get_symbol*(i: int64): string {.inline.}
 
+proc new_namespace*(): Namespace {.gcsafe.}
+proc new_namespace*(name: string): Namespace {.gcsafe.}
+proc new_namespace*(parent: Namespace): Namespace {.gcsafe.}
+proc `[]=`*(self: var Namespace, key: string, val: Value) {.inline.}
+
 #################### Common ######################
 
 proc todo*() =
@@ -140,6 +617,9 @@ proc not_allowed*() =
 
 proc to_binstr*(v: int64): string =
   re.replacef(fmt"{v: 065b}", re.re"([01]{8})", "$1 ")
+
+proc new_id*(): Id =
+  cast[Id](rand(BIGGEST_INT))
 
 #################### Reference ###################
 
@@ -564,6 +1044,494 @@ proc gene*(self: Value): Gene =
       return get_gene(cast[int64](bitand(v, AND_MASK)))
     else:
       not_allowed("Not a gene.")
+
+#################### Application #################
+
+proc new_app*(): Application =
+  result = Application()
+  var global = new_namespace("global")
+  result.ns = global
+
+#################### Namespace ###################
+
+proc new_namespace*(): Namespace =
+  return Namespace(
+    name: "<root>",
+    members: Table[string, Value](),
+  )
+
+proc new_namespace*(parent: Namespace): Namespace =
+  return Namespace(
+    parent: parent,
+    name: "<root>",
+    members: Table[string, Value](),
+  )
+
+proc new_namespace*(name: string): Namespace =
+  return Namespace(
+    name: name,
+    members: Table[string, Value](),
+  )
+
+proc new_namespace*(parent: Namespace, name: string): Namespace =
+  return Namespace(
+    parent: parent,
+    name: name,
+    members: Table[string, Value](),
+  )
+
+proc root*(self: Namespace): Namespace =
+  if self.name == "<root>":
+    return self
+  else:
+    return self.parent.root
+
+proc get_module*(self: Namespace): Module =
+  if self.module == nil:
+    if self.parent != nil:
+      return self.parent.get_module()
+    else:
+      return
+  else:
+    return self.module
+
+proc package*(self: Namespace): Package =
+  self.get_module().pkg
+
+proc proxy*(self: Namespace, name: string, target: Value) =
+  self.proxies[name] = target
+
+proc has_key*(self: Namespace, key: string): bool {.inline.} =
+  todo()
+  # if self.proxies.has_key(key):
+  #   return self.proxies[key].ns.has_key(key)
+  # else:
+  #   return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
+
+proc `[]`*(self: Namespace, key: string): Value {.inline.} =
+  todo()
+  # if self.proxies.has_key(key):
+  #   return self.proxies[key].ns[key]
+  # elif self.members.has_key(key):
+  #   return self.members[key]
+  # elif not self.stop_inheritance and self.parent != nil:
+  #   return self.parent[key]
+  # else:
+  #   raise new_exception(NotDefinedException, key & " is not defined")
+
+proc locate*(self: Namespace, key: string): (Value, Namespace) {.inline.} =
+  if self.members.has_key(key):
+    result = (self.members[key], self)
+  elif not self.stop_inheritance and self.parent != nil:
+    result = self.parent.locate(key)
+  else:
+    not_allowed()
+
+proc `[]=`*(self: var Namespace, key: string, val: Value) {.inline.} =
+  self.members[key] = val
+
+proc get_members*(self: Namespace): Value =
+  todo()
+  # result = new_gene_map()
+  # for k, v in self.members:
+  #   result.map[k] = v
+
+proc member_names*(self: Namespace): Value =
+  todo()
+  # result = new_gene_vec()
+  # for k, _ in self.members:
+  #   result.vec.add(k)
+
+# proc on_member_missing*(frame: Frame, self: Value, args: Value): Value =
+proc on_member_missing*(vm_data: VirtualMachineData, args: Value): Value =
+  todo()
+  # let self = args.gene_type
+  # case self.kind
+  # of VkNamespace:
+  #   self.ns.on_member_missing.add(args.gene_children[0])
+  # of VkClass:
+  #   self.class.ns.on_member_missing.add(args.gene_children[0])
+  # of VkMixin:
+  #   self.mixin.ns.on_member_missing.add(args.gene_children[0])
+  # else:
+  #   todo("member_missing " & $self.kind)
+
+#################### Scope #######################
+
+proc new_scope*(): Scope = Scope(
+  members: @[],
+  mappings: Table[string, int](),
+  mapping_history: @[],
+)
+
+proc max*(self: Scope): NameIndexScope {.inline.} =
+  return self.members.len.NameIndexScope
+
+proc set_parent*(self: var Scope, parent: Scope, max: NameIndexScope) {.inline.} =
+  self.parent = parent
+  self.parent_index_max = max
+
+proc reset*(self: var Scope) {.inline.} =
+  self.parent = nil
+  self.members.setLen(0)
+
+proc has_key(self: Scope, key: string, max: int): bool {.inline.} =
+  if self.mappings.has_key(key):
+    var found = self.mappings[key]
+    if found < max:
+      return true
+    if found > 255:
+      var index = found and 0xFF
+      if index < max:
+        return true
+      var history_index = found.shr(8) - 1
+      var history = self.mapping_history[history_index]
+      # If first >= max, all others will be >= max
+      if history[0].int < max:
+        return true
+
+  if self.parent != nil:
+    return self.parent.has_key(key, self.parent_index_max.int)
+
+proc has_key*(self: Scope, key: string): bool {.inline.} =
+  if self.mappings.has_key(key):
+    return true
+  elif self.parent != nil:
+    return self.parent.has_key(key, self.parent_index_max.int)
+
+proc def_member*(self: var Scope, key: string, val: Value) {.inline.} =
+  var index = self.members.len
+  self.members.add(val)
+  if self.mappings.has_key_or_put(key, index):
+    var cur = self.mappings[key]
+    if cur > 255:
+      todo()
+      # var history_index = cur.shr(8) - 1
+      # self.mapping_history[history_index].add(cur and 0xFF)
+      # self.mappings[key] = (cur and 0b1111111100000000) + index
+    else:
+      var history_index = self.mapping_history.len
+      self.mapping_history.add(@[NameIndexScope(cur)])
+      self.mappings[key] = (history_index + 1).shl(8) + index
+
+proc `[]`(self: Scope, key: string, max: int): Value {.inline.} =
+  if self.mappings.has_key(key):
+    var found = self.mappings[key]
+    if found > 255:
+      var cur = found and 0xFF
+      if cur < max:
+        return self.members[cur]
+      else:
+        var history_index = found.shr(8) - 1
+        var history = self.mapping_history[history_index]
+        var i = history.len - 1
+        while i >= 0:
+          var index: int = history[i].int
+          if index < max:
+            return self.members[index]
+          i -= 1
+    elif found < max:
+      return self.members[found.int]
+
+  if self.parent != nil:
+    return self.parent[key, self.parent_index_max.int]
+
+proc `[]`*(self: Scope, key: string): Value {.inline.} =
+  if self.mappings.has_key(key):
+    var found = self.mappings[key]
+    if found > 255:
+      found = found and 0xFF
+    return self.members[found]
+  elif self.parent != nil:
+    return self.parent[key, self.parent_index_max.int]
+
+proc `[]=`(self: var Scope, key: string, val: Value, max: int) {.inline.} =
+  if self.mappings.has_key(key):
+    var found = self.mappings[key]
+    if found > 255:
+      var index = found and 0xFF
+      if index < max:
+        self.members[index] = val
+      else:
+        var history_index = found.shr(8) - 1
+        var history = self.mapping_history[history_index]
+        var i = history.len - 1
+        while i >= 0:
+          var index: int = history[history_index].int
+          if index < max:
+            self.members[index] = val
+          i -= 1
+    elif found < max:
+      self.members[found.int] = val
+
+  elif self.parent != nil:
+    self.parent.`[]=`(key, val, self.parent_index_max.int)
+  else:
+    not_allowed()
+
+proc `[]=`*(self: var Scope, key: string, val: Value) {.inline.} =
+  if self.mappings.has_key(key):
+    self.members[self.mappings[key].int] = val
+  elif self.parent != nil:
+    self.parent.`[]=`(key, val, self.parent_index_max.int)
+  else:
+    not_allowed()
+
+#################### Pattern Matching ############
+
+proc new_match_matcher*(): RootMatcher =
+  result = RootMatcher(
+    mode: MatchExpression,
+  )
+
+proc new_arg_matcher*(): RootMatcher =
+  result = RootMatcher(
+    mode: MatchArguments,
+  )
+
+proc new_matcher*(root: RootMatcher, kind: MatcherKind): Matcher =
+  result = Matcher(
+    root: root,
+    kind: kind,
+  )
+
+proc required*(self: Matcher): bool =
+  # return self.default_value_expr == nil and not self.is_splat
+  return not self.is_splat
+
+proc hint*(self: RootMatcher): MatchingHint =
+  if self.children.len == 0:
+    result.mode = MhNone
+  else:
+    result.mode = MhSimpleData
+    for item in self.children:
+      if item.kind != MatchData or not item.required:
+        result.mode = MhDefault
+        return
+
+# proc new_matched_field*(name: string, value: Value): MatchedField =
+#   result = MatchedField(
+#     name: name,
+#     value: value,
+#   )
+
+proc props*(self: seq[Matcher]): HashSet[string] =
+  for m in self:
+    if m.kind == MatchProp and not m.is_splat:
+      result.incl(m.name)
+
+proc prop_splat*(self: seq[Matcher]): string =
+  for m in self:
+    if m.kind == MatchProp and m.is_splat:
+      return m.name
+
+#################### Function ####################
+
+proc new_fn*(name: string, matcher: RootMatcher, body: seq[Value]): Function =
+  return Function(
+    name: name,
+    matcher: matcher,
+    matching_hint: matcher.hint,
+    body: body,
+  )
+
+#################### Macro #######################
+
+proc new_macro*(name: string, matcher: RootMatcher, body: seq[Value]): Macro =
+  return Macro(
+    name: name,
+    matcher: matcher,
+    matching_hint: matcher.hint,
+    body: body,
+  )
+
+#################### Block #######################
+
+proc new_block*(matcher: RootMatcher,  body: seq[Value]): Block =
+  return Block(
+    matcher: matcher,
+    matching_hint: matcher.hint,
+    body: body,
+  )
+
+#################### Class #######################
+
+proc new_class*(name: string, parent: Class): Class =
+  return Class(
+    name: name,
+    ns: new_namespace(nil, name),
+    parent: parent,
+  )
+
+proc new_class*(name: string): Class =
+  var parent: Class
+  # if VM.object_class != nil:
+  #   parent = VM.object_class.class
+  new_class(name, parent)
+
+proc get_constructor*(self: Class): Value =
+  if self.constructor.is_nil:
+    if not self.parent.is_nil:
+      return self.parent.get_constructor()
+  else:
+    return self.constructor
+
+proc has_method*(self: Class, name: string): bool =
+  if self.methods.has_key(name):
+    return true
+  elif self.parent != nil:
+    return self.parent.has_method(name)
+
+proc get_method*(self: Class, name: string): Method =
+  if self.methods.has_key(name):
+    return self.methods[name]
+  elif self.parent != nil:
+    return self.parent.get_method(name)
+  # else:
+  #   not_allowed("No method available: " & name.to_s)
+
+proc get_super_method*(self: Class, name: string): Method =
+  if self.parent != nil:
+    return self.parent.get_method(name)
+  else:
+    not_allowed("No super method available: " & name)
+
+proc get_class*(val: Value): Class =
+  case val.kind:
+    # of VkApplication:
+    #   return App.app.application_class.class
+    # of VkPackage:
+    #   return App.app.package_class.class
+    # of VkInstance:
+    #   return val.instance_class
+    # of VkCast:
+    #   return val.cast_class
+    # of VkClass:
+    #   return App.app.class_class.class
+    # of VkMixin:
+    #   return App.app.mixin_class.class
+    # of VkNamespace:
+    #   return App.app.namespace_class.class
+    # of VkFuture:
+    #   return App.app.future_class.class
+    # of VkThread:
+    #   return App.app.thread_class.class
+    # of VkThreadMessage:
+    #   return App.app.thread_message_class.class
+    # of VkNativeFile:
+    #   return App.app.file_class.class
+    # of VkException:
+    #   var ex = val.exception
+    #   if ex is ref Exception:
+    #     var ex = cast[ref Exception](ex)
+    #     if ex.instance != nil:
+    #       return ex.instance.instance_class
+    #     else:
+    #       return App.app.exception_class.class
+    #   else:
+    #     return App.app.exception_class.class
+    # of VkNil:
+    #   return App.app.nil_class.class
+    # of VkBool:
+    #   return App.app.bool_class.class
+    # of VkInt:
+    #   return App.app.int_class.class
+    # of VkChar:
+    #   return App.app.char_class.class
+    # of VkString:
+    #   return App.app.string_class.class
+    # of VkSymbol:
+    #   return App.app.symbol_class.class
+    # of VkComplexSymbol:
+    #   return App.app.complex_symbol_class.class
+    # of VkVector:
+    #   return App.app.array_class.class
+    # of VkMap:
+    #   return App.app.map_class.class
+    # of VkSet:
+    #   return App.app.set_class.class
+    # of VkGene:
+    #   return App.app.gene_class.class
+    # of VkRegex:
+    #   return App.app.regex_class.class
+    # of VkRange:
+    #   return App.app.range_class.class
+    # of VkDate:
+    #   return App.app.date_class.class
+    # of VkDateTime:
+    #   return App.app.datetime_class.class
+    # of VkTime:
+    #   return App.app.time_class.class
+    # of VkFunction:
+    #   return App.app.function_class.class
+    # of VkTimezone:
+    #   return App.app.timezone_class.class
+    # of VkAny:
+    #   if val.any_class == nil:
+    #     return App.app.object_class.class
+    #   else:
+    #     return val.any_class
+    # of VkCustom:
+    #   if val.custom_class == nil:
+    #     return App.app.object_class.class
+    #   else:
+    #     return val.custom_class
+    else:
+      todo("get_class " & $val.kind)
+
+proc is_a*(self: Value, class: Class): bool =
+  var my_class = self.get_class
+  while true:
+    if my_class == class:
+      return true
+    if my_class.parent == nil:
+      return false
+    else:
+      my_class = my_class.parent
+
+proc def_native_method*(self: Class, name: string, f: NativeFn) =
+  self.methods[name] = Method(
+    class: self,
+    name: name,
+    callable: Reference(kind: VkNativeFn, native_fn: f),
+  )
+
+proc def_native_method*(self: Class, name: string, f: NativeFn2) =
+  self.methods[name] = Method(
+    class: self,
+    name: name,
+    callable: Reference(kind: VkNativeFn2, native_fn2: f),
+  )
+
+proc def_native_macro_method*(self: Class, name: string, f: NativeFn) =
+  self.methods[name] = Method(
+    class: self,
+    name: name,
+    callable: Reference(kind: VkNativeFn, native_fn: f),
+    is_macro: true,
+  )
+
+proc def_native_constructor*(self: Class, f: NativeFn) =
+  self.constructor = Reference(kind: VkNativeFn, native_fn: f)
+
+proc def_native_constructor*(self: Class, f: NativeFn2) =
+  self.constructor = Reference(kind: VkNativeFn2, native_fn2: f)
+
+#################### Method ######################
+
+proc new_method*(class: Class, name: string, fn: Function): Method =
+  return Method(
+    class: class,
+    name: name,
+    callable: Reference(kind: VkFunction, fn: fn),
+  )
+
+proc clone*(self: Method): Method =
+  return Method(
+    class: self.class,
+    name: self.name,
+    callable: self.callable,
+  )
 
 #################### Helpers #####################
 

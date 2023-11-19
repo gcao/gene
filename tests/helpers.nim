@@ -2,7 +2,7 @@ import unittest, strutils, tables, osproc
 
 import gene/types
 import gene/parser
-# import gene/vm
+import gene/vm
 
 # Uncomment below lines to see logs
 # import logging
@@ -28,6 +28,9 @@ proc cleanup*(code: string): string =
   result.stripLineEnd
   if result.contains("\n"):
     result = "\n" & result
+
+proc init_all*() =
+  init_app_and_vm()
 
 proc test_parser*(code: string, result: Value) =
   var code = cleanup(code)
@@ -58,3 +61,31 @@ proc test_read_all*(code: string, callback: proc(result: seq[Value])) =
   var code = cleanup(code)
   test "Parser / read_all: " & code:
     callback read_all(code)
+
+proc test_vm*(code: string) =
+  var code = cleanup(code)
+  test "Compilation & VM: " & code:
+    init_all()
+    discard VM.exec(code, "test_code")
+
+proc test_vm*(code: string, result: Value) =
+  var code = cleanup(code)
+  test "Compilation & VM: " & code:
+    init_all()
+    check VM.exec(code, "test_code") == result
+
+proc test_vm*(code: string, callback: proc(result: Value)) =
+  var code = cleanup(code)
+  test "Compilation & VM: " & code:
+    init_all()
+    callback VM.exec(code, "test_code")
+
+proc test_vm_error*(code: string) =
+  var code = cleanup(code)
+  test "Compilation & VM: " & code:
+    init_all()
+    try:
+      discard VM.exec(code, "test_code")
+      fail()
+    except:
+      discard
