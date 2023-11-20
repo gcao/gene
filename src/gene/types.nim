@@ -594,6 +594,10 @@ proc str*(v: Value): string {.inline.}
 converter to_value*(v: char): Value {.inline.}
 converter to_value*(v: Rune): Value {.inline.}
 
+proc add_gene*(v: Gene): int64
+proc get_gene*(i: int64): Gene
+proc free_gene*(i: int64)
+
 proc get_symbol*(i: int64): string {.inline.}
 
 proc new_namespace*(): Namespace {.gcsafe.}
@@ -620,6 +624,24 @@ proc to_binstr*(v: int64): string =
 
 proc new_id*(): Id =
   cast[Id](rand(BIGGEST_INT))
+
+proc `=destroy`*(self: Value) =
+  let v1 = cast[uint64](self)
+  case cast[int64](v1.shr(48)):
+    of GENE_PREFIX:
+      free_gene(cast[int64](bitand(v1, AND_MASK)))
+    else:
+      discard
+
+proc `=copy`*(a: var Value, b: Value) =
+  `=destroy`(a)
+  let v1 = cast[uint64](b)
+  case cast[int64](v1.shr(48)):
+    of GENE_PREFIX:
+      let i = add_gene(get_gene(cast[int64](bitand(v1, AND_MASK))))
+      a = cast[Value](bitor(GENE_MASK, i.uint64))
+    else:
+      a = cast[Value](cast[uint64](b))
 
 #################### Reference ###################
 
