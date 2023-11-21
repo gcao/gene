@@ -135,7 +135,7 @@ test_parser "[,]", @[]
 test_parser "[1 2]", new_array_value(to_value(1), to_value(2))
 test_parser "[1, 2]", new_array_value(to_value(1), to_value(2))
 
-test_parser "#[]", new_set()
+test_parser "#[]", new_set_value()
 # This should work
 # test_parser "#[1 2]", new_gene_set(to_value(1), to_value(2))
 

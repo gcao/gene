@@ -46,8 +46,8 @@ type
 
   Value* = distinct int64
 
-  Reference* = ref object
-    # ref_count*: int32
+  Reference* = object
+    ref_count*: int32
     case kind*: ValueKind
       of VkDocument:
         doc*: Document
@@ -225,7 +225,7 @@ type
   Class* = ref object
     parent*: Class
     name*: string
-    constructor*: Reference
+    constructor*: Value
     methods*: Table[string, Method]
     on_extended*: Value
     # method_missing*: Value
@@ -235,7 +235,7 @@ type
   Method* = ref object
     class*: Class
     name*: string
-    callable*: Reference
+    callable*: Value
     # public*: bool
     is_macro*: bool
 
@@ -512,10 +512,6 @@ type
     store: seq[string]
     map:  Table[string, int64]
 
-  ManagedReferences = object
-    data: seq[Reference]
-    free: seq[int64]
-
   Exception* = object of CatchableError
     instance*: Value  # instance of Gene exception class
 
@@ -559,9 +555,7 @@ const CHAR3_MASK = 0x7FFE_0400_0000_0000u64
 const CHAR4_MASK = 0x7FFE_0500_0000_0000u64
 
 const SHORT_STR_PREFIX  = 0xFFF8
-const LONG_STR_PREFIX = 0xFFF9
 const SHORT_STR_MASK = 0xFFF8_0000_0000_0000u64
-const LONG_STR_MASK = 0xFFF9_0000_0000_0000u64
 
 const EMPTY_STRING = 0xFFF8_0000_0000_0000u64
 
@@ -583,18 +577,14 @@ proc kind*(v: Value): ValueKind {.inline.}
 proc `==`*(a, b: Value): bool {.no_side_effect.}
 
 proc `$`*(self: Value): string
-proc `$`*(self: Reference): string
+proc `$`*(self: ptr Reference): string
 
-proc to_ref*(v: Value): Reference
+proc to_ref*(v: Value): ptr Reference
 
 proc str*(v: Value): string {.inline.}
 
 converter to_value*(v: char): Value {.inline.}
 converter to_value*(v: Rune): Value {.inline.}
-
-# proc add_gene*(v: Gene): int64
-# proc get_gene*(i: int64): Gene
-# proc free_gene*(i: int64)
 
 proc get_symbol*(i: int64): string {.inline.}
 
@@ -648,9 +638,7 @@ proc `=copy`*(a: var Value, b: Value) =
 
 #################### Reference ###################
 
-var REFS*: ManagedReferences
-
-proc `==`*(a, b: Reference): bool =
+proc `==`*(a, b: ptr Reference): bool =
   if a.is_nil:
     return b.is_nil
 
@@ -672,50 +660,37 @@ proc `==`*(a, b: Reference): bool =
     else:
       todo()
 
-proc `$`*(self: Reference): string =
+proc `$`*(self: ptr Reference): string =
   $self.kind
 
-proc add_ref*(v: Reference): int64 =
-  {.cast(gcsafe).}:
-    if REFS.free.len == 0:
-      result = REFS.data.len
-      REFS.data.add(v)
-    else:
-      result = REFS.free.pop()
-      REFS.data[result] = v
-    # echo REFS.data, " ", result
+proc new_ref*(kind: ValueKind): ptr Reference =
+  result = cast[ptr Reference](alloc0(sizeof(Reference)))
+  {.cast(uncheckedAssign).}:
+    result.kind = kind
 
-proc get_ref*(i: int64): Reference =
-  {.cast(no_side_effect).}:
-    REFS.data[i]
+proc to_ref*(v: Value): ptr Reference =
+  cast[ptr Reference](bitand(AND_MASK, v.uint64))
 
-proc free_ref*(i: int64) =
-  REFS.data[i] = nil
-  REFS.free.add(i)
-
-proc to_ref*(v: Value): Reference =
-  {.cast(gcsafe).}:
-    get_ref(cast[int64](bitand(AND_MASK, v.uint64)))
-
-converter to_value*(v: Reference): Value {.inline.} =
-  {.cast(gcsafe).}:
-    cast[Value](bitor(REF_MASK, add_ref(v).uint64))
+converter to_ref_value*(v: ptr Reference): Value {.inline.} =
+  v.ref_count.inc()
+  cast[Value](bitor(REF_MASK, cast[uint64](v)))
 
 #################### Value ######################
 
 proc `==`*(a, b: Value): bool {.no_side_effect.} =
-  {.cast(gcsafe).}:
-    if cast[uint64](a) == cast[uint64](b):
-      return true
+  cast[uint64](a) == cast[uint64](b)
+  # {.cast(gcsafe).}:
+  #   if cast[uint64](a) == cast[uint64](b):
+  #     return true
 
-    let v1 = cast[uint64](a)
-    let v2 = cast[uint64](b)
-    case cast[int64](v1.shr(48)):
-      of REF_PREFIX:
-        if cast[int64](v2.shr(48)) == REF_PREFIX:
-          return get_ref(cast[int64](bitand(v1, AND_MASK))) == get_ref(cast[int64](bitand(v2, AND_MASK)))
-      else:
-        discard
+  #   let v1 = cast[uint64](a)
+  #   let v2 = cast[uint64](b)
+  #   case cast[int64](v1.shr(48)):
+  #     of REF_PREFIX:
+  #       if cast[int64](v2.shr(48)) == REF_PREFIX:
+  #         return get_ref(cast[int64](bitand(v1, AND_MASK))) == get_ref(cast[int64](bitand(v2, AND_MASK)))
+  #     else:
+  #       discard
 
   # Default to false
 
@@ -730,15 +705,12 @@ proc kind*(v: Value): ValueKind {.inline.} =
       of POINTER_PREFIX:
         return VkPointer
       of REF_PREFIX:
-        # It may not be a bad idea to store the reference kind in the value itself.
-        # However we may later support changing reference in place, so it may not be a good idea.
-        let r = get_ref(cast[int64](bitand(v1, AND_MASK)))
-        return r.kind
+        return v.to_ref().kind
       of GENE_PREFIX:
         return VkGene
       # of CHAR_PREFIX:
       #   return VkChar
-      of SHORT_STR_PREFIX, LONG_STR_PREFIX:
+      of SHORT_STR_PREFIX:
         return VkString
       of SYMBOL_PREFIX:
         return VkSymbol
@@ -773,7 +745,7 @@ proc `$`*(self: Value): string =
     of VkInt:
       result = $(cast[int64](self))
     of VkString:
-      result = $self.to_ref.str
+      result = $self.to_ref().str
     of VkSymbol:
       todo()
     else:
@@ -819,30 +791,30 @@ proc `[]`*(self: Value, i: int): Value {.inline.} =
     of NIL_PREFIX:
       return NIL
     of REF_PREFIX:
-      # It may not be a bad idea to store the reference kind in the value itself.
-      # However we may later support changing reference in place, so it may not be a good idea.
-      let r = get_ref(cast[int64](bitand(v, AND_MASK)))
-      if r.kind == VkArray:
-        if i >= r.arr.len:
-          return NIL
+      let r = self.to_ref()
+      case r.kind:
+        of VkArray:
+          if i >= r.arr.len:
+            return NIL
+          else:
+            return r.arr[i]
+        of VkString:
+          var j = 0
+          for r in r.str.runes:
+            if i == j:
+              return r
+            j.inc()
         else:
-          return r.arr[i]
-      else:
-        todo($r.kind)
+          todo($r.kind)
     of GENE_PREFIX:
       todo("VkGene")
-    of SHORT_STR_PREFIX, LONG_STR_PREFIX:
+    of SHORT_STR_PREFIX:
       var j = 0
       # TODO: optimize
       for r in self.str().runes:
         if i == j:
           return r
         j.inc()
-      # return self.str().rune_at(i).to_value()
-      # if i >= self.str().len:
-      #   return NIL
-      # else:
-      #   return self.str()[i].to_value()
     of SYMBOL_PREFIX:
       todo("VkSymbol")
     else:
@@ -857,14 +829,15 @@ proc size*(self: Value): int {.inline.} =
     of REF_PREFIX:
       # It may not be a bad idea to store the reference kind in the value itself.
       # However we may later support changing reference in place, so it may not be a good idea.
-      let r = get_ref(cast[int64](bitand(v, AND_MASK)))
-      if r.kind == VkArray:
-        return r.arr.len
-      else:
-        todo($r.kind)
+      let r = self.to_ref()
+      case r.kind:
+        of VkArray:
+          return r.arr.len
+        else:
+          todo($r.kind)
     of GENE_PREFIX:
       todo("VkGene")
-    of SHORT_STR_PREFIX, LONG_STR_PREFIX:
+    of SHORT_STR_PREFIX:
       return self.str().to_runes().len
     of SYMBOL_PREFIX:
       todo("VkSymbol")
@@ -885,15 +858,6 @@ converter to_int*(v: Value): int64 {.inline.} =
   result = cast[int64](v)
 
 #################### String #####################
-
-proc get_str*(i: int64): string =
-  get_ref(i).str
-
-proc new_str*(s: string): int64 =
-  add_ref(Reference(kind: VkString, str: s))
-
-proc free_str*(i: int64) =
-  free_ref(i)
 
 converter to_value*(v: char): Value {.inline.} =
   {.cast(gcsafe).}:
@@ -933,9 +897,8 @@ proc str*(v: Value): string {.inline.} =
             else: # 0 char
               result = ""
 
-      of LONG_STR_PREFIX:
-        var x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
-        result = get_str(x)
+      of REF_PREFIX:
+        result = v.to_ref().str
 
       of SYMBOL_PREFIX:
         var x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
@@ -967,8 +930,9 @@ converter to_value*(v: string): Value {.inline.} =
       return cast[Value](bitor(SHORT_STR_MASK,
         v[0].ord.uint64, v[1].ord.shl(8).uint64, v[2].ord.shl(16).uint64, v[3].ord.shl(24).uint64, v[4].ord.shl(32).uint64, v[5].ord.shl(40).uint64))
     else:
-      let i = new_str(v).uint64
-      return cast[Value](bitor(LONG_STR_MASK, i))
+      let r = new_ref(VkString)
+      r.str = v
+      result = r.to_ref_value()
 
 converter to_value*(v: Rune): Value {.inline.} =
   let rune_value = v.ord.uint64
@@ -1001,30 +965,33 @@ proc to_symbol_value*(s: string): Value {.inline.} =
 #################### ComplexSymbol ###############
 
 proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
-  let r = Reference(kind: VkComplexSymbol, csymbol: parts)
-  return r.to_value()
+  let r = new_ref(VkComplexSymbol)
+  r.csymbol = parts
+  result = r.to_ref_value()
 
 #################### Array #######################
 
 proc new_array_value*(v: varargs[Value]): Value =
-  let i = add_ref(Reference(kind: VkArray, arr: @v)).uint64
-  cast[Value](bitor(REF_MASK, i))
+  let r = new_ref(VkArray)
+  r.arr = @v
+  result = r.to_ref_value()
 
 #################### Set #########################
 
-proc new_set*(): Value =
-  let i = add_ref(Reference(kind: VkSet)).uint64
-  cast[Value](bitor(REF_MASK, i))
+proc new_set_value*(): Value =
+  let r = new_ref(VkSet)
+  result = r.to_ref_value()
 
 #################### Map #########################
 
 proc new_map_value*(): Value =
-  let i = add_ref(Reference(kind: VkMap)).uint64
-  cast[Value](bitor(REF_MASK, i))
+  let r = new_ref(VkMap)
+  result = r.to_ref_value()
 
 proc new_map_value*(map: Table[string, Value]): Value =
-  let i = add_ref(Reference(kind: VkMap, map: map)).uint64
-  cast[Value](bitor(REF_MASK, i))
+  let r = new_ref(VkMap)
+  r.map = map
+  result = r.to_ref_value()
 
 #################### Gene ########################
 
@@ -1500,40 +1467,52 @@ proc is_a*(self: Value, class: Class): bool =
       my_class = my_class.parent
 
 proc def_native_method*(self: Class, name: string, f: NativeFn) =
+  let r = new_ref(VkNativeFn)
+  r.native_fn = f
   self.methods[name] = Method(
     class: self,
     name: name,
-    callable: Reference(kind: VkNativeFn, native_fn: f),
+    callable: r.to_ref_value(),
   )
 
 proc def_native_method*(self: Class, name: string, f: NativeFn2) =
+  let r = new_ref(VkNativeFn2)
+  r.native_fn2 = f
   self.methods[name] = Method(
     class: self,
     name: name,
-    callable: Reference(kind: VkNativeFn2, native_fn2: f),
+    callable: r.to_ref_value(),
   )
 
 proc def_native_macro_method*(self: Class, name: string, f: NativeFn) =
+  let r = new_ref(VkNativeFn)
+  r.native_fn = f
   self.methods[name] = Method(
     class: self,
     name: name,
-    callable: Reference(kind: VkNativeFn, native_fn: f),
+    callable: r.to_ref_value(),
     is_macro: true,
   )
 
 proc def_native_constructor*(self: Class, f: NativeFn) =
-  self.constructor = Reference(kind: VkNativeFn, native_fn: f)
+  let r = new_ref(VkNativeFn)
+  r.native_fn = f
+  self.constructor = r.to_ref_value()
 
 proc def_native_constructor*(self: Class, f: NativeFn2) =
-  self.constructor = Reference(kind: VkNativeFn2, native_fn2: f)
+  let r = new_ref(VkNativeFn2)
+  r.native_fn2 = f
+  self.constructor = r.to_ref_value()
 
 #################### Method ######################
 
 proc new_method*(class: Class, name: string, fn: Function): Method =
+  let r = new_ref(VkFunction)
+  r.fn = fn
   return Method(
     class: class,
     name: name,
-    callable: Reference(kind: VkFunction, fn: fn),
+    callable: r.to_ref_value(),
   )
 
 proc clone*(self: Method): Method =
@@ -1546,7 +1525,6 @@ proc clone*(self: Method): Method =
 #################### Helpers #####################
 
 proc init_values*() =
-  REFS = ManagedReferences()
   SYMBOLS = ManagedSymbols()
 
 init_values()

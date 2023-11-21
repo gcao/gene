@@ -346,8 +346,9 @@ proc read_string2(self: var Parser): Value =
   self.read_string('"')
 
 proc read_quoted(self: var Parser): Value =
-  let r = Reference(kind: VkQuote, quote: self.read())
-  result = r
+  let r = new_ref(VkQuote)
+  r.quote = self.read()
+  result = r.to_ref_value()
 
 proc read_string_interpolation(self: var Parser): Value {.gcsafe.} =
   var gene = new_gene("#Str".to_symbol_value())
@@ -370,9 +371,9 @@ proc read_string_interpolation(self: var Parser): Value {.gcsafe.} =
         self.bufpos.inc()
         self.skip_ws()
         if self.buf[self.bufpos] == '^':
-          let v = Reference(kind: VkMap)
-          v.map = self.read_map(MkMap)
-          gene.children.add(v)
+          let r = new_ref(VkMap)
+          r.map = self.read_map(MkMap)
+          gene.children.add(r.to_ref_value())
           all_are_strings = false
         else:
           let v = self.read()
@@ -415,12 +416,10 @@ proc read_unquoted(self: var Parser): Value =
   if self.buf[self.bufpos] == '_':
     self.bufpos.inc()
     unquote_discard = true
-  let r = Reference(
-    kind: VkUnquote,
-    unquote: self.read(),
-    unquote_discard: unquote_discard,
-  )
-  result = r
+  let r = new_ref(VkUnquote)
+  r.unquote = self.read()
+  r.unquote_discard = unquote_discard
+  result = r.to_ref_value()
 
 proc skip_block_comment(self: var Parser) {.gcsafe.} =
   var pos = self.bufpos
@@ -669,9 +668,9 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
                 let r = map[][part].to_ref()
                 map = r.map.addr
               else:
-                var new_map_value = Reference(kind: VkMap)
-                map[][part] = new_map_value
-                map = new_map_value.map.addr
+                var m = new_ref(VkMap)
+                map[][part] = m.to_ref_value()
+                map = m.map.addr
             key = parts[^1]
             case key[0]:
             of '^':
@@ -786,26 +785,21 @@ proc read_gene(self: var Parser): Value {.gcsafe.} =
   result = gene.to_gene_value()
 
 proc read_map(self: var Parser): Value {.gcsafe.} =
-  Reference(
-    kind: VkMap,
-    map: self.read_map(MkMap),
-  )
+  let r = new_ref(VkMap)
+  r.map = self.read_map(MkMap)
+  result = r.to_ref_value()
 
-proc read_vector(self: var Parser): Value {.gcsafe.} =
-  Reference(
-    kind: VkArray,
-    arr: self.read_delimited_list(']', true).list,
-  )
+proc read_array(self: var Parser): Value {.gcsafe.} =
+  let r = new_ref(VkArray)
+  r.arr = self.read_delimited_list(']', true).list
+  result = r.to_ref_value()
 
 proc read_set(self: var Parser): Value =
-  let r = Reference(
-    kind: VkSet,
-    set: HashSet[Value](),
-  )
+  let r = new_ref(VkSet)
   let list_result = self.read_delimited_list(']', true)
   for item in list_result.list:
     r.set.incl(item)
-  result = r
+  result = r.to_ref_value()
 
 proc read_regex(self: var Parser): Value =
   todo()
@@ -925,7 +919,7 @@ proc init_macro_array() =
   macros['#'] = read_dispatch
   macros['('] = read_gene
   macros['{'] = read_map
-  macros['['] = read_vector
+  macros['['] = read_array
   macros[')'] = read_unmatched_delimiter
   macros[']'] = read_unmatched_delimiter
   macros['}'] = read_unmatched_delimiter

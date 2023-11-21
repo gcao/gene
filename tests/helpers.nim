@@ -9,16 +9,16 @@ import gene/vm
 # addHandler(newConsoleLogger())
 
 converter to_value*(self: seq[int]): Value =
-  let r = Reference(kind: VkArray)
+  let r = new_ref(VkArray)
   for item in self:
     r.arr.add(item)
-  result = r.to_value()
+  result = r.to_ref_value()
 
 converter seq_to_gene*(self: seq[string]): Value =
-  let r = Reference(kind: VkArray)
+  let r = new_ref(VkArray)
   for item in self:
     r.arr.add(item.to_value())
-  result = r.to_value()
+  result = r.to_ref_value()
 
 converter to_value*(self: openArray[(string, Value)]): Value =
   new_map_value(self.to_table())

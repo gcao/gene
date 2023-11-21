@@ -10,7 +10,9 @@ proc init_app_and_vm*() =
   VM = VirtualMachine(
     state: VmWaiting,
   )
-  App = Reference(kind: VkApplication, app: new_app()).to_value()
+  let r = new_ref(VkApplication)
+  r.app = new_app()
+  App = r.to_ref_value()
 
   for callback in VmCreatedCallbacks:
     callback()
@@ -642,7 +644,9 @@ proc exec*(self: var VirtualMachine): Value =
       of IkFunction:
         var f = to_function(inst.arg0)
         f.ns = self.data.registers.ns
-        let v = Reference(kind: VkFunction, fn: f).to_value()
+        let r = new_ref(VkFunction)
+        r.fn = f
+        let v = r.to_ref_value()
         f.ns[f.name] = v
         f.parent_scope = self.data.registers.scope
         f.parent_scope_max = self.data.registers.scope.max
@@ -651,7 +655,9 @@ proc exec*(self: var VirtualMachine): Value =
       of IkMacro:
         var m = to_macro(inst.arg0)
         m.ns = self.data.registers.ns
-        var v = Reference(kind: VkMacro, `macro`: m).to_value()
+        let r = new_ref(VkMacro)
+        r.macro = m
+        var v = r.to_ref_value()
         m.ns[m.name] = v
         self.data.registers.push(v)
 
@@ -670,31 +676,33 @@ proc exec*(self: var VirtualMachine): Value =
       of IkNamespace:
         var name = inst.arg0.str
         var ns = new_namespace(name)
-        var v = Reference(kind: VkNamespace, ns: ns).to_value()
+        let r = new_ref(VkNamespace)
+        r.ns = ns
+        var v = r.to_ref_value()
         self.data.registers.ns[name] = v
         self.data.registers.push(v)
 
       of IkClass:
         var name = inst.arg0.str
         var class = new_class(name)
-        var v = Reference(kind: VkClass, class: class).to_value()
+        let r = new_ref(VkClass)
+        r.class = class
+        var v = r.to_ref_value()
         self.data.registers.ns[name] = v
         self.data.registers.push(v)
 
       of IkNew:
         var v = self.data.registers.pop()
-        var instance = Reference(
-          kind: VkInstance,
-          instance_class: v.gene.type.to_ref.class,
-        )
-        self.data.registers.push(instance.to_value())
+        var instance = new_ref(VkInstance)
+        instance.instance_class = v.gene.type.to_ref.class
+        self.data.registers.push(instance.to_ref_value())
 
         let class = instance.instance_class
         if class.constructor != nil:
           case class.constructor.kind:
             of VkFunction:
-              class.constructor.fn.compile()
-              let compiled = class.constructor.fn.body_compiled
+              class.constructor.to_ref().fn.compile()
+              let compiled = class.constructor.to_ref().fn.body_compiled
               compiled.skip_return = true
 
               self.data.pc.inc()
@@ -704,7 +712,7 @@ proc exec*(self: var VirtualMachine): Value =
               )
               self.data.registers = new_registers(caller)
               self.data.registers.self = instance
-              self.data.registers.ns = class.constructor.fn.ns
+              self.data.registers.ns = class.constructor.to_ref().fn.ns
               self.data.cur_block = compiled
               self.data.pc = 0
               continue
@@ -715,9 +723,10 @@ proc exec*(self: var VirtualMachine): Value =
         var name = inst.arg0.str
         var class = new_class(name)
         class.parent = self.data.registers.pop().to_ref.class
-        let r = Reference(kind: VkClass, class: class)
-        self.data.registers.ns[name] = r.to_value()
-        self.data.registers.push(r.to_value())
+        let r = new_ref(VkClass)
+        r.class = class
+        self.data.registers.ns[name] = r.to_ref_value()
+        self.data.registers.push(r.to_ref_value())
 
       of IkResolveMethod:
         todo()
@@ -740,11 +749,11 @@ proc exec*(self: var VirtualMachine): Value =
         let meth = class.get_method(inst.arg0.str)
         case meth.callable.kind:
           of VkNativeFn:
-            self.data.registers.push(meth.callable.native_fn(self.data, v))
+            self.data.registers.push(meth.callable.to_ref().native_fn(self.data, v))
           of VkFunction:
             self.data.pc.inc()
 
-            var fn = meth.callable.fn
+            var fn = meth.callable.to_ref().fn
             fn.compile()
             self.data.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
