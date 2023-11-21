@@ -711,7 +711,7 @@ proc exec*(self: var VirtualMachine): Value =
                 registers: self.data.registers,
               )
               self.data.registers = new_registers(caller)
-              self.data.registers.self = instance
+              self.data.registers.self = instance.to_ref_value()
               self.data.registers.ns = class.constructor.to_ref().fn.ns
               self.data.cur_block = compiled
               self.data.pc = 0

@@ -671,26 +671,24 @@ proc new_ref*(kind: ValueKind): ptr Reference =
 proc to_ref*(v: Value): ptr Reference =
   cast[ptr Reference](bitand(AND_MASK, v.uint64))
 
-converter to_ref_value*(v: ptr Reference): Value {.inline.} =
+proc to_ref_value*(v: ptr Reference): Value {.inline.} =
   v.ref_count.inc()
   cast[Value](bitor(REF_MASK, cast[uint64](v)))
 
 #################### Value ######################
 
 proc `==`*(a, b: Value): bool {.no_side_effect.} =
-  cast[uint64](a) == cast[uint64](b)
-  # {.cast(gcsafe).}:
-  #   if cast[uint64](a) == cast[uint64](b):
-  #     return true
+  if cast[uint64](a) == cast[uint64](b):
+    return true
 
-  #   let v1 = cast[uint64](a)
-  #   let v2 = cast[uint64](b)
-  #   case cast[int64](v1.shr(48)):
-  #     of REF_PREFIX:
-  #       if cast[int64](v2.shr(48)) == REF_PREFIX:
-  #         return get_ref(cast[int64](bitand(v1, AND_MASK))) == get_ref(cast[int64](bitand(v2, AND_MASK)))
-  #     else:
-  #       discard
+  let v1 = cast[uint64](a)
+  let v2 = cast[uint64](b)
+  case cast[int64](v1.shr(48)):
+    of REF_PREFIX:
+      if cast[int64](v2.shr(48)) == REF_PREFIX:
+        return a.to_ref() == b.to_ref()
+    else:
+      discard
 
   # Default to false
 
