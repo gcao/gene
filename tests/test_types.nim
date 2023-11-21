@@ -30,15 +30,15 @@ test "Value kind":
   check "你".to_value().kind == VkString
   check "你从哪里来？".to_value().kind == VkString
 
-  check new_array().kind == VkArray
-  check new_map().kind == VkMap
-  check new_gene().kind == VkGene
+  check new_array_value().kind == VkArray
+  check new_map_value().kind == VkMap
+  check new_gene_value().kind == VkGene
 
-  check "".to_symbol().kind == VkSymbol
-  check "a".to_symbol().kind == VkSymbol
-  check "abcdefghij".to_symbol().kind == VkSymbol
-  check "你".to_symbol().kind == VkSymbol
-  check "你从哪里来？".to_symbol().kind == VkSymbol
+  check "".to_symbol_value().kind == VkSymbol
+  check "a".to_symbol_value().kind == VkSymbol
+  check "abcdefghij".to_symbol_value().kind == VkSymbol
+  check "你".to_symbol_value().kind == VkSymbol
+  check "你从哪里来？".to_symbol_value().kind == VkSymbol
 
 test "Value conversion":
   check nil.pointer.to_value().is_nil() == true
@@ -66,11 +66,11 @@ test "Value conversion":
   check "你".to_value().str() == "你"
   check "你从哪里来？".to_value().str() == "你从哪里来？"
 
-  check "".to_symbol().str() == ""
-  check "abc".to_symbol().str() == "abc"
-  check "abcdefghij".to_symbol().str() == "abcdefghij"
-  check "你".to_symbol().str() == "你"
-  check "你从哪里来？".to_symbol().str() == "你从哪里来？"
+  check "".to_symbol_value().str() == ""
+  check "abc".to_symbol_value().str() == "abc"
+  check "abcdefghij".to_symbol_value().str() == "abcdefghij"
+  check "你".to_symbol_value().str() == "你"
+  check "你从哪里来？".to_symbol_value().str() == "你从哪里来？"
 
 test "String / char":
   check "abc".to_value()[0] == 'a'.to_value()
@@ -80,9 +80,9 @@ test "String / char":
   check "你".to_value().size == 1
 
 test "Array":
-  check new_array().size == 0
-  check new_array(1).size == 1
+  check new_array_value().size == 0
+  check new_array_value(1).size == 1
 
-  let a = new_array(1)
+  let a = new_array_value(1)
   check a[0] == 1
   check a[1] == NIL

@@ -3,7 +3,7 @@ import random
 import dynlib
 
 type
-  ValueKind* = enum
+  ValueKind* {.size: sizeof(int16) .} = enum
     # void vs nil vs placeholder:
     #   void has special meaning in some places (e.g. templates)
     #   nil is the default/uninitialized value.
@@ -47,6 +47,7 @@ type
   Value* = distinct int64
 
   Reference* = ref object
+    # ref_count*: int32
     case kind*: ValueKind
       of VkDocument:
         doc*: Document
@@ -60,7 +61,7 @@ type
         map*: Table[string, Value]
       of VkStream:
         stream*: seq[Value]
-        stream_index*: BiggestInt
+        stream_index*: int64
         stream_ended*: bool
       of VkComplexSymbol:
         csymbol*: seq[string]
@@ -99,7 +100,8 @@ type
       else:
         discard
 
-  Gene* = ref object
+  Gene* = object
+    ref_count*: int32
     `type`*: Value
     props*: Table[string, Value]
     children*: seq[Value]
@@ -514,10 +516,6 @@ type
     data: seq[Reference]
     free: seq[int64]
 
-  ManagedGenes = object
-    data: seq[Gene]
-    free: seq[int64]
-
   Exception* = object of CatchableError
     instance*: Value  # instance of Gene exception class
 
@@ -594,9 +592,9 @@ proc str*(v: Value): string {.inline.}
 converter to_value*(v: char): Value {.inline.}
 converter to_value*(v: Rune): Value {.inline.}
 
-proc add_gene*(v: Gene): int64
-proc get_gene*(i: int64): Gene
-proc free_gene*(i: int64)
+# proc add_gene*(v: Gene): int64
+# proc get_gene*(i: int64): Gene
+# proc free_gene*(i: int64)
 
 proc get_symbol*(i: int64): string {.inline.}
 
@@ -629,7 +627,11 @@ proc `=destroy`*(self: Value) =
   let v1 = cast[uint64](self)
   case cast[int64](v1.shr(48)):
     of GENE_PREFIX:
-      free_gene(cast[int64](bitand(v1, AND_MASK)))
+      let g = cast[ptr Gene](bitand(v1, AND_MASK))
+      if g.ref_count == 1:
+        dealloc(g)
+      else:
+        g.ref_count.dec()
     else:
       discard
 
@@ -638,8 +640,9 @@ proc `=copy`*(a: var Value, b: Value) =
   let v1 = cast[uint64](b)
   case cast[int64](v1.shr(48)):
     of GENE_PREFIX:
-      let i = add_gene(get_gene(cast[int64](bitand(v1, AND_MASK))))
-      a = cast[Value](bitor(GENE_MASK, i.uint64))
+      let g = cast[ptr Gene](bitand(v1, AND_MASK))
+      g.ref_count.inc()
+      a = b
     else:
       a = cast[Value](cast[uint64](b))
 
@@ -985,7 +988,7 @@ var SYMBOLS*: ManagedSymbols
 proc get_symbol*(i: int64): string {.inline.} =
   SYMBOLS.store[i]
 
-proc to_symbol*(s: string): Value {.inline.} =
+proc to_symbol_value*(s: string): Value {.inline.} =
   {.cast(gcsafe).}:
     if SYMBOLS.map.has_key(s):
       let i = SYMBOLS.map[s].uint64
@@ -1003,7 +1006,7 @@ proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
 
 #################### Array #######################
 
-proc new_array*(v: varargs[Value]): Value =
+proc new_array_value*(v: varargs[Value]): Value =
   let i = add_ref(Reference(kind: VkArray, arr: @v)).uint64
   cast[Value](bitor(REF_MASK, i))
 
@@ -1015,57 +1018,42 @@ proc new_set*(): Value =
 
 #################### Map #########################
 
-proc new_map*(): Value =
+proc new_map_value*(): Value =
   let i = add_ref(Reference(kind: VkMap)).uint64
   cast[Value](bitor(REF_MASK, i))
 
-proc new_map*(map: Table[string, Value]): Value =
+proc new_map_value*(map: Table[string, Value]): Value =
   let i = add_ref(Reference(kind: VkMap, map: map)).uint64
   cast[Value](bitor(REF_MASK, i))
 
 #################### Gene ########################
 
-var GENES*: ManagedGenes
+proc to_gene_value*(v: ptr Gene): Value {.inline.} =
+  v.ref_count.inc()
+  cast[Value](bitor(cast[uint64](v), GENE_MASK))
 
-proc add_gene*(v: Gene): int64 =
-  if GENES.free.len == 0:
-    result = GENES.data.len
-    GENES.data.add(v)
-  else:
-    result = GENES.free.pop()
-    GENES.data[result] = v
-  # echo GENES.data, " ", result
+proc gene*(v: Value): ptr Gene {.inline.} =
+  cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
 
-proc get_gene*(i: int64): Gene =
-  GENES.data[i]
+proc new_gene*(): ptr Gene =
+  result = cast[ptr Gene](alloc0(sizeof(Gene)))
+  result.ref_count = 1
+  result.type = NIL
+  result.props = Table[string, Value]()
+  result.children = @[]
 
-proc free_gene*(i: int64) =
-  GENES.data[i] = nil
-  GENES.free.add(i)
+proc new_gene*(`type`: Value): ptr Gene =
+  result = cast[ptr Gene](alloc0(sizeof(Gene)))
+  result.ref_count = 1
+  result.type = `type`
+  result.props = Table[string, Value]()
+  result.children = @[]
 
-converter to_value*(v: Gene): Value =
-  {.cast(gcsafe).}:
-    let i = add_gene(v).uint64
-    cast[Value](bitor(GENE_MASK, i))
+proc new_gene_value*(): Value {.inline.} =
+  new_gene().to_gene_value()
 
-proc new_gene*(): Value =
-  {.cast(gcsafe).}:
-    let i = add_gene(Gene(`type`: NIL)).uint64
-    cast[Value](bitor(GENE_MASK, i))
-
-proc new_gene*(v: Value): Value =
-  {.cast(gcsafe).}:
-    let g = Gene(`type`: v)
-    let i = add_gene(g).uint64
-    cast[Value](bitor(GENE_MASK, i))
-
-proc gene*(self: Value): Gene =
-  {.cast(gcsafe).}:
-    let v = cast[uint64](self)
-    if cast[int64](v.shr(48)) == GENE_PREFIX:
-      return get_gene(cast[int64](bitand(v, AND_MASK)))
-    else:
-      not_allowed("Not a gene.")
+proc new_gene_value*(`type`: Value): Value {.inline.} =
+  new_gene(`type`).to_gene_value()
 
 #################### Application #################
 
@@ -1559,7 +1547,6 @@ proc clone*(self: Method): Method =
 
 proc init_values*() =
   REFS = ManagedReferences()
-  GENES = ManagedGenes()
   SYMBOLS = ManagedSymbols()
 
 init_values()

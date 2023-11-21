@@ -350,7 +350,7 @@ proc read_quoted(self: var Parser): Value =
   result = r
 
 proc read_string_interpolation(self: var Parser): Value {.gcsafe.} =
-  var gene = Gene(`type`: new_gene("#Str".to_symbol()))
+  var gene = new_gene("#Str".to_symbol_value())
   var triple_mode = false
   if self.buf[self.bufpos] == '"' and self.buf[self.bufpos + 1] == '"':
     self.bufpos += 2
@@ -407,7 +407,7 @@ proc read_string_interpolation(self: var Parser): Value {.gcsafe.} =
       s.add(v.str)
     return s
   else:
-    return gene
+    return gene.to_gene_value()
 
 proc read_unquoted(self: var Parser): Value =
   # Special logic for %_
@@ -493,7 +493,7 @@ proc read_character(self: var Parser): Value =
     discard self.parse_string(ch)
     if self.error != ErrNone:
       raise new_exception(ParseError, "read_string failure: " & $self.error)
-    return self.str.to_symbol()
+    return self.str.to_symbol_value()
   else:
     let token = self.read_token(false)
     if token.len == 1:
@@ -544,7 +544,7 @@ proc skip_ws(self: var Parser) {.gcsafe.} =
 
 proc match_symbol(s: string): Value =
   if s == "/":
-    return s.to_symbol()
+    return s.to_symbol_value()
   var parts: seq[string] = @[]
   var i = 0
   var part = ""
@@ -566,7 +566,7 @@ proc match_symbol(s: string): Value =
   if parts.len > 1:
     return parts.to_complex_symbol()
   else:
-    return parts[0].to_symbol()
+    return parts[0].to_symbol_value()
 
 proc interpret_token(token: string): Value =
   case token
@@ -669,9 +669,9 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
                 let r = map[][part].to_ref()
                 map = r.map.addr
               else:
-                var new_map = Reference(kind: VkMap)
-                map[][part] = new_map
-                map = new_map.map.addr
+                var new_map_value = Reference(kind: VkMap)
+                map[][part] = new_map_value
+                map = new_map_value.map.addr
             key = parts[^1]
             case key[0]:
             of '^':
@@ -769,7 +769,7 @@ proc add_line_col(self: var Parser, node: var Value) =
   # node.column = self.getColNumber(self.bufpos)
 
 proc read_gene(self: var Parser): Value {.gcsafe.} =
-  var gene = Gene(`type`: NIL)
+  var gene = new_gene()
   #echo "line ", getCurrentLine(p), "lineno: ", p.line_number, " col: ", getColNumber(p, p.bufpos)
   #echo $get_current_line(p) & " LINENO(" & $p.line_number & ")"
   self.add_line_col(result)
@@ -780,10 +780,10 @@ proc read_gene(self: var Parser): Value {.gcsafe.} =
   if not gene.type.is_nil() and gene.type.kind == VkSymbol:
     if handlers.has_key(gene.type.str):
       let handler = handlers[gene.type.str]
-      result = gene
+      result = gene.to_gene_value()
       return handler(self, result)
 
-  result = gene
+  result = gene.to_gene_value()
 
 proc read_map(self: var Parser): Value {.gcsafe.} =
   Reference(
@@ -893,9 +893,9 @@ proc read_unmatched_delimiter(self: var Parser): Value =
 #   result = nil
 
 proc read_decorator(self: var Parser): Value =
-  let gene = Gene(`type`: self.read())
+  let gene = new_gene(self.read())
   gene.children.add(self.read())
-  result = gene
+  result = gene.to_gene_value()
 
 # proc read_star(self: var Parser): Value =
 #   return new_gene_gene(self.read())

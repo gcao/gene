@@ -177,7 +177,7 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
       todo("parse " & $v.kind)
 
 proc parse*(self: var RootMatcher, v: Value) =
-  if v == nil or v == to_symbol("_"):
+  if v == nil or v == to_symbol_value("_"):
     return
   self.parse(self.children, v)
   self.calc_min_left()
@@ -195,7 +195,7 @@ proc to_function*(node: Value): Function {.gcsafe.} =
     matcher.parse(node.gene.children[0])
     name = "<unnamed>"
     body_start = 1
-  elif node.gene.type == to_symbol("fnxx"):
+  elif node.gene.type == to_symbol_value("fnxx"):
     name = "<unnamed>"
     body_start = 0
   else:
@@ -412,7 +412,7 @@ proc exec*(self: var VirtualMachine): Value =
         discard self.data.registers.pop()
 
       of IkArrayStart:
-        self.data.registers.push(new_array())
+        self.data.registers.push(new_array_value())
       of IkArrayAddChild:
         let child = self.data.registers.pop()
         self.data.registers.current().to_ref.arr.add(child)
@@ -420,7 +420,7 @@ proc exec*(self: var VirtualMachine): Value =
         discard
 
       of IkMapStart:
-        self.data.registers.push(new_map())
+        self.data.registers.push(new_map_value())
       of IkMapSetProp:
         let key = inst.arg0.str
         let val = self.data.registers.pop()
@@ -429,27 +429,27 @@ proc exec*(self: var VirtualMachine): Value =
         discard
 
       of IkGeneStart:
-        self.data.registers.push(new_gene())
+        self.data.registers.push(new_gene_value())
       of IkGeneStartDefault:
         let v = self.data.registers.pop()
         if v.kind == VkMacro:
           not_allowed("Macro not allowed here")
-        self.data.registers.push(new_gene(v))
+        self.data.registers.push(new_gene_value(v))
       of IkGeneStartMacro:
         let v = self.data.registers.pop()
         if v.kind != VkMacro:
           not_allowed("Macro expected")
-        self.data.registers.push(new_gene(v))
+        self.data.registers.push(new_gene_value(v))
       of IkGeneStartMethod:
         let v = self.data.registers.pop()
         # if v.kind != VkBoundMethod or v.bound_method.method.is_macro:
         #   not_allowed("Macro method not allowed here")
-        self.data.registers.push(new_gene(v))
+        self.data.registers.push(new_gene_value(v))
       of IkGeneStartMacroMethod:
         let v = self.data.registers.pop()
         # if v.kind != VkBoundMethod or not v.bound_method.method.is_macro:
         #   not_allowed("Macro method expected")
-        self.data.registers.push(new_gene(v))
+        self.data.registers.push(new_gene_value(v))
       of IkGeneCheckType:
         let v = self.data.registers.current()
         case v.kind:

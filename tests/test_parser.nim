@@ -60,31 +60,31 @@ test_parser "\\b", 'b'
 test_parser "\\backspace", '\b'
 test_parser "\\中", "中".runeAt(0)
 
-test_parser "\\\"nil\"", to_symbol("nil")
-test_parser "\\\"true\"", to_symbol("true")
-test_parser "\\'nil'", to_symbol("nil")
+test_parser "\\\"nil\"", to_symbol_value("nil")
+test_parser "\\\"true\"", to_symbol_value("true")
+test_parser "\\'nil'", to_symbol_value("nil")
 
 test_parser "\"test\"", "test"
 test_parser ",\"test\",", "test"
 test_parser "'test'", "test"
 test_parser ",'test',", "test"
 
-test_parser "a", to_symbol("a")
-test_parser "A", to_symbol("A")
-test_parser "/", to_symbol("/")
-test_parser "+a", to_symbol("+a")
-test_parser "#a", to_symbol("#a")
-test_parser "a#b", to_symbol("a#b")
-test_parser "a:b", to_symbol("a:b")
-test_parser "a\\ b", to_symbol("a b")
-test_parser "a\\/b", to_symbol("a/b")
+test_parser "a", to_symbol_value("a")
+test_parser "A", to_symbol_value("A")
+test_parser "/", to_symbol_value("/")
+test_parser "+a", to_symbol_value("+a")
+test_parser "#a", to_symbol_value("#a")
+test_parser "a#b", to_symbol_value("a#b")
+test_parser "a:b", to_symbol_value("a:b")
+test_parser "a\\ b", to_symbol_value("a b")
+test_parser "a\\/b", to_symbol_value("a/b")
 test_parser "n/A", to_complex_symbol(@["n", "A"])
 test_parser "n\\/A/B", to_complex_symbol(@["n/A", "B"])
 test_parser "n/m/A", to_complex_symbol(@["n", "m", "A"])
 test_parser "/A", to_complex_symbol(@["", "A"])
-test_parser "^a", to_symbol("^a")
-test_parser "symbol-👋", to_symbol("symbol-👋")
-test_parser "+foo+", to_symbol("+foo+")
+test_parser "^a", to_symbol_value("^a")
+test_parser "symbol-👋", to_symbol_value("symbol-👋")
+test_parser "+foo+", to_symbol_value("+foo+")
 
 # test_parser "#/b/", proc(r: Value) =
 #   check r.kind == VkRegex
@@ -112,7 +112,7 @@ test_parser "+foo+", to_symbol("+foo+")
 #   new_gene_datetime(init_date_time(02, cast[Month](12), 2020, 10, 11, 12, utc()))
 # test_parser "10:11:12", new_gene_time(10, 11, 12)
 
-test_parser "{}", new_map()
+test_parser "{}", new_map_value()
 test_parser "{^a 1}", {"a": to_value(1)}.to_value()
 
 test_parser "{^a^b 1}", to_value({"a": to_value({"b": to_value(1)})})
@@ -132,15 +132,15 @@ test_parser "(_ ^a^^b 1)", proc(r: Value) =
 
 test_parser "[]", @[]
 test_parser "[,]", @[]
-test_parser "[1 2]", new_array(to_value(1), to_value(2))
-test_parser "[1, 2]", new_array(to_value(1), to_value(2))
+test_parser "[1 2]", new_array_value(to_value(1), to_value(2))
+test_parser "[1, 2]", new_array_value(to_value(1), to_value(2))
 
 test_parser "#[]", new_set()
 # This should work
 # test_parser "#[1 2]", new_gene_set(to_value(1), to_value(2))
 
-test_parser ",a", to_symbol("a")
-test_parser "a,", to_symbol("a")
+test_parser ",a", to_symbol_value("a")
+test_parser "a,", to_symbol_value("a")
 
 test_parser "1 2 3", 1
 
@@ -197,16 +197,16 @@ test_parser "{^^x ^!y ^^z}", proc(r: Value) =
 
 test_parser ":foo", proc(r: Value) =
   check r.to_ref.kind == VkQuote
-  check r.to_ref.quote == to_symbol("foo")
+  check r.to_ref.quote == to_symbol_value("foo")
 
 test_parser "%foo", proc(r: Value) =
   check r.to_ref.kind == VkUnquote
-  check r.to_ref.unquote == to_symbol("foo")
+  check r.to_ref.unquote == to_symbol_value("foo")
   check r.to_ref.unquote_discard == false
 
 test_parser "%_foo", proc(r: Value) =
   check r.to_ref.kind == VkUnquote
-  check r.to_ref.unquote == to_symbol("foo")
+  check r.to_ref.unquote == to_symbol_value("foo")
   check r.to_ref.unquote_discard == true
 
 # # TODO: %_ is not allowed on gene type and property value
@@ -363,8 +363,8 @@ test_read_all """
   check r[1] == 2
 
 test_read_all "a,b", proc(r: seq[Value]) =
-  check r[0] == to_symbol("a")
-  check r[1] == to_symbol("b")
+  check r[0] == to_symbol_value("a")
+  check r[1] == to_symbol_value("b")
 
 test_read_all "1 2", @[to_value(1), to_value(2)]
 
