@@ -135,21 +135,19 @@ test_vm """
   )
 """, 1
 
-# test_vm """
-#   # ($_print_instructions)
-#   (loop
-#     1
-#     (break)
-#   )
-#   # ($_print_registers)
-#   2
-# """, 2
+test_vm """
+  (loop
+    1
+    (break)
+  )
+  2
+""", 2
 
-# test_vm """
-#   (loop
-#     (break 1)
-#   )
-# """, 1
+test_vm """
+  (loop
+    (break 1)
+  )
+""", 1
 
 test_vm ":(1 + 2)", proc(r: Value) =
   check r.gene.type == 1
@@ -165,27 +163,27 @@ test_vm "(:a 1 2)", proc(r: Value) =
   check r.gene.children[0] == 1
   check r.gene.children[1] == 2
 
-# test_vm """
-#   (var x {^a 1})
-#   x/a
-# """, 1
+test_vm """
+  (var x {^a 1})
+  x/a
+""", 1
 
-# test_vm """
-#   (var x (_ ^a 1))
-#   x/a
-# """, 1
+test_vm """
+  (var x (_ ^a 1))
+  x/a
+""", 1
 
-# test_vm """
-#   (var x [1 2])
-#   x/0
-# """, 1
+test_vm """
+  (var x [1 2])
+  x/0
+""", 1
 
-# test_vm """
-#   (var x (_ 1 2))
-#   x/0
-# """, 1
+test_vm """
+  (var x (_ 1 2))
+  x/0
+""", 1
 
-# test_vm """
-#   (var x {^a [1 2]})
-#   x/a/1
-# """, 2
+test_vm """
+  (var x {^a [1 2]})
+  x/a/1
+""", 2

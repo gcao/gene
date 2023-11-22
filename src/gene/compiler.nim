@@ -2,7 +2,7 @@ import tables, strutils, strformat
 import random
 
 import ./types
-# import ./utils
+import ./utils
 import "./compiler/if"
 
 proc new_label(): Label =
@@ -91,23 +91,22 @@ proc compile_symbol(self: var Compiler, input: Value) =
     self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
 
 proc compile_complex_symbol(self: var Compiler, input: Value) =
-  todo()
-  # if self.quote_level > 0:
-  #   self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
-  # else:
-  #   var first = input.csymbol[0]
-  #   if first == "":
-  #     self.output.instructions.add(Instruction(kind: IkSelf))
-  #   else:
-  #     self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: first))
-  #   for s in input.csymbol[1..^1]:
-  #     let (is_int, i) = to_int(s)
-  #     if is_int:
-  #       self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
-  #     elif s.starts_with("."):
-  #       self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
-  #     else:
-  #       self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s))
+  if self.quote_level > 0:
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
+  else:
+    var first = input.to_ref().csymbol[0]
+    if first == "":
+      self.output.instructions.add(Instruction(kind: IkSelf))
+    else:
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: first))
+    for s in input.to_ref().csymbol[1..^1]:
+      let (is_int, i) = to_int(s)
+      if is_int:
+        self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
+      elif s.starts_with("."):
+        self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
+      else:
+        self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s))
 
 proc compile_array(self: var Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkArrayStart))
@@ -168,21 +167,19 @@ proc compile_assignment(self: var Compiler, gene: ptr Gene) =
   else:
     not_allowed($`type`)
 
-proc compile_loop(self: var Compiler, input: Value) =
-  todo()
-  # var label = new_id()
-  # self.output.instructions.add(Instruction(kind: IkLoopStart, label: label))
-  # self.compile(input.gene_children)
-  # self.output.instructions.add(Instruction(kind: IkContinue, arg0: label))
-  # self.output.instructions.add(Instruction(kind: IkLoopEnd, label: label))
+proc compile_loop(self: var Compiler, gene: ptr Gene) =
+  var label = new_label()
+  self.output.instructions.add(Instruction(kind: IkLoopStart, label: label))
+  self.compile(gene.children)
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.Value))
+  self.output.instructions.add(Instruction(kind: IkLoopEnd, label: label))
 
-proc compile_break(self: var Compiler, input: Value) =
-  todo()
-  # if input.gene_children.len > 0:
-  #   self.compile(input.gene_children[0])
-  # else:
-  #   self.output.instructions.add(Instruction(kind: IkPushNil))
-  # self.output.instructions.add(Instruction(kind: IkBreak))
+proc compile_break(self: var Compiler, gene: ptr Gene) =
+  if gene.children.len > 0:
+    self.compile(gene.children[0])
+  else:
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  self.output.instructions.add(Instruction(kind: IkBreak))
 
 proc compile_fn(self: var Compiler, input: Value) =
   todo()
@@ -432,10 +429,10 @@ proc compile_gene(self: var Compiler, input: Value) =
         self.compile_var(gene)
         return
       of "loop":
-        self.compile_loop(input)
+        self.compile_loop(gene)
         return
       of "break":
-        self.compile_break(input)
+        self.compile_break(gene)
         return
       of "fn", "fnx":
         self.compile_fn(input)
