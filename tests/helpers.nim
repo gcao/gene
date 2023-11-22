@@ -68,11 +68,16 @@ proc test_vm*(code: string) =
     init_all()
     discard VM.exec(code, "test_code")
 
-proc test_vm*(code: string, result: Value) =
+proc test_vm*(trace: bool, code: string, result: Value) =
   var code = cleanup(code)
   test "Compilation & VM: " & code:
     init_all()
+    if trace:
+      VM.trace = true
     check VM.exec(code, "test_code") == result
+
+proc test_vm*(code: string, result: Value) =
+  test_vm(false, code, result)
 
 proc test_vm*(code: string, callback: proc(result: Value)) =
   var code = cleanup(code)
@@ -87,5 +92,5 @@ proc test_vm_error*(code: string) =
     try:
       discard VM.exec(code, "test_code")
       fail()
-    except:
+    except CatchableError:
       discard

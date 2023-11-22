@@ -75,21 +75,21 @@ test_vm """
   )
 """, NIL
 
-# test_vm """
-#   (if true
-#     1
-#   else
-#     2
-#   )
-# """, 1
+test_vm """
+  (if true
+    1
+  else
+    2
+  )
+""", 1
 
-# test_vm """
-#   (if false
-#     1
-#   else
-#     2
-#   )
-# """, 2
+test_vm """
+  (if false
+    1
+  else
+    2
+  )
+""", 2
 
 # test_vm """
 #   (var i 1)

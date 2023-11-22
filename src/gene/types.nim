@@ -484,6 +484,7 @@ type
   VirtualMachine* = ref object
     state*: VirtualMachineState
     data*: VirtualMachineData
+    trace*: bool
 
   VmCallback* = proc() {.gcsafe.}
 
@@ -493,7 +494,6 @@ type
     pc*: int
     registers*: Registers
     code_mgr*: CodeManager
-    trace*: bool
 
   Registers* = ref object
     caller*: Caller

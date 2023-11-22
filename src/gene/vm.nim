@@ -279,7 +279,7 @@ proc exec*(self: var VirtualMachine): Value =
     let inst = self.data.cur_block[self.data.pc]
     if inst.kind == IkStart:
       indent &= "  "
-    if self.data.trace:
+    if self.trace:
       # self.print_registers()
       echo fmt"{indent}{self.data.pc:03} {inst}"
     case inst.kind:
@@ -385,13 +385,13 @@ proc exec*(self: var VirtualMachine): Value =
         continue
       of IkJumpIfFalse:
         if not self.data.registers.pop().to_bool():
-          self.data.pc = self.data.cur_block.find_label(inst.arg0.Label) + 1
+          self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
           continue
 
       of IkJumpIfMatchSuccess:
         let mr = self.data.registers.match_result
         if mr.fields[inst.arg0.str].kind == MfSuccess:
-          self.data.pc = self.data.cur_block.find_label(inst.arg1.Label) + 1
+          self.data.pc = self.data.cur_block.find_label(inst.arg1.Label)
           continue
 
       of IkLoopStart, IkLoopEnd:
@@ -773,10 +773,10 @@ proc exec*(self: var VirtualMachine): Value =
       of IkInternal:
         case inst.arg0.str:
           of "$_trace_start":
-            self.data.trace = true
+            self.trace = true
             self.data.registers.push(NIL)
           of "$_trace_end":
-            self.data.trace = false
+            self.trace = false
             self.data.registers.push(NIL)
           of "$_debug":
             if inst.arg1:
