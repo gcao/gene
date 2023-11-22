@@ -335,13 +335,13 @@ type
     fields*: Table[string, MatchedField]
 
   Id* = uint64
-  Label* = uint64
+  Label* = int32
 
   Compiler* = ref object
     output*: CompilationUnit
     quote_level*: int
 
-  InstructionKind* = enum
+  InstructionKind* {.size: sizeof(int16).} = enum
     IkNoop
 
     IkStart   # start a compilation unit
@@ -451,9 +451,9 @@ type
 
   Instruction* = object
     kind*: InstructionKind
+    label*: Label
     arg0*: Value
     arg1*: Value
-    label*: Label
 
   CompilationUnitKind* = enum
     CkDefault
@@ -493,6 +493,7 @@ type
     pc*: int
     registers*: Registers
     code_mgr*: CodeManager
+    trace*: bool
 
   Registers* = ref object
     caller*: Caller
@@ -583,6 +584,7 @@ randomize()
 
 proc kind*(v: Value): ValueKind {.inline.}
 proc `==`*(a, b: Value): bool {.no_side_effect.}
+converter to_bool*(v: Value): bool {.inline.}
 
 proc `$`*(self: Value): string
 proc `$`*(self: ptr Reference): string
@@ -769,12 +771,18 @@ proc `$`*(self: Value): string =
   case self.kind:
     of VkNil:
       result = "nil"
+    of VkBool:
+      result = $(self == TRUE)
     of VkInt:
       result = $(cast[int64](self))
+    of VkFloat:
+      result = $(cast[float64](self))
     of VkString:
-      result = $self.to_ref().str
+      {.cast(gcsafe).}:
+        result = "\"" & $self.str & "\""
     of VkSymbol:
-      todo()
+      {.cast(gcsafe).}:
+        result = $self.str
     else:
       result = $self.kind
 
@@ -1011,6 +1019,13 @@ proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
 proc new_array_value*(v: varargs[Value]): Value =
   let r = new_ref(VkArray)
   r.arr = @v
+  result = r.to_ref_value()
+
+#################### Stream ######################
+
+proc new_stream_value*(v: varargs[Value]): Value =
+  let r = new_ref(VkStream)
+  r.stream = @v
   result = r.to_ref_value()
 
 #################### Set #########################

@@ -21,59 +21,59 @@ test_vm "{^a 1}", new_map_value({"a": 1.to_value()}.to_table())
 
 test_vm "1 2 3", 3
 
-# test_vm "(1 + 2)", 3
-# test_vm "(3 - 2)", 1
-# test_vm "(2 * 3)", 6
-# test_vm "(6 / 2)", 3.0
+test_vm "(1 + 2)", 3
+test_vm "(3 - 2)", 1
+test_vm "(2 * 3)", 6
+test_vm "(6 / 2)", 3.0
 
-# test_vm "(2 < 3)", true
-# test_vm "(2 < 2)", false
-# test_vm "(2 <= 2)", true
-# test_vm "(2 <= 1)", false
-# test_vm "(2 > 1)", true
-# test_vm "(2 > 2)", false
-# test_vm "(2 >= 2)", true
-# test_vm "(2 >= 3)", false
-# test_vm "(2 == 2)", true
-# test_vm "(2 == 3)", false
-# test_vm "(2 != 3)", true
-# test_vm "(2 != 2)", false
+test_vm "(2 < 3)", true
+test_vm "(2 < 2)", false
+test_vm "(2 <= 2)", true
+test_vm "(2 <= 1)", false
+test_vm "(2 > 1)", true
+test_vm "(2 > 2)", false
+test_vm "(2 >= 2)", true
+test_vm "(2 >= 3)", false
+test_vm "(2 == 2)", true
+test_vm "(2 == 3)", false
+test_vm "(2 != 3)", true
+test_vm "(2 != 2)", false
 
-# test_vm "(true  && true)",  true
-# test_vm "(true  && false)", false
-# test_vm "(false && false)", false
-# test_vm "(true  || true)",  true
-# test_vm "(true  || false)", true
-# test_vm "(false || false)", false
+test_vm "(true  && true)",  true
+test_vm "(true  && false)", false
+test_vm "(false && false)", false
+test_vm "(true  || true)",  true
+test_vm "(true  || false)", true
+test_vm "(false || false)", false
 
-# # && and || are short-circuiting
-# # test_vm "(false && error)", false
-# # test_vm "(true  || error)", true
+# && and || are short-circuiting
+# test_vm "(false && error)", false
+# test_vm "(true  || error)", true
 
-# # test_vm "(1 || 2)", 1
-# # test_vm "(false || 1)", 1
+# test_vm "(1 || 2)", 1
+# test_vm "(false || 1)", 1
 
-# # (do ...) will create a scope if needed, execute all statements and return the result of the last statement.
-# # `catch` and `ensure` can be used inside `do`.
-# # `ensure` will run after `catch` if both are present? but the exception thrown in `ensure` will be ignored?
+# (do ...) will create a scope if needed, execute all statements and return the result of the last statement.
+# `catch` and `ensure` can be used inside `do`.
+# `ensure` will run after `catch` if both are present? but the exception thrown in `ensure` will be ignored?
 
-# test_vm """
-#   (do 1 2 3)
-# """, 3
+test_vm """
+  (do 1 2 3)
+""", 3
 
-# test_vm """
-#   (if false
-#     1
-#   )
-# """, Value(kind: VkNil)
+test_vm """
+  (if false
+    1
+  )
+""", NIL
 
-# test_vm """
-#   (if true
-#     # do nothing
-#   else
-#     1
-#   )
-# """, Value(kind: VkNil)
+test_vm """
+  (if true
+    # do nothing
+  else
+    1
+  )
+""", NIL
 
 # test_vm """
 #   (if true

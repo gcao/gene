@@ -274,13 +274,12 @@ proc print_registers(self: var VirtualMachine) =
   echo s
 
 proc exec*(self: var VirtualMachine): Value =
-  var trace = false
   var indent = ""
   while true:
     let inst = self.data.cur_block[self.data.pc]
     if inst.kind == IkStart:
       indent &= "  "
-    if trace:
+    if self.data.trace:
       # self.print_registers()
       echo fmt"{indent}{self.data.pc:03} {inst}"
     case inst.kind:
@@ -385,7 +384,7 @@ proc exec*(self: var VirtualMachine): Value =
         self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
         continue
       of IkJumpIfFalse:
-        if not self.data.registers.pop().bool:
+        if not self.data.registers.pop().to_bool():
           self.data.pc = self.data.cur_block.find_label(inst.arg0.Label) + 1
           continue
 
@@ -617,7 +616,7 @@ proc exec*(self: var VirtualMachine): Value =
         self.data.registers.push(compiled.id.Value)
 
       of IkCallInit:
-        let id = self.data.registers.pop().Label
+        let id = self.data.registers.pop().Id
         let compiled = self.data.code_mgr.data[id]
         let obj = self.data.registers.current()
         var ns: Namespace
@@ -774,10 +773,10 @@ proc exec*(self: var VirtualMachine): Value =
       of IkInternal:
         case inst.arg0.str:
           of "$_trace_start":
-            trace = true
+            self.data.trace = true
             self.data.registers.push(NIL)
           of "$_trace_end":
-            trace = false
+            self.data.trace = false
             self.data.registers.push(NIL)
           of "$_debug":
             if inst.arg1:

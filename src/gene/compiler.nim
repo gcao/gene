@@ -1,14 +1,17 @@
 import tables, strutils, strformat
+import random
 
 import ./types
 # import ./utils
-# import "./compiler/if"
+import "./compiler/if"
+
+proc new_label(): Label =
+  result = rand(int32.high).Label
 
 proc `$`*(self: Instruction): string =
   case self.kind
     of IkPushValue,
       IkVar,
-      IkJump, IkJumpIfFalse,
       IkAddValue, IkLtValue,
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
@@ -16,11 +19,25 @@ proc `$`*(self: Instruction): string =
       IkSetMember, IkGetMember,
       IkSetChild, IkGetChild,
       IkInternal:
-      ($self.kind)[2..^1] & " " & $self.arg0
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
+    of IkJump, IkJumpIfFalse:
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0.int32.to_hex()}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()}"
     of IkJumpIfMatchSuccess:
-      ($self.kind)[2..^1] & " " & $self.arg0 & " " & $self.arg1
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0.int32.to_hex()} ${$self.arg1.int32.to_hex()}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()} ${$self.arg1.int32.to_hex()}"
     else:
-      ($self.kind)[2..^1]
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]}"
 
 proc `$`*(self: seq[Instruction]): string =
   for i, instr in self:
@@ -106,21 +123,20 @@ proc compile_map(self: var Compiler, input: Value) =
     self.output.instructions.add(Instruction(kind: IkMapSetProp, arg0: k))
   self.output.instructions.add(Instruction(kind: IkMapEnd))
 
-proc compile_do(self: var Compiler, input: Value) =
-  self.compile(input.gene.children)
+proc compile_do(self: var Compiler, gene: ptr Gene) =
+  self.compile(gene.children)
 
-proc compile_if(self: var Compiler, input: Value) =
-  todo()
-  # normalize_if(input)
-  # self.compile(input.gene_props[COND_KEY])
-  # var elseLabel = new_id()
-  # var endLabel = new_id()
-  # self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: elseLabel))
-  # self.compile(input.gene_props[THEN_KEY])
-  # self.output.instructions.add(Instruction(kind: IkJump, arg0: endLabel))
-  # self.output.instructions.add(Instruction(kind: IkNoop, label: elseLabel))
-  # self.compile(input.gene_props[ELSE_KEY])
-  # self.output.instructions.add(Instruction(kind: IkNoop, label: endLabel))
+proc compile_if(self: var Compiler, gene: ptr Gene) =
+  normalize_if(gene)
+  self.compile(gene.props[COND_KEY])
+  var else_label = new_label()
+  var end_label = new_label()
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
+  self.compile(gene.props[THEN_KEY])
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
+  self.compile(gene.props[ELSE_KEY])
+  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
 proc compile_var(self: var Compiler, input: Value) =
   todo()
@@ -327,135 +343,136 @@ proc compile_method_call(self: var Compiler, input: Value) {.inline.} =
   # self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
 
 proc compile_gene(self: var Compiler, input: Value) =
-  todo()
-  # if self.quote_level > 0 or input.gene_type.is_symbol("_") or input.gene_type.kind == VkQuote:
-  #   self.compile_gene_default(input)
-  #   return
+  let gene = input.gene
+  if self.quote_level > 0 or gene.type == "_".to_symbol_value() or gene.type.kind == VkQuote:
+    todo()
+    # self.compile_gene_default(input)
+    # return
 
-  # let `type` = input.gene_type
-  # if input.gene_children.len > 0:
-  #   var first = input.gene_children[0]
-  #   if first.kind == VkSymbol:
-  #     case first.str:
-  #       of "=":
-  #         self.compile_assignment(input)
-  #         return
-  #       of "+":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkAdd))
-  #         return
-  #       of "-":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkSub))
-  #         return
-  #       of "*":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkMul))
-  #         return
-  #       of "/":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkDiv))
-  #         return
-  #       of "<":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkLt))
-  #         return
-  #       of "<=":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkLe))
-  #         return
-  #       of ">":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkGt))
-  #         return
-  #       of ">=":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkGe))
-  #         return
-  #       of "==":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkEq))
-  #         return
-  #       of "!=":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkNe))
-  #         return
-  #       of "&&":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkAnd))
-  #         return
-  #       of "||":
-  #         self.compile(`type`)
-  #         self.compile(input.gene_children[1])
-  #         self.output.instructions.add(Instruction(kind: IkOr))
-  #         return
-  #       else:
-  #         if first.str.starts_with("."):
-  #           self.compile_method_call(input)
-  #           return
+  let `type` = gene.type
+  if gene.children.len > 0:
+    var first = gene.children[0]
+    if first.kind == VkSymbol:
+      case first.str:
+        of "=":
+          self.compile_assignment(input)
+          return
+        of "+":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkAdd))
+          return
+        of "-":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkSub))
+          return
+        of "*":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkMul))
+          return
+        of "/":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkDiv))
+          return
+        of "<":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkLt))
+          return
+        of "<=":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkLe))
+          return
+        of ">":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkGt))
+          return
+        of ">=":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkGe))
+          return
+        of "==":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkEq))
+          return
+        of "!=":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkNe))
+          return
+        of "&&":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkAnd))
+          return
+        of "||":
+          self.compile(`type`)
+          self.compile(gene.children[1])
+          self.output.instructions.add(Instruction(kind: IkOr))
+          return
+        else:
+          if first.str.starts_with("."):
+            self.compile_method_call(input)
+            return
 
-  # if `type`.kind == VkSymbol:
-  #   case `type`.str:
-  #     of "do":
-  #       self.compile_do(input)
-  #       return
-  #     of "if":
-  #       self.compile_if(input)
-  #       return
-  #     of "var":
-  #       self.compile_var(input)
-  #       return
-  #     of "loop":
-  #       self.compile_loop(input)
-  #       return
-  #     of "break":
-  #       self.compile_break(input)
-  #       return
-  #     of "fn", "fnx":
-  #       self.compile_fn(input)
-  #       return
-  #     of "macro":
-  #       self.compile_macro(input)
-  #       return
-  #     of "return":
-  #       self.compile_return(input)
-  #       return
-  #     of "ns":
-  #       self.compile_ns(input)
-  #       return
-  #     of "class":
-  #       self.compile_class(input)
-  #       return
-  #     of "new":
-  #       self.compile_new(input)
-  #       return
-  #     else:
-  #       let s = `type`.str
-  #       if s.starts_with("."):
-  #         self.compile_method_call(input)
-  #         return
-  #       elif s.starts_with("$_"):
-  #         if input.gene_children.len > 1:
-  #           not_allowed($input)
-  #         elif input.gene_children.len == 1:
-  #           self.compile(input.gene_children[0])
-  #           self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`, arg1: true))
-  #         else:
-  #           self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`))
-  #         return
+  if `type`.kind == VkSymbol:
+    case `type`.str:
+      of "do":
+        self.compile_do(gene)
+        return
+      of "if":
+        self.compile_if(gene)
+        return
+      of "var":
+        self.compile_var(input)
+        return
+      of "loop":
+        self.compile_loop(input)
+        return
+      of "break":
+        self.compile_break(input)
+        return
+      of "fn", "fnx":
+        self.compile_fn(input)
+        return
+      of "macro":
+        self.compile_macro(input)
+        return
+      of "return":
+        self.compile_return(input)
+        return
+      of "ns":
+        self.compile_ns(input)
+        return
+      of "class":
+        self.compile_class(input)
+        return
+      of "new":
+        self.compile_new(input)
+        return
+      else:
+        let s = `type`.str
+        if s.starts_with("."):
+          self.compile_method_call(input)
+          return
+        elif s.starts_with("$_"):
+          if gene.children.len > 1:
+            not_allowed($input)
+          elif gene.children.len == 1:
+            self.compile(gene.children[0])
+            self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`, arg1: true))
+          else:
+            self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`))
+          return
 
-  # self.compile_gene_unknown(input)
+  self.compile_gene_unknown(input)
 
 proc compile(self: var Compiler, input: Value) =
   case input.kind:
@@ -503,7 +520,7 @@ proc compile*(f: var Function) =
 
   # generate code for arguments
   for m in f.matcher.children:
-    let label = new_id()
+    let label = cast[Label](rand(int32.high))
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
       arg0: m.name,
