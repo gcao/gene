@@ -547,7 +547,9 @@ const OTHER_PREFIX = 0x7FFE
 
 const VOID* = cast[Value](0x7FFE_0000_0000_0000u64)
 const PLACEHOLDER* = cast[Value](0x7FFE_0100_0000_0000u64)
-const IGNORE* = cast[Value](0x7FFE_0200_0000_0000u64)
+
+# Special variable used by the parser
+const PARSER_IGNORE* = cast[Value](0x7FFE_0200_0000_0000u64)
 
 const CHAR_MASK = 0x7FFE_0200_0000_0000u64
 const CHAR2_MASK = 0x7FFE_0300_0000_0000u64

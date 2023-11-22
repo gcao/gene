@@ -348,6 +348,9 @@ test_parser """
   check r.to_ref.map["p"].gene.type.str == "f"
   check r.to_ref.map["p"].gene.children[0].str == "a"
 
+test_read_all "nil", proc(r: seq[Value]) =
+  check r[0] == NIL
+
 test_read_all """
   1 # comment
   2

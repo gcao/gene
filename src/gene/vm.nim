@@ -1,4 +1,4 @@
-import tables, oids, strutils, strformat
+import tables, strutils, strformat
 
 import ./types
 import ./parser
@@ -293,7 +293,7 @@ proc exec*(self: var VirtualMachine): Value =
           self.handle_args(matcher, self.data.registers.args)
 
       of IkEnd:
-        indent.delete(indent.len-2, indent.len-1)
+        indent.delete(indent.len-2..indent.len-1)
         let v = self.data.registers.default
         let caller = self.data.registers.caller
         if caller == nil:

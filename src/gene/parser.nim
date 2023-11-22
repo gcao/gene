@@ -102,7 +102,6 @@ var DEFAULT_UNITS {.threadvar.}: Table[string, Value]
 var HEX {.threadvar.}: Table[char, uint8]
 var DATE_FORMAT {.threadvar.}: TimeFormat
 var DATETIME_FORMAT {.threadvar.}: TimeFormat
-var Ignore {.threadvar.}: Value
 
 var macros {.threadvar.}: MacroArray
 var dispatch_macros {.threadvar.}: MacroArray
@@ -983,7 +982,7 @@ proc init_dispatch_macro_array() =
 #     todo("#Set " & $value.gene_children[0])
 
 # proc handle_ignore(self: var Parser, value: Value): Value =
-#   Ignore
+#   PARSER_IGNORE
 
 # proc handle_reference(self: var Parser, value: Value): Value =
 #   let name = value.gene_children[0].str
@@ -1322,7 +1321,7 @@ proc read*(self: var Parser): Value =
     let m = macros[ch] # save line:col metadata here?
     inc(self.bufpos)
     result = m(self)
-    if result == Ignore:
+    if result == PARSER_IGNORE:
       result = self.read()
     return result
   elif ch in ['+', '-']:
@@ -1331,13 +1330,13 @@ proc read*(self: var Parser): Value =
     else:
       token = self.read_token(false)
       result = interpret_token(token)
-      if result == Ignore:
+      if result == PARSER_IGNORE:
         result = self.read()
       return result
 
   token = self.read_token(true)
   result = interpret_token(token)
-  if result == Ignore:
+  if result == PARSER_IGNORE:
     result = self.read()
 
 proc read_document_properties(self: var Parser) =
@@ -1368,8 +1367,9 @@ proc read_all*(self: var Parser, buffer: string): seq[Value] =
   defer: self.close()
   # self.read_document_properties()
   var node = self.read()
-  while node != nil:
-    result.add(node)
+  while true:
+    if node != PARSER_IGNORE:
+      result.add(node)
     self.skip_ws()
     if self.buf[self.bufpos] == EndOfFile:
       break
