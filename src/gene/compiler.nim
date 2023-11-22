@@ -138,35 +138,35 @@ proc compile_if(self: var Compiler, gene: ptr Gene) =
   self.compile(gene.props[ELSE_KEY])
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
-proc compile_var(self: var Compiler, input: Value) =
-  todo()
-  # let name = input.gene_children[0]
-  # if input.gene_children.len > 1:
-  #   self.compile(input.gene_children[1])
-  #   self.output.instructions.add(Instruction(kind: IkVar, arg0: name))
-  # else:
-  #   self.output.instructions.add(Instruction(kind: IkVarValue, arg0: name, arg1: Value(kind: VkNil)))
+proc compile_var(self: var Compiler, gene: ptr Gene) =
+  let name = gene.children[0]
+  if gene.children.len > 1:
+    self.compile(gene.children[1])
+    self.output.instructions.add(Instruction(kind: IkVar, arg0: name))
+  else:
+    self.output.instructions.add(Instruction(kind: IkVarValue, arg0: name, arg1: NIL))
 
-proc compile_assignment(self: var Compiler, input: Value) =
-  todo()
-  # let `type` = input.gene_type
-  # if `type`.kind == VkSymbol:
-  #   self.compile(input.gene_children[1])
-  #   self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
-  # elif `type`.kind == VkComplexSymbol:
-  #   if `type`.csymbol[0] == "":
-  #     `type`.csymbol[0] = "self"
-  #   if `type`.csymbol.len == 2:
-  #     self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`.csymbol[0]))
-  #     self.compile(input.gene_children[1])
-  #     self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.csymbol[1]))
-  #   else:
-  #     let arg0 = Value(kind: VkComplexSymbol, csymbol: `type`.csymbol[0..^2])
-  #     self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: arg0))
-  #     self.compile(input.gene_children[1])
-  #     self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.csymbol[^1]))
-  # else:
-  #   not_allowed($`type`)
+proc compile_assignment(self: var Compiler, gene: ptr Gene) =
+  let `type` = gene.type
+  if `type`.kind == VkSymbol:
+    self.compile(gene.children[1])
+    self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
+  elif `type`.kind == VkComplexSymbol:
+    if `type`.to_ref().csymbol[0] == "":
+      `type`.to_ref().csymbol[0] = "self"
+    if `type`.to_ref().csymbol.len == 2:
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`.to_ref().csymbol[0]))
+      self.compile(gene.children[1])
+      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.to_ref().csymbol[1]))
+    else:
+      let r = new_ref(VkComplexSymbol)
+      r.csymbol = `type`.to_ref().csymbol[0..^2]
+      let arg0 = r.to_ref_value()
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: arg0))
+      self.compile(gene.children[1])
+      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.to_ref().csymbol[^1]))
+  else:
+    not_allowed($`type`)
 
 proc compile_loop(self: var Compiler, input: Value) =
   todo()
@@ -236,18 +236,17 @@ proc compile_new(self: var Compiler, input: Value) =
   # self.output.instructions.add(Instruction(kind: IkGeneEnd))
   # self.output.instructions.add(Instruction(kind: IkNew))
 
-proc compile_gene_default(self: var Compiler, input: Value) {.inline.} =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkGeneStart))
-  # self.compile(input.gene_type)
-  # self.output.instructions.add(Instruction(kind: IkGeneSetType))
-  # for k, v in input.gene_props:
-  #   self.compile(v)
-  #   self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-  # for child in input.gene_children:
-  #   self.compile(child)
-  #   self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  # self.output.instructions.add(Instruction(kind: IkGeneEnd))
+proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
+  self.output.instructions.add(Instruction(kind: IkGeneStart))
+  self.compile(gene.type)
+  self.output.instructions.add(Instruction(kind: IkGeneSetType))
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkGeneEnd))
 
 # For a call that is unsure whether it is a function call or a macro call,
 # we need to handle both cases and decide at runtime:
@@ -345,9 +344,8 @@ proc compile_method_call(self: var Compiler, input: Value) {.inline.} =
 proc compile_gene(self: var Compiler, input: Value) =
   let gene = input.gene
   if self.quote_level > 0 or gene.type == "_".to_symbol_value() or gene.type.kind == VkQuote:
-    todo()
-    # self.compile_gene_default(input)
-    # return
+    self.compile_gene_default(gene)
+    return
 
   let `type` = gene.type
   if gene.children.len > 0:
@@ -355,7 +353,7 @@ proc compile_gene(self: var Compiler, input: Value) =
     if first.kind == VkSymbol:
       case first.str:
         of "=":
-          self.compile_assignment(input)
+          self.compile_assignment(gene)
           return
         of "+":
           self.compile(`type`)
@@ -431,7 +429,7 @@ proc compile_gene(self: var Compiler, input: Value) =
         self.compile_if(gene)
         return
       of "var":
-        self.compile_var(input)
+        self.compile_var(gene)
         return
       of "loop":
         self.compile_loop(input)

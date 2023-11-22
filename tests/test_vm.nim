@@ -91,49 +91,49 @@ test_vm """
   )
 """, 2
 
-# test_vm """
-#   (var i 1)
-# """, 1
+test_vm """
+  (var i 1)
+""", 1
 
-# test_vm """
-#   (var i 1)
-#   i
-# """, 1
+test_vm """
+  (var i 1)
+  i
+""", 1
 
-# test_vm """
-#   (var a 1)
-#   (var b 2)
-#   [a b]
-# """, new_gene_vec(1, 2)
+test_vm """
+  (var a 1)
+  (var b 2)
+  [a b]
+""", new_array_value(1, 2)
 
-# test_vm """
-#   (var a 1)
-#   (var b 2)
-#   {^a a ^b b}
-# """, {"a": new_gene_int(1), "b": new_gene_int(2)}.toTable
+test_vm """
+  (var a 1)
+  (var b 2)
+  {^a a ^b b}
+""", new_map_value({"a": 1.Value, "b": 2.Value}.to_table)
 
-# test_vm """
-#   (var i 1)
-#   (i = 2)
-#   i
-# """, 2
+test_vm """
+  (var i 1)
+  (i = 2)
+  i
+""", 2
 
-# test_vm """
-#   (var i 1)
-#   (i + 2)
-# """, 3
+test_vm """
+  (var i 1)
+  (i + 2)
+""", 3
 
-# test_vm """
-#   (var a (if false 1))
-#   a
-# """, Value(kind: VkNil)
+test_vm """
+  (var a (if false 1))
+  a
+""", NIL
 
-# test_vm """
-#   (do
-#     (var i 1)
-#     i
-#   )
-# """, 1
+test_vm """
+  (do
+    (var i 1)
+    i
+  )
+""", 1
 
 # test_vm """
 #   # ($_print_instructions)
@@ -151,19 +151,19 @@ test_vm """
 #   )
 # """, 1
 
-# test_vm ":(1 + 2)", proc(r: Value) =
-#   check r.gene_type == 1
-#   check r.gene_children[0] == new_gene_symbol("+")
-#   check r.gene_children[1] == 2
+test_vm ":(1 + 2)", proc(r: Value) =
+  check r.gene.type == 1
+  check r.gene.children[0] == "+".to_symbol_value()
+  check r.gene.children[1] == 2
 
-# test_vm "(_ 1 2)", proc(r: Value) =
-#   check r.gene_children[0] == 1
-#   check r.gene_children[1] == 2
+test_vm "(_ 1 2)", proc(r: Value) =
+  check r.gene.children[0] == 1
+  check r.gene.children[1] == 2
 
-# test_vm "(:a 1 2)", proc(r: Value) =
-#   check r.gene_type == new_gene_symbol("a")
-#   check r.gene_children[0] == 1
-#   check r.gene_children[1] == 2
+test_vm "(:a 1 2)", proc(r: Value) =
+  check r.gene.type == "a".to_symbol_value()
+  check r.gene.children[0] == 1
+  check r.gene.children[1] == 2
 
 # test_vm """
 #   (var x {^a 1})
