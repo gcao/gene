@@ -106,6 +106,10 @@ type
     props*: Table[string, Value]
     children*: seq[Value]
 
+  String* = object
+    ref_count*: int32
+    str*: string
+
   Document* = ref object
     `type`: Value
     props*: Table[string, Value]
@@ -558,6 +562,8 @@ const CHAR4_MASK = 0x7FFE_0500_0000_0000u64
 
 const SHORT_STR_PREFIX  = 0xFFF8
 const SHORT_STR_MASK = 0xFFF8_0000_0000_0000u64
+const LONG_STR_PREFIX  = 0xFFF9
+const LONG_STR_MASK = 0xFFF9_0000_0000_0000u64
 
 const EMPTY_STRING = 0xFFF8_0000_0000_0000u64
 
@@ -583,6 +589,8 @@ proc `$`*(self: ptr Reference): string
 
 proc to_ref*(v: Value): ptr Reference
 
+proc new_str*(s: string): ptr String
+proc new_str_value*(s: string): Value
 proc str*(v: Value): string {.inline.}
 
 converter to_value*(v: char): Value {.inline.}
@@ -619,11 +627,23 @@ proc `=destroy`*(self: Value) =
   let v1 = cast[uint64](self)
   case cast[int64](v1.shr(48)):
     of GENE_PREFIX:
-      let g = cast[ptr Gene](bitand(v1, AND_MASK))
-      if g.ref_count == 1:
-        dealloc(g)
+      let x = cast[ptr Gene](bitand(v1, AND_MASK))
+      if x.ref_count == 1:
+        dealloc(x)
       else:
-        g.ref_count.dec()
+        x.ref_count.dec()
+    of REF_PREFIX:
+      let x = cast[ptr Reference](bitand(v1, AND_MASK))
+      if x.ref_count == 1:
+        dealloc(x)
+      else:
+        x.ref_count.dec()
+    of LONG_STR_PREFIX:
+      let x = cast[ptr String](bitand(v1, AND_MASK))
+      if x.ref_count == 1:
+        dealloc(x)
+      else:
+        x.ref_count.dec()
     else:
       discard
 
@@ -632,9 +652,16 @@ proc `=copy`*(a: var Value, b: Value) =
   let v1 = cast[uint64](b)
   case cast[int64](v1.shr(48)):
     of GENE_PREFIX:
-      let g = cast[ptr Gene](bitand(v1, AND_MASK))
-      g.ref_count.inc()
-      a = b
+      let x = cast[ptr Gene](bitand(v1, AND_MASK))
+      x.ref_count.inc()
+      a = cast[Value](cast[uint64](b))
+    of REF_PREFIX:
+      let x = cast[ptr Reference](bitand(v1, AND_MASK))
+      x.ref_count.inc()
+      a = cast[Value](cast[uint64](b))
+    of LONG_STR_PREFIX:
+      let x = cast[ptr String](bitand(v1, AND_MASK))
+      a = new_str_value(x.str)
     else:
       a = cast[Value](cast[uint64](b))
 
@@ -710,7 +737,7 @@ proc kind*(v: Value): ValueKind {.inline.} =
         return VkGene
       # of CHAR_PREFIX:
       #   return VkChar
-      of SHORT_STR_PREFIX:
+      of SHORT_STR_PREFIX, LONG_STR_PREFIX:
         return VkString
       of SYMBOL_PREFIX:
         return VkSymbol
@@ -808,7 +835,7 @@ proc `[]`*(self: Value, i: int): Value {.inline.} =
           todo($r.kind)
     of GENE_PREFIX:
       todo("VkGene")
-    of SHORT_STR_PREFIX:
+    of SHORT_STR_PREFIX, LONG_STR_PREFIX:
       var j = 0
       # TODO: optimize
       for r in self.str().runes:
@@ -859,6 +886,14 @@ converter to_int*(v: Value): int64 {.inline.} =
 
 #################### String #####################
 
+proc new_str*(s: string): ptr String =
+  result = cast[ptr String](alloc0(sizeof(String)))
+  result.ref_count = 1
+  result.str = s
+
+proc new_str_value*(s: string): Value =
+  cast[Value](bitor(LONG_STR_MASK, cast[uint64](new_str(s))))
+
 converter to_value*(v: char): Value {.inline.} =
   {.cast(gcsafe).}:
     cast[Value](bitor(CHAR_MASK, v.ord.uint64))
@@ -897,8 +932,9 @@ proc str*(v: Value): string {.inline.} =
             else: # 0 char
               result = ""
 
-      of REF_PREFIX:
-        result = v.to_ref().str
+      of LONG_STR_PREFIX:
+        var x = cast[ptr String](bitand(cast[uint64](v1), AND_MASK))
+        result = x.str
 
       of SYMBOL_PREFIX:
         var x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
@@ -930,9 +966,10 @@ converter to_value*(v: string): Value {.inline.} =
       return cast[Value](bitor(SHORT_STR_MASK,
         v[0].ord.uint64, v[1].ord.shl(8).uint64, v[2].ord.shl(16).uint64, v[3].ord.shl(24).uint64, v[4].ord.shl(32).uint64, v[5].ord.shl(40).uint64))
     else:
-      let r = new_ref(VkString)
-      r.str = v
-      result = r.to_ref_value()
+      let s = cast[ptr String](alloc0(sizeof(String)))
+      s.ref_count = 1
+      s.str = v
+      result = cast[Value](bitor(LONG_STR_MASK, cast[uint64](s)))
 
 converter to_value*(v: Rune): Value {.inline.} =
   let rune_value = v.ord.uint64
