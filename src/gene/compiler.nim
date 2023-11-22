@@ -2,7 +2,6 @@ import tables, strutils, strformat
 import random
 
 import ./types
-import ./utils
 import "./compiler/if"
 
 proc new_label(): Label =
@@ -197,14 +196,13 @@ proc compile_macro(self: var Compiler, input: Value) =
   todo()
   # self.output.instructions.add(Instruction(kind: IkMacro, arg0: input))
 
-proc compile_ns(self: var Compiler, input: Value) =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkNamespace, arg0: input.gene_children[0]))
-  # if input.gene_children.len > 1:
-  #   let body = new_gene_stream(input.gene_children[1..^1])
-  #   self.output.instructions.add(Instruction(kind: IkPushValue, arg0: body))
-  #   self.output.instructions.add(Instruction(kind: IkCompileInit))
-  #   self.output.instructions.add(Instruction(kind: IkCallInit))
+proc compile_ns(self: var Compiler, gene: ptr Gene) =
+  self.output.instructions.add(Instruction(kind: IkNamespace, arg0: gene.children[0]))
+  if gene.children.len > 1:
+    let body = new_stream_value(gene.children[1..^1])
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: body))
+    self.output.instructions.add(Instruction(kind: IkCompileInit))
+    self.output.instructions.add(Instruction(kind: IkCallInit))
 
 proc compile_class(self: var Compiler, input: Value) =
   todo()
@@ -444,7 +442,7 @@ proc compile_gene(self: var Compiler, input: Value) =
         self.compile_return(input)
         return
       of "ns":
-        self.compile_ns(input)
+        self.compile_ns(gene)
         return
       of "class":
         self.compile_class(input)

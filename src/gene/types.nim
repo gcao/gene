@@ -1131,22 +1131,20 @@ proc proxy*(self: Namespace, name: string, target: Value) =
   self.proxies[name] = target
 
 proc has_key*(self: Namespace, key: string): bool {.inline.} =
-  todo()
-  # if self.proxies.has_key(key):
-  #   return self.proxies[key].ns.has_key(key)
-  # else:
-  #   return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
+  if self.proxies.has_key(key):
+    return self.proxies[key].to_ref().ns.has_key(key)
+  else:
+    return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
 
 proc `[]`*(self: Namespace, key: string): Value {.inline.} =
-  todo()
-  # if self.proxies.has_key(key):
-  #   return self.proxies[key].ns[key]
-  # elif self.members.has_key(key):
-  #   return self.members[key]
-  # elif not self.stop_inheritance and self.parent != nil:
-  #   return self.parent[key]
-  # else:
-  #   raise new_exception(NotDefinedException, key & " is not defined")
+  if self.proxies.has_key(key):
+    return self.proxies[key].to_ref().ns[key]
+  elif self.members.has_key(key):
+    return self.members[key]
+  elif not self.stop_inheritance and self.parent != nil:
+    return self.parent[key]
+  else:
+    raise new_exception(NotDefinedException, key & " is not defined")
 
 proc locate*(self: Namespace, key: string): (Value, Namespace) {.inline.} =
   if self.members.has_key(key):
@@ -1580,3 +1578,5 @@ proc init_values*() =
   SYMBOLS = ManagedSymbols()
 
 init_values()
+
+include ./utils
