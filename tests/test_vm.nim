@@ -11,15 +11,15 @@ test_vm "false", false
 test_vm "_", PLACEHOLDER
 test_vm "\"string\"", "string"
 
-# test_vm ":a", new_gene_symbol("a")
+test_vm ":a", "a".to_symbol_value()
 
-# test_vm "[]", new_gene_vec()
-# test_vm "[1 2]", new_gene_vec(1, 2)
+test_vm "[]", new_array_value()
+test_vm "[1 2]", new_array_value(1, 2)
 
-# test_vm "{}", Table[string, Value]()
-# test_vm "{^a 1}", {"a": new_gene_int(1)}.toTable
+test_vm "{}", new_map_value()
+test_vm "{^a 1}", new_map_value({"a": 1.to_value()}.to_table())
 
-# test_vm "1 2 3", 3
+test_vm "1 2 3", 3
 
 # test_vm "(1 + 2)", 3
 # test_vm "(3 - 2)", 1

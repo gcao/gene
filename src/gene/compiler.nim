@@ -93,20 +93,18 @@ proc compile_complex_symbol(self: var Compiler, input: Value) =
   #       self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s))
 
 proc compile_array(self: var Compiler, input: Value) =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkArrayStart))
-  # for child in input.vec:
-  #   self.compile(child)
-  #   self.output.instructions.add(Instruction(kind: IkArrayAddChild))
-  # self.output.instructions.add(Instruction(kind: IkArrayEnd))
+  self.output.instructions.add(Instruction(kind: IkArrayStart))
+  for child in input.to_ref().arr:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkArrayAddChild))
+  self.output.instructions.add(Instruction(kind: IkArrayEnd))
 
 proc compile_map(self: var Compiler, input: Value) =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkMapStart))
-  # for k, v in input.map:
-  #   self.compile(v)
-  #   self.output.instructions.add(Instruction(kind: IkMapSetProp, arg0: k))
-  # self.output.instructions.add(Instruction(kind: IkMapEnd))
+  self.output.instructions.add(Instruction(kind: IkMapStart))
+  for k, v in input.to_ref().map:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkMapSetProp, arg0: k))
+  self.output.instructions.add(Instruction(kind: IkMapEnd))
 
 proc compile_do(self: var Compiler, input: Value) =
   self.compile(input.gene.children)
