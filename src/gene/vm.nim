@@ -152,23 +152,22 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
       #   else:
       #     m.name = name
     of VkArray:
-      todo($VkArray)
-      # var i = 0
-      # while i < v.vec.len:
-      #   var item = v.vec[i]
-      #   i += 1
-      #   if item.kind == VkVector:
-      #     var m = new_matcher(self, MatchData)
-      #     group.add(m)
-      #     self.parse(m.children, item)
-      #   else:
-      #     self.parse(group, item)
-      #     if i < v.vec.len and v.vec[i].is_symbol("="):
-      #       i += 1
-      #       var last_matcher = group[^1]
-      #       var value = v.vec[i]
-      #       i += 1
-      #       last_matcher.default_value = value
+      var i = 0
+      while i < v.to_ref().arr.len:
+        var item = v.to_ref().arr[i]
+        i += 1
+        if item.kind == VkArray:
+          var m = new_matcher(self, MatchData)
+          group.add(m)
+          self.parse(m.children, item)
+        else:
+          self.parse(group, item)
+          if i < v.to_ref().arr.len and v.to_ref().arr[i] == "=".to_symbol_value():
+            i += 1
+            var last_matcher = group[^1]
+            var value = v.to_ref().arr[i]
+            i += 1
+            last_matcher.default_value = value
     of VkQuote:
       todo($VkQuote)
       # var m = new_matcher(self, MatchLiteral)

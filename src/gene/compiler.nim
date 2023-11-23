@@ -181,8 +181,7 @@ proc compile_break(self: var Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkBreak))
 
 proc compile_fn(self: var Compiler, input: Value) =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
+  self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
 
 proc compile_return(self: var Compiler, input: Value) =
   todo()
