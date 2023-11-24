@@ -192,11 +192,11 @@ proc to_function*(node: Value): Function {.gcsafe.} =
   var name: string
   var matcher = new_arg_matcher()
   var body_start: int
-  if node.gene.type == to_value("fnx"):
+  if node.gene.type == "fnx".to_symbol_value():
     matcher.parse(node.gene.children[0])
     name = "<unnamed>"
     body_start = 1
-  elif node.gene.type == to_symbol_value("fnxx"):
+  elif node.gene.type == "fnxx".to_symbol_value():
     name = "<unnamed>"
     body_start = 0
   else:
@@ -659,17 +659,17 @@ proc exec*(self: var VirtualMachine): Value =
         m.ns[m.name] = v
         self.data.registers.push(v)
 
-      # of IkReturn:
-      #   let caller = self.data.registers.caller
-      #   if caller == nil:
-      #     not_allowed("Return from top level")
-      #   else:
-      #     let v = self.data.registers.pop()
-      #     self.data.registers = caller.registers
-      #     self.data.cur_block = self.data.code_mgr.data[caller.address.id]
-      #     self.data.pc = caller.address.pc
-      #     self.data.registers.push(v)
-      #     continue
+      of IkReturn:
+        let caller = self.data.registers.caller
+        if caller == nil:
+          not_allowed("Return from top level")
+        else:
+          let v = self.data.registers.pop()
+          self.data.registers = caller.registers
+          self.data.cur_block = self.data.code_mgr.data[caller.address.id]
+          self.data.pc = caller.address.pc
+          self.data.registers.push(v)
+          continue
 
       of IkNamespace:
         var name = inst.arg0.str

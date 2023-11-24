@@ -183,13 +183,12 @@ proc compile_break(self: var Compiler, gene: ptr Gene) =
 proc compile_fn(self: var Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
 
-proc compile_return(self: var Compiler, input: Value) =
-  todo()
-  # if input.gene_children.len > 0:
-  #   self.compile(input.gene_children[0])
-  # else:
-  #   self.output.instructions.add(Instruction(kind: IkPushNil))
-  # self.output.instructions.add(Instruction(kind: IkReturn))
+proc compile_return(self: var Compiler, gene: ptr Gene) =
+  if gene.children.len > 0:
+    self.compile(gene.children[0])
+  else:
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  self.output.instructions.add(Instruction(kind: IkReturn))
 
 proc compile_macro(self: var Compiler, input: Value) =
   todo()
@@ -252,39 +251,38 @@ proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
 # * Compile arguments assuming it is a function call
 # * GeneLabel: GeneEnd
 # Similar logic is used for regular method calls and macro-method calls
-proc compile_gene_unknown(self: var Compiler, input: Value) {.inline.} =
-  todo()
-  # self.compile(input.gene_type)
-  # let fn_label = new_id()
-  # let end_label = new_id()
-  # self.output.instructions.add(
-  #   Instruction(
-  #     kind: IkGeneCheckType,
-  #     arg0: Value(kind: VkCuId, cu_id: fn_label),
-  #     arg1: Value(kind: VkCuId, cu_id: end_label),
-  #   )
-  # )
+proc compile_gene_unknown(self: var Compiler, gene: ptr Gene) {.inline.} =
+  self.compile(gene.type)
+  let fn_label = new_label()
+  let end_label = new_label()
+  self.output.instructions.add(
+    Instruction(
+      kind: IkGeneCheckType,
+      arg0: fn_label.Value,
+      arg1: end_label.Value,
+    )
+  )
 
-  # self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
-  # self.quote_level.inc()
-  # for k, v in input.gene_props:
-  #   self.compile(v)
-  #   self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-  # for child in input.gene_children:
-  #   self.compile(child)
-  #   self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  # self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label))
-  # self.quote_level.dec()
+  self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
+  self.quote_level.inc()
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.quote_level.dec()
 
-  # self.output.instructions.add(Instruction(kind: IkGeneStartDefault, label: fn_label))
-  # for k, v in input.gene_props:
-  #   self.compile(v)
-  #   self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-  # for child in input.gene_children:
-  #   self.compile(child)
-  #   self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, label: fn_label))
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
 
-  # self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
+  self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
 
 # TODO: handle special cases:
 # 1. No arguments
@@ -438,7 +436,7 @@ proc compile_gene(self: var Compiler, input: Value) =
         self.compile_macro(input)
         return
       of "return":
-        self.compile_return(input)
+        self.compile_return(gene)
         return
       of "ns":
         self.compile_ns(gene)
@@ -464,7 +462,7 @@ proc compile_gene(self: var Compiler, input: Value) =
             self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`))
           return
 
-  self.compile_gene_unknown(input)
+  self.compile_gene_unknown(gene)
 
 proc compile(self: var Compiler, input: Value) =
   case input.kind:
