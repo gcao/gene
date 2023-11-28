@@ -256,7 +256,7 @@ proc compile_gene_unknown(self: var Compiler, gene: ptr Gene) {.inline.} =
     Instruction(
       kind: IkGeneCheckType,
       arg0: fn_label.Value,
-      arg1: end_label.Value,
+      # arg1: end_label.Value,
     )
   )
 

@@ -428,7 +428,7 @@ type
     IkGeneStartMacro
     IkGeneStartMethod
     IkGeneStartMacroMethod
-    IkGeneCheckType
+    IkGeneCheckType           # if type is function like, jump to label in arg0
     IkGeneSetType
     IkGeneSetProp
     IkGeneSetPropValue        # args: key, literal value
@@ -588,8 +588,10 @@ converter to_bool*(v: Value): bool {.inline.}
 
 proc `$`*(self: Value): string
 proc `$`*(self: ptr Reference): string
+proc `$`*(self: ptr Gene): string
 
 proc to_ref*(v: Value): ptr Reference
+proc gene*(v: Value): ptr Gene {.inline.}
 
 proc new_str*(s: string): ptr String
 proc new_str_value*(s: string): Value
@@ -768,23 +770,24 @@ proc kind*(v: Value): ValueKind {.inline.} =
           return VkFloat
 
 proc `$`*(self: Value): string =
-  case self.kind:
-    of VkNil:
-      result = "nil"
-    of VkBool:
-      result = $(self == TRUE)
-    of VkInt:
-      result = $(cast[int64](self))
-    of VkFloat:
-      result = $(cast[float64](self))
-    of VkString:
-      {.cast(gcsafe).}:
+  {.cast(gcsafe).}:
+    case self.kind:
+      of VkNil:
+        result = "nil"
+      of VkBool:
+        result = $(self == TRUE)
+      of VkInt:
+        result = $(cast[int64](self))
+      of VkFloat:
+        result = $(cast[float64](self))
+      of VkString:
         result = "\"" & $self.str & "\""
-    of VkSymbol:
-      {.cast(gcsafe).}:
+      of VkSymbol:
         result = $self.str
-    else:
-      result = $self.kind
+      of VkGene:
+        result = $self.gene
+      else:
+        result = $self.kind
 
 proc is_nil*(v: Value): bool {.inline.} =
   v == NIL
@@ -1053,6 +1056,14 @@ proc to_gene_value*(v: ptr Gene): Value {.inline.} =
 
 proc gene*(v: Value): ptr Gene {.inline.} =
   cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
+
+proc `$`*(self: ptr Gene): string =
+  result = "(" & $self.type
+  for k, v in self.props:
+    result &= " ^" & k & " " & $v
+  for child in self.children:
+    result &= " " & $child
+  result &= ")"
 
 proc new_gene*(): ptr Gene =
   result = cast[ptr Gene](alloc0(sizeof(Gene)))
@@ -1388,6 +1399,7 @@ proc new_class*(name: string, parent: Class): Class =
     name: name,
     ns: new_namespace(nil, name),
     parent: parent,
+    constructor: NIL,
   )
 
 proc new_class*(name: string): Class =

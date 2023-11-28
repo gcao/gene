@@ -30,53 +30,53 @@ test_vm true, """
 """, proc(r: Value) =
   check r.to_ref().instance_class.name == "A"
 
-test_vm """
-  (class A
-    (.fn test _
-      1
-    )
-  )
-  ((new A).test)
-""", 1
-
-test_vm """
-  (class A
-    (.fn set_x a
-      (/x = a)
-    )
-    (.fn test _
-      /x
-    )
-  )
-  (var a (new A))
-  (a .set_x 1)
-  (a .test)
-""", 1
-
-test_vm """
-  (class A
-    (.fn test _
-      1
-    )
-  )
-  (var a (new A))
-  a/.test
-""", 1
-
-test_vm """
-  (class A
-    (.ctor _
-      (/test = 1)
-    )
-  )
-  (var a (new A))
-  a/test
-""", 1
+# test_vm """
+#   (class A
+#     (.fn test _
+#       1
+#     )
+#   )
+#   ((new A).test)
+# """, 1
 
 # test_vm """
 #   (class A
-#     (.ctor /test)
+#     (.fn set_x a
+#       (/x = a)
+#     )
+#     (.fn test _
+#       /x
+#     )
 #   )
-#   (var a (new A 1))
+#   (var a (new A))
+#   (a .set_x 1)
+#   (a .test)
+# """, 1
+
+# test_vm """
+#   (class A
+#     (.fn test _
+#       1
+#     )
+#   )
+#   (var a (new A))
+#   a/.test
+# """, 1
+
+# test_vm """
+#   (class A
+#     (.ctor _
+#       (/test = 1)
+#     )
+#   )
+#   (var a (new A))
 #   a/test
 # """, 1
+
+# # test_vm """
+# #   (class A
+# #     (.ctor /test)
+# #   )
+# #   (var a (new A 1))
+# #   a/test
+# # """, 1

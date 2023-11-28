@@ -460,11 +460,11 @@ proc exec*(self: var VirtualMachine): Value =
           of VkMacro:
             # TODO: delete non-macro-related instructions
             discard
-          # of VkBoundMethod:
-          #   if not v.bound_method.method.is_macro:
-          #     self.data.pc = self.data.cur_block.find_label(inst.arg0.cu_id)
-          #     # TODO: delete non-macro-related instructions
-          #     continue
+          of VkBoundMethod:
+            if not v.to_ref().bound_method.method.is_macro:
+              self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
+              # TODO: delete non-macro-related instructions
+              continue
           else:
             todo($v.kind)
 
@@ -522,6 +522,9 @@ proc exec*(self: var VirtualMachine): Value =
               self.data.pc = 0
               continue
 
+            of VkClass:
+              todo($v)
+
             # of VkBoundMethod:
             #   discard self.data.registers.pop()
 
@@ -552,7 +555,7 @@ proc exec*(self: var VirtualMachine): Value =
             #       todo("Bound method: " & $meth.callable.kind)
 
             else:
-              discard
+              todo($v)
 
       of IkAdd:
         self.data.registers.push(self.data.registers.pop().int + self.data.registers.pop().int)
@@ -696,26 +699,27 @@ proc exec*(self: var VirtualMachine): Value =
         self.data.registers.push(instance.to_ref_value())
 
         let class = instance.instance_class
-        if class.constructor != nil:
-          case class.constructor.kind:
-            of VkFunction:
-              class.constructor.to_ref().fn.compile()
-              let compiled = class.constructor.to_ref().fn.body_compiled
-              compiled.skip_return = true
+        case class.constructor.kind:
+          of VkFunction:
+            class.constructor.to_ref().fn.compile()
+            let compiled = class.constructor.to_ref().fn.body_compiled
+            compiled.skip_return = true
 
-              self.data.pc.inc()
-              var caller = Caller(
-                address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-                registers: self.data.registers,
-              )
-              self.data.registers = new_registers(caller)
-              self.data.registers.self = instance.to_ref_value()
-              self.data.registers.ns = class.constructor.to_ref().fn.ns
-              self.data.cur_block = compiled
-              self.data.pc = 0
-              continue
-            else:
-              todo($class.constructor.kind)
+            self.data.pc.inc()
+            var caller = Caller(
+              address: Address(id: self.data.cur_block.id, pc: self.data.pc),
+              registers: self.data.registers,
+            )
+            self.data.registers = new_registers(caller)
+            self.data.registers.self = instance.to_ref_value()
+            self.data.registers.ns = class.constructor.to_ref().fn.ns
+            self.data.cur_block = compiled
+            self.data.pc = 0
+            continue
+          of VkNil:
+            discard
+          else:
+            todo($class.constructor.kind)
 
       of IkSubClass:
         var name = inst.arg0.str
@@ -736,7 +740,7 @@ proc exec*(self: var VirtualMachine): Value =
           # class: class,
           `method`: meth,
         )
-        self.data.registers.push(r.to_value())
+        self.data.registers.push(r.to_ref_value())
 
       of IkCallMethodNoArgs:
         let v = self.data.registers.pop()
