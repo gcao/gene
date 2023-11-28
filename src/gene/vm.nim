@@ -555,7 +555,7 @@ proc exec*(self: var VirtualMachine): Value =
             #       todo("Bound method: " & $meth.callable.kind)
 
             else:
-              todo($v)
+              discard
 
       of IkAdd:
         self.data.registers.push(self.data.registers.pop().int + self.data.registers.pop().int)
