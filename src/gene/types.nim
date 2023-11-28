@@ -245,7 +245,7 @@ type
 
   BoundMethod* = object
     self*: Value
-    class*: Class       # Note that class may be different from method.class
+    # class*: Class       # Note that class may be different from method.class
     `method`*: Method
 
   Function* = ref object
@@ -1425,28 +1425,28 @@ proc get_super_method*(self: Class, name: string): Method =
 
 proc get_class*(val: Value): Class =
   case val.kind:
-    # of VkApplication:
-    #   return App.app.application_class.class
-    # of VkPackage:
-    #   return App.app.package_class.class
-    # of VkInstance:
-    #   return val.instance_class
+    of VkApplication:
+      return App.to_ref().app.application_class.to_ref().class
+    of VkPackage:
+      return App.to_ref().app.package_class.to_ref().class
+    of VkInstance:
+      return val.to_ref().instance_class
     # of VkCast:
     #   return val.cast_class
-    # of VkClass:
-    #   return App.app.class_class.class
+    of VkClass:
+      return App.to_ref().app.class_class.to_ref().class
     # of VkMixin:
-    #   return App.app.mixin_class.class
-    # of VkNamespace:
-    #   return App.app.namespace_class.class
+    #   return App.to_ref().app.mixin_class.to_ref().class
+    of VkNamespace:
+      return App.to_ref().app.namespace_class.to_ref().class
     # of VkFuture:
-    #   return App.app.future_class.class
+    #   return App.to_ref().app.future_class.to_ref().class
     # of VkThread:
-    #   return App.app.thread_class.class
+    #   return App.to_ref().app.thread_class.to_ref().class
     # of VkThreadMessage:
-    #   return App.app.thread_message_class.class
+    #   return App.to_ref().app.thread_message_class.to_ref().class
     # of VkNativeFile:
-    #   return App.app.file_class.class
+    #   return App.to_ref().app.file_class.to_ref().class
     # of VkException:
     #   var ex = val.exception
     #   if ex is ref Exception:
@@ -1454,53 +1454,53 @@ proc get_class*(val: Value): Class =
     #     if ex.instance != nil:
     #       return ex.instance.instance_class
     #     else:
-    #       return App.app.exception_class.class
+    #       return App.to_ref().app.exception_class.to_ref().class
     #   else:
-    #     return App.app.exception_class.class
-    # of VkNil:
-    #   return App.app.nil_class.class
-    # of VkBool:
-    #   return App.app.bool_class.class
-    # of VkInt:
-    #   return App.app.int_class.class
-    # of VkChar:
-    #   return App.app.char_class.class
-    # of VkString:
-    #   return App.app.string_class.class
-    # of VkSymbol:
-    #   return App.app.symbol_class.class
-    # of VkComplexSymbol:
-    #   return App.app.complex_symbol_class.class
-    # of VkVector:
-    #   return App.app.array_class.class
-    # of VkMap:
-    #   return App.app.map_class.class
-    # of VkSet:
-    #   return App.app.set_class.class
-    # of VkGene:
-    #   return App.app.gene_class.class
+    #     return App.to_ref().app.exception_class.to_ref().class
+    of VkNil:
+      return App.to_ref().app.nil_class.to_ref().class
+    of VkBool:
+      return App.to_ref().app.bool_class.to_ref().class
+    of VkInt:
+      return App.to_ref().app.int_class.to_ref().class
+    of VkChar:
+      return App.to_ref().app.char_class.to_ref().class
+    of VkString:
+      return App.to_ref().app.string_class.to_ref().class
+    of VkSymbol:
+      return App.to_ref().app.symbol_class.to_ref().class
+    of VkComplexSymbol:
+      return App.to_ref().app.complex_symbol_class.to_ref().class
+    of VkArray:
+      return App.to_ref().app.array_class.to_ref().class
+    of VkMap:
+      return App.to_ref().app.map_class.to_ref().class
+    of VkSet:
+      return App.to_ref().app.set_class.to_ref().class
+    of VkGene:
+      return App.to_ref().app.gene_class.to_ref().class
     # of VkRegex:
-    #   return App.app.regex_class.class
+    #   return App.to_ref().app.regex_class.to_ref().class
     # of VkRange:
-    #   return App.app.range_class.class
+    #   return App.to_ref().app.range_class.to_ref().class
     # of VkDate:
-    #   return App.app.date_class.class
+    #   return App.to_ref().app.date_class.to_ref().class
     # of VkDateTime:
-    #   return App.app.datetime_class.class
+    #   return App.to_ref().app.datetime_class.to_ref().class
     # of VkTime:
-    #   return App.app.time_class.class
-    # of VkFunction:
-    #   return App.app.function_class.class
+    #   return App.to_ref().app.time_class.to_ref().class
+    of VkFunction:
+      return App.to_ref().app.function_class.to_ref().class
     # of VkTimezone:
-    #   return App.app.timezone_class.class
+    #   return App.to_ref().app.timezone_class.to_ref().class
     # of VkAny:
     #   if val.any_class == nil:
-    #     return App.app.object_class.class
+    #     return App.to_ref().app.object_class.to_ref().class
     #   else:
     #     return val.any_class
     # of VkCustom:
     #   if val.custom_class == nil:
-    #     return App.app.object_class.class
+    #     return App.to_ref().app.object_class.to_ref().class
     #   else:
     #     return val.custom_class
     else:

@@ -191,8 +191,7 @@ proc compile_return(self: var Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkReturn))
 
 proc compile_macro(self: var Compiler, input: Value) =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkMacro, arg0: input))
+  self.output.instructions.add(Instruction(kind: IkMacro, arg0: input))
 
 proc compile_ns(self: var Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkNamespace, arg0: gene.children[0]))
@@ -202,32 +201,30 @@ proc compile_ns(self: var Compiler, gene: ptr Gene) =
     self.output.instructions.add(Instruction(kind: IkCompileInit))
     self.output.instructions.add(Instruction(kind: IkCallInit))
 
-proc compile_class(self: var Compiler, input: Value) =
-  todo()
-  # var body_start = 1
-  # if input.gene_children.len >= 3 and input.gene_children[1].is_symbol("<"):
-  #   body_start = 3
-  #   self.compile(input.gene_children[2])
-  #   self.output.instructions.add(Instruction(kind: IkSubClass, arg0: input.gene_children[0]))
-  # else:
-  #   self.output.instructions.add(Instruction(kind: IkClass, arg0: input.gene_children[0]))
+proc compile_class(self: var Compiler, gene: ptr Gene) =
+  var body_start = 1
+  if gene.children.len >= 3 and gene.children[1] == "<".to_symbol_value():
+    body_start = 3
+    self.compile(gene.children[2])
+    self.output.instructions.add(Instruction(kind: IkSubClass, arg0: gene.children[0]))
+  else:
+    self.output.instructions.add(Instruction(kind: IkClass, arg0: gene.children[0]))
 
-  # if input.gene_children.len > body_start:
-  #   let body = new_gene_stream(input.gene_children[body_start..^1])
-  #   self.output.instructions.add(Instruction(kind: IkPushValue, arg0: body))
-  #   self.output.instructions.add(Instruction(kind: IkCompileInit))
-  #   self.output.instructions.add(Instruction(kind: IkCallInit))
+  if gene.children.len > body_start:
+    let body = new_stream_value(gene.children[body_start..^1])
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: body))
+    self.output.instructions.add(Instruction(kind: IkCompileInit))
+    self.output.instructions.add(Instruction(kind: IkCallInit))
 
 # Construct a Gene object whose type is the class
 # The Gene object will be used as the arguments to the constructor
-proc compile_new(self: var Compiler, input: Value) =
-  todo()
-  # self.output.instructions.add(Instruction(kind: IkGeneStart))
-  # self.compile(input.gene_children[0])
-  # self.output.instructions.add(Instruction(kind: IkGeneSetType))
-  # # TODO: compile the arguments
-  # self.output.instructions.add(Instruction(kind: IkGeneEnd))
-  # self.output.instructions.add(Instruction(kind: IkNew))
+proc compile_new(self: var Compiler, gene: ptr Gene) =
+  self.output.instructions.add(Instruction(kind: IkGeneStart))
+  self.compile(gene.children[0])
+  self.output.instructions.add(Instruction(kind: IkGeneSetType))
+  # TODO: compile the arguments
+  self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  self.output.instructions.add(Instruction(kind: IkNew))
 
 proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
   self.output.instructions.add(Instruction(kind: IkGeneStart))
@@ -291,47 +288,46 @@ proc compile_gene_unknown(self: var Compiler, gene: ptr Gene) {.inline.} =
 # self, method_name, arguments
 # self + method_name => bounded_method_object (is composed of self, class, method_object(is composed of name, logic))
 # (bounded_method_object ...arguments)
-proc compile_method_call(self: var Compiler, input: Value) {.inline.} =
-  todo()
-  # if input.gene_type.kind == VkSymbol and input.gene_type.str.starts_with("."):
-  #   self.output.instructions.add(Instruction(kind: IkSelf))
-  #   self.output.instructions.add(Instruction(kind: IkResolveMethod, arg0: input.gene_type.str[1..^1]))
-  # else:
-  #   self.compile(input.gene_type)
-  #   let first = input.gene_children[0]
-  #   input.gene_children.delete(0)
-  #   self.output.instructions.add(Instruction(kind: IkResolveMethod, arg0: first.str[1..^1]))
+proc compile_method_call(self: var Compiler, gene: ptr Gene) {.inline.} =
+  if gene.type.kind == VkSymbol and gene.type.str.starts_with("."):
+    self.output.instructions.add(Instruction(kind: IkSelf))
+    self.output.instructions.add(Instruction(kind: IkResolveMethod, arg0: gene.type.str[1..^1]))
+  else:
+    self.compile(gene.type)
+    let first = gene.children[0]
+    gene.children.delete(0)
+    self.output.instructions.add(Instruction(kind: IkResolveMethod, arg0: first.str[1..^1]))
 
-  # let fn_label = new_id()
-  # let end_label = new_id()
-  # self.output.instructions.add(
-  #   Instruction(
-  #     kind: IkGeneCheckType,
-  #     arg0: Value(kind: VkCuId, cu_id: fn_label),
-  #     arg1: Value(kind: VkCuId, cu_id: end_label),
-  #   )
-  # )
+  let fn_label = new_label()
+  let end_label = new_label()
+  self.output.instructions.add(
+    Instruction(
+      kind: IkGeneCheckType,
+      arg0: fn_label.Value,
+      arg1: end_label.Value,
+    )
+  )
 
-  # self.output.instructions.add(Instruction(kind: IkGeneStartMacroMethod))
-  # self.quote_level.inc()
-  # for k, v in input.gene_props:
-  #   self.compile(v)
-  #   self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-  # for child in input.gene_children:
-  #   self.compile(child)
-  #   self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  # self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label))
-  # self.quote_level.dec()
+  self.output.instructions.add(Instruction(kind: IkGeneStartMacroMethod))
+  self.quote_level.inc()
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.quote_level.dec()
 
-  # self.output.instructions.add(Instruction(kind: IkGeneStartMethod, label: fn_label))
-  # for k, v in input.gene_props:
-  #   self.compile(v)
-  #   self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-  # for child in input.gene_children:
-  #   self.compile(child)
-  #   self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkGeneStartMethod, label: fn_label))
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
 
-  # self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
+  self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
 
 proc compile_gene(self: var Compiler, input: Value) =
   let gene = input.gene
@@ -409,7 +405,7 @@ proc compile_gene(self: var Compiler, input: Value) =
           return
         else:
           if first.str.starts_with("."):
-            self.compile_method_call(input)
+            self.compile_method_call(gene)
             return
 
   if `type`.kind == VkSymbol:
@@ -442,15 +438,15 @@ proc compile_gene(self: var Compiler, input: Value) =
         self.compile_ns(gene)
         return
       of "class":
-        self.compile_class(input)
+        self.compile_class(gene)
         return
       of "new":
-        self.compile_new(input)
+        self.compile_new(gene)
         return
       else:
         let s = `type`.str
         if s.starts_with("."):
-          self.compile_method_call(input)
+          self.compile_method_call(gene)
           return
         elif s.starts_with("$_"):
           if gene.children.len > 1:

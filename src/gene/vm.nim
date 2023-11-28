@@ -727,18 +727,16 @@ proc exec*(self: var VirtualMachine): Value =
         self.data.registers.push(r.to_ref_value())
 
       of IkResolveMethod:
-        todo()
-        # var v = self.data.registers.pop()
-        # let class = v.get_class()
-        # let meth = class.get_method(inst.arg0.str)
-        # self.data.registers.push Value(
-        #   kind: VkBoundMethod,
-        #   bound_method: BoundMethod(
-        #     self: v,
-        #     class: class,
-        #     `method`: meth,
-        #   )
-        # )
+        var v = self.data.registers.pop()
+        let class = v.get_class()
+        let meth = class.get_method(inst.arg0.str)
+        let r = new_ref(VkBoundMethod)
+        r.bound_method = BoundMethod(
+          self: v,
+          # class: class,
+          `method`: meth,
+        )
+        self.data.registers.push(r.to_value())
 
       of IkCallMethodNoArgs:
         let v = self.data.registers.pop()

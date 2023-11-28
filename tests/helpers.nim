@@ -72,8 +72,7 @@ proc test_vm*(trace: bool, code: string, result: Value) =
   var code = cleanup(code)
   test "Compilation & VM: " & code:
     init_all()
-    if trace:
-      VM.trace = true
+    VM.trace = trace
     check VM.exec(code, "test_code") == result
 
 proc test_vm*(code: string, result: Value) =
@@ -83,6 +82,13 @@ proc test_vm*(code: string, callback: proc(result: Value)) =
   var code = cleanup(code)
   test "Compilation & VM: " & code:
     init_all()
+    callback VM.exec(code, "test_code")
+
+proc test_vm*(trace: bool, code: string, callback: proc(result: Value)) =
+  var code = cleanup(code)
+  test "Compilation & VM: " & code:
+    init_all()
+    VM.trace = trace
     callback VM.exec(code, "test_code")
 
 proc test_vm_error*(code: string) =
