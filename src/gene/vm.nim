@@ -525,34 +525,34 @@ proc exec*(self: var VirtualMachine): Value =
             of VkClass:
               todo($v)
 
-            # of VkBoundMethod:
-            #   discard self.data.registers.pop()
+            of VkBoundMethod:
+              discard self.data.registers.pop()
 
-            #   let meth = gene_type.bound_method.method
-            #   case meth.callable.kind:
-            #     of VkNativeFn:
-            #       self.data.registers.push(meth.callable.native_fn(self.data, v))
-            #     of VkFunction:
-            #       self.data.pc.inc()
+              let meth = gene_type.to_ref().bound_method.method
+              case meth.callable.kind:
+                of VkNativeFn:
+                  self.data.registers.push(meth.callable.to_ref().native_fn(self.data, v))
+                of VkFunction:
+                  self.data.pc.inc()
 
-            #       var fn = meth.callable.fn
-            #       fn.compile()
-            #       self.data.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
+                  var fn = meth.callable.to_ref().fn
+                  fn.compile()
+                  self.data.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
-            #       var caller = Caller(
-            #         address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-            #         registers: self.data.registers,
-            #       )
-            #       self.data.registers = new_registers(caller)
-            #       self.data.registers.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-            #       self.data.registers.ns = fn.ns
-            #       self.data.registers.self = gene_type.bound_method.self
-            #       self.data.registers.args = v
-            #       self.data.cur_block = fn.body_compiled
-            #       self.data.pc = 0
-            #       continue
-            #     else:
-            #       todo("Bound method: " & $meth.callable.kind)
+                  var caller = Caller(
+                    address: Address(id: self.data.cur_block.id, pc: self.data.pc),
+                    registers: self.data.registers,
+                  )
+                  self.data.registers = new_registers(caller)
+                  self.data.registers.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+                  self.data.registers.ns = fn.ns
+                  self.data.registers.self = gene_type.to_ref().bound_method.self
+                  self.data.registers.args = v
+                  self.data.cur_block = fn.body_compiled
+                  self.data.pc = 0
+                  continue
+                else:
+                  todo("Bound method: " & $meth.callable.kind)
 
             else:
               discard

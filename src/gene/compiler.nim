@@ -14,7 +14,7 @@ proc `$`*(self: Instruction): string =
       IkAddValue, IkLtValue,
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
-      IkResolveSymbol,
+      IkResolveSymbol, IkResolveMethod,
       IkSetMember, IkGetMember,
       IkSetChild, IkGetChild,
       IkInternal:
@@ -223,7 +223,8 @@ proc compile_new(self: var Compiler, gene: ptr Gene) =
   self.compile(gene.children[0])
   self.output.instructions.add(Instruction(kind: IkGeneSetType))
   # TODO: compile the arguments
-  self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  # IKGeneEnd is replaced by IkNew here
+  # self.output.instructions.add(Instruction(kind: IkGeneEnd))
   self.output.instructions.add(Instruction(kind: IkNew))
 
 proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
