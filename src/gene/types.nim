@@ -44,6 +44,8 @@ type
     VkNativeFn
     VkNativeFn2
 
+    # VkInstruction
+
   Value* = distinct int64
 
   Reference* = object
@@ -97,6 +99,8 @@ type
         native_fn*: NativeFn
       of VkNativeFn2:
         native_fn2*: NativeFn2
+      # of VkInstruction:
+      #   instruction*: Instruction
       else:
         discard
 
@@ -447,8 +451,6 @@ type
     IkYield
     IkResume
 
-    IkInternal
-
   Instruction* = object
     kind*: InstructionKind
     label*: Label
@@ -605,7 +607,7 @@ proc get_symbol*(i: int64): string {.inline.}
 proc new_namespace*(): Namespace {.gcsafe.}
 proc new_namespace*(name: string): Namespace {.gcsafe.}
 proc new_namespace*(parent: Namespace): Namespace {.gcsafe.}
-proc `[]=`*(self: var Namespace, key: string, val: Value) {.inline.}
+proc `[]=`*(self: Namespace, key: string, val: Value) {.inline.}
 
 #################### Common ######################
 
@@ -1087,12 +1089,23 @@ proc new_gene_value*(`type`: Value): Value {.inline.} =
 
 #################### Application #################
 
+proc app*(self: Value): Application {.inline.} =
+  self.to_ref().app
+
 proc new_app*(): Application =
   result = Application()
   var global = new_namespace("global")
   result.ns = global
 
 #################### Namespace ###################
+
+proc ns*(self: Value): Namespace {.inline.} =
+  self.to_ref().ns
+
+proc to_value*(self: Namespace): Value {.inline.} =
+  let r = new_ref(VkNamespace)
+  r.ns = self
+  result = r.to_ref_value()
 
 proc new_namespace*(): Namespace =
   return Namespace(
@@ -1165,7 +1178,7 @@ proc locate*(self: Namespace, key: string): (Value, Namespace) {.inline.} =
   else:
     not_allowed()
 
-proc `[]=`*(self: var Namespace, key: string, val: Value) {.inline.} =
+proc `[]=`*(self: Namespace, key: string, val: Value) {.inline.} =
   self.members[key] = val
 
 proc get_members*(self: Namespace): Value =
@@ -1583,6 +1596,18 @@ proc clone*(self: Method): Method =
     name: self.name,
     callable: self.callable,
   )
+
+#################### Native ######################
+
+converter to_value*(f: NativeFn): Value {.inline.} =
+  let r = new_ref(VkNativeFn)
+  r.native_fn = f
+  result = r.to_ref_value()
+
+converter to_value*(f: NativeFn2): Value {.inline.} =
+  let r = new_ref(VkNativeFn2)
+  r.native_fn2 = f
+  result = r.to_ref_value()
 
 #################### Helpers #####################
 

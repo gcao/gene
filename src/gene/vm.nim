@@ -12,6 +12,9 @@ proc init_app_and_vm*() =
   )
   let r = new_ref(VkApplication)
   r.app = new_app()
+  r.app.global_ns = new_namespace("global").to_value()
+  r.app.gene_ns   = new_namespace("gene"  ).to_value()
+  r.app.genex_ns  = new_namespace("gene"  ).to_value()
   App = r.to_ref_value()
 
   for callback in VmCreatedCallbacks:
@@ -238,7 +241,7 @@ proc to_macro(node: Value): Macro =
   # body = wrap_with_try(body)
   result = new_macro(name, matcher, body)
 
-proc handle_args*(self: var VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
+proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
   case matcher.hint.mode:
     of MhNone:
       discard
@@ -262,7 +265,7 @@ proc handle_args*(self: var VirtualMachine, matcher: RootMatcher, args: Value) {
     else:
       todo($matcher.hint.mode)
 
-proc print_registers(self: var VirtualMachine) =
+proc print_registers(self: VirtualMachine) =
   var s = "Registers "
   for i, reg in self.data.registers.data:
     if i > 0:
@@ -272,8 +275,13 @@ proc print_registers(self: var VirtualMachine) =
     s &= $self.data.registers.data[i]
   echo s
 
-proc exec*(self: var VirtualMachine): Value =
+proc exec*(self: VirtualMachine): Value =
   var indent = ""
+
+  App.app.gene_ns.ns["_trace_start"] = proc(vm_data: VirtualMachineData, args: Value): Value =
+    self.trace = true
+    self.data.registers.push(NIL)
+
   while true:
     let inst = self.data.cur_block[self.data.pc]
     if inst.kind == IkStart:
@@ -319,6 +327,8 @@ proc exec*(self: var VirtualMachine): Value =
             self.data.registers.push(PLACEHOLDER)
           of "self":
             self.data.registers.push(self.data.registers.self)
+          of "gene":
+            self.data.registers.push(App.app.gene_ns)
           else:
             let scope = self.data.registers.scope
             let name = inst.arg0.str
@@ -465,6 +475,9 @@ proc exec*(self: var VirtualMachine): Value =
               self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
               # TODO: delete non-macro-related instructions
               continue
+          of VkNativeFn, VkNativeFn2:
+            self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
+            continue
           else:
             todo($v.kind)
 
@@ -771,29 +784,29 @@ proc exec*(self: var VirtualMachine): Value =
           else:
             todo("CallMethodNoArgs: " & $meth.callable.kind)
 
-      of IkInternal:
-        case inst.arg0.str:
-          of "$_trace_start":
-            self.trace = true
-            self.data.registers.push(NIL)
-          of "$_trace_end":
-            self.trace = false
-            self.data.registers.push(NIL)
-          of "$_debug":
-            if inst.arg1:
-              echo "$_debug ", self.data.registers.current()
-            else:
-              self.data.registers.push(NIL)
-          of "$_print_instructions":
-            echo self.data.cur_block
-            if inst.arg1:
-              discard self.data.registers.pop()
-            self.data.registers.push(NIL)
-          of "$_print_registers":
-            self.print_registers()
-            self.data.registers.push(NIL)
-          else:
-            todo(inst.arg0.str)
+      # of IkInternal:
+      #   case inst.arg0.str:
+      #     of "$_trace_start":
+      #       self.trace = true
+      #       self.data.registers.push(NIL)
+      #     of "$_trace_end":
+      #       self.trace = false
+      #       self.data.registers.push(NIL)
+      #     of "$_debug":
+      #       if inst.arg1:
+      #         echo "$_debug ", self.data.registers.current()
+      #       else:
+      #         self.data.registers.push(NIL)
+      #     of "$_print_instructions":
+      #       echo self.data.cur_block
+      #       if inst.arg1:
+      #         discard self.data.registers.pop()
+      #       self.data.registers.push(NIL)
+      #     of "$_print_registers":
+      #       self.print_registers()
+      #       self.data.registers.push(NIL)
+      #     else:
+      #       todo(inst.arg0.str)
 
       else:
         todo($inst.kind)
@@ -802,7 +815,7 @@ proc exec*(self: var VirtualMachine): Value =
     if self.data.pc >= self.data.cur_block.len:
       break
 
-proc exec*(self: var VirtualMachine, code: string, module_name: string): Value =
+proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))
 
   var ns = new_namespace(module_name)

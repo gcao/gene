@@ -16,8 +16,7 @@ proc `$`*(self: Instruction): string =
       IkArrayAddChildValue,
       IkResolveSymbol, IkResolveMethod,
       IkSetMember, IkGetMember,
-      IkSetChild, IkGetChild,
-      IkInternal:
+      IkSetChild, IkGetChild:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0}"
       else:
@@ -83,16 +82,32 @@ proc compile(self: var Compiler, input: seq[Value]) =
 proc compile_literal(self: var Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
 
-proc compile_symbol(self: var Compiler, input: Value) =
-  if self.quote_level > 0:
-    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
-  else:
-    self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
+# Translate $x to gene/x and $x/y to gene/x/y
+proc translate_symbol(input: Value): Value =
+  case input.kind:
+    of VkSymbol:
+      let s = input.str
+      if s.starts_with("$"):
+        result = @["gene", s[1..^1]].to_complex_symbol()
+      else:
+        result = input
+    of VkComplexSymbol:
+
+      var parts = input.to_ref().csymbol
+      if parts[0].starts_with("$"):
+        parts[0] = parts[0][1..^1]
+        parts.insert("gene", 0)
+        result = parts.to_complex_symbol()
+      else:
+        result = input
+    else:
+      not_allowed($input)
 
 proc compile_complex_symbol(self: var Compiler, input: Value) =
   if self.quote_level > 0:
     self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
   else:
+    let input = translate_symbol(input)
     var first = input.to_ref().csymbol[0]
     if first == "":
       self.output.instructions.add(Instruction(kind: IkSelf))
@@ -106,6 +121,16 @@ proc compile_complex_symbol(self: var Compiler, input: Value) =
         self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
       else:
         self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s))
+
+proc compile_symbol(self: var Compiler, input: Value) =
+  if self.quote_level > 0:
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
+  else:
+    let input = translate_symbol(input)
+    if input.kind == VkSymbol:
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
+    elif input.kind == VkComplexSymbol:
+      self.compile_complex_symbol(input)
 
 proc compile_array(self: var Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkArrayStart))
@@ -448,15 +473,6 @@ proc compile_gene(self: var Compiler, input: Value) =
         let s = `type`.str
         if s.starts_with("."):
           self.compile_method_call(gene)
-          return
-        elif s.starts_with("$_"):
-          if gene.children.len > 1:
-            not_allowed($input)
-          elif gene.children.len == 1:
-            self.compile(gene.children[0])
-            self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`, arg1: true))
-          else:
-            self.output.instructions.add(Instruction(kind: IkInternal, arg0: `type`))
           return
 
   self.compile_gene_unknown(gene)
