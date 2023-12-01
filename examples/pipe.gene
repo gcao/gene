@@ -1,0 +1,10 @@
+#!/usr/bin/env gene
+
+# Demo how pipe works
+#<
+cat tests/fixtures/test.txt | gene pipe.gene
+#>#
+
+(println "Before piped text")
+(println (stdin .read))
+(println "After piped text")

@@ -1,0 +1,3 @@
+#!/usr/bin/env gene
+
+(println $cmd_args)

@@ -1,0 +1,9 @@
+#!/usr/bin/env gene
+
+(import genex/html/tags/*)
+
+(var svg (SVG ^width 600 ^height 400
+  (RECT)
+))
+
+(println svg/.to_s)

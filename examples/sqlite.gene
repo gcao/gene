@@ -1,0 +1,23 @@
+#!/usr/bin/env gene
+
+# Support mysql, sqlite etc
+# Connect
+# Create table
+# Alter table
+# Drop table
+# Select
+# Insert
+# Update
+# Delete
+# Begin
+# Commit
+# Close connection
+
+# Data types
+# Bool
+# Int
+# Float
+# String
+# DateTime
+
+# https://nim-lang.org/docs/db_sqlite.html

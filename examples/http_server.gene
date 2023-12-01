@@ -1,0 +1,140 @@
+#!/usr/bin/env gene
+
+# Import all members from genex/http to current namespace
+(import genex/http/*)
+
+# The main app class
+(class App
+
+   # Constructor
+   # First arg is automatically stored as `port` property in the instance
+   (.ctor /port
+      # Initializes `middleware` property as an empty array
+      (/middlewares = [])
+   )
+
+   # Helper method for constructing handlers from /middlewares and /handler
+   (.fn construct_handler middleware_index
+      (if (middleware_index < /middlewares/.size)
+         (var middleware (/middlewares ./ middleware_index))
+         (var handler    (.construct_handler (middleware_index + 1)))
+         (middleware handler)
+       else
+         /handler
+      )
+   )
+
+   # Construct the root handler based on /middlewares and /handler
+   # Start the HTTP server
+   (.fn start _
+      # Note: print and println inserts " " between arguments
+      (println "Starting HTTP server at port" /port "...")
+
+      (var root_handler (.construct_handler 0))
+      (start_server /port root_handler)
+      (gene/run_forever)
+   )
+)
+
+# A dummy router that calls handlers one by one until one responds the request.
+(class DummyRouter
+
+   # Constructor
+   (.ctor _
+      (/handlers = [])
+   )
+
+   # Define `call` method which enables the router to be invoked like any handler,
+   # i.e. (<dummy router> req)
+   (.fn call req
+
+      (for h in /handlers
+         (var result (h req))
+         (if result
+            (println result/.status req/.method req/.url)
+            (return result)
+         )
+      )
+
+      # No handler responded the request, return 404 Not found.
+      (respond 404)
+
+    catch *
+      # `catch` can appear on the top level of fn/method/macro/block.
+      # `_` represents all catchable exceptions.
+      # Log the exception and let it bubble up to be handled by a middleware or the
+      # HTTP server itself.
+      (println $ex/.to_s)
+      (throw $ex)
+   )
+)
+
+# A simple handler that responds to /hello
+(fn hello req
+   # Return if path is not "/hello"
+   (if (req/.path != "/hello")
+      (return)
+   )
+
+   (var params req/.params)
+   (if (params .contains "name")
+      # (respond "any string") will create a 200/OK respoonse with the string as body.
+      (respond #"Hello #{params/name}!")
+    else
+      (respond "Hello world!")
+   )
+)
+
+# A handler that responds to /secret
+# Please note that the authentication is handled in `auth` middleware.
+(fn secret req
+   (if (req/.path != "/secret")
+      (return)
+   )
+
+   (respond "Sssh, do not tell this to anyone!")
+)
+
+# A dummy passcode used for authentication
+(var passcode "secret")
+
+# Middlewares wrap `handler` with some logic.
+# `auth` is a middleware that makes sure access to critical resources are authenticated.
+(fn auth handler
+
+   # (fnx arg ...) defines an anonymous function.
+   (fnx req
+      (if (req/.path != "/secret")
+         (return (handler req))
+      )
+
+      (var authenticated
+         # Read and check passcode from Authorization header
+         ((gene/base64_decode req/.headers/authorization) == passcode)
+      )
+      (if authenticated
+         (handler req)
+       else
+         (respond 401)
+      )
+   )
+)
+
+# Server port defaults to 2080 but can be passed in the command line.
+(var port 2080)
+(if ($cmd_args/.size > 1)
+   (port = $cmd_args/1/.to_i)
+)
+
+# Create and initialize the app
+# ($tap <value> <body>) will run <body> with `self` set to <value> and return <value>
+(var app ($tap (new App port)
+   (/middlewares .add auth)
+   (/handler = ($tap (new DummyRouter)
+      (/handlers .add hello)
+      (/handlers .add secret)
+   ))
+))
+
+# Start the app
+(app .start)

@@ -1,0 +1,10 @@
+#!/usr/bin/env gene
+
+(println (gene/today))
+(println ((gene/today) .year))
+
+(println (gene/now))
+(println ((gene/now) .year))
+
+(println 01:02:03)
+(println (01:02:03 .hour))

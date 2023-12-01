@@ -1,0 +1,13 @@
+#!/usr/bin/env gene
+
+(var file "tests/fixtures/test.txt")
+(println "Show contents of " file)
+(println (gene/File/read file))
+(println)
+
+(var file "/tmp/test.txt")
+(println "Write to " file)
+(gene/File/write file "line1\nline2\nline3")
+(println "Read from " file)
+(println (gene/File/read file))
+(println)

@@ -56,7 +56,7 @@ proc default(self: Registers): Value =
 #     code_mgr: CodeManager(),
 #   )
 
-proc new_vm_data(ns: Namespace): VirtualMachineData =
+proc new_vm_data*(ns: Namespace): VirtualMachineData =
   result = VirtualMachineData(
     registers: new_registers(ns),
     code_mgr: CodeManager(),

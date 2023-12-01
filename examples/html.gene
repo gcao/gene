@@ -1,0 +1,13 @@
+(HTML
+  (HEAD
+    (TITLE "Test HTML")
+  ) # HEAD
+  (BODY
+    (HEADER ^style {^font-size "22px"}
+      "This is the header section"
+    )
+    (DIV ^style {^font-size "10px"}
+      "First section"
+    )
+  ) # BODY
+) # HTML

@@ -1,0 +1,10 @@
+#!/usr/bin/env gene
+
+(println
+  (await
+    (spawn_return
+      (gene/sleep 100)
+      "Result from thread"
+    )
+  )
+)

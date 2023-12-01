@@ -1,0 +1,13 @@
+#!/usr/bin/env gene
+
+(var output (gene/os/exec "examples/chrome_tabs.scpt"))
+(var rows (gene/csv/parse output))
+(if ($cmd_args/.size > 1)
+  (var filter $cmd_args/1/.to_lower_case)
+  (rows = (rows .filter (row ->
+    ((row/2/.to_lower_case .contains filter) || (row/3/.to_lower_case .contains filter))
+  )))
+)
+(for row in rows
+  (println row)
+)
