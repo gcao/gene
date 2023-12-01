@@ -7,7 +7,7 @@ import ./helpers
 test_vm """
   (macro m [])
 """, proc(r: Value) =
-  check r.to_ref.macro.name == "m"
+  check r.ref.macro.name == "m"
 
 test_vm """
   (macro m a

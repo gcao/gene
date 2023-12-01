@@ -12,15 +12,15 @@ import ./helpers
 test_vm """
   (ns n)
 """, proc(r: Value) =
-  check r.to_ref().ns.name == "n"
+  check r.ref.ns.name == "n"
 
 test_vm """
   (ns n
     (ns m)
   )
 """, proc(r: Value) =
-  check r.to_ref().ns.name == "n"
-  check r.to_ref().ns["m"].to_ref().ns.name == "m"
+  check r.ref.ns.name == "n"
+  check r.ref.ns["m"].ref.ns.name == "m"
 
 test_vm """
   (ns n
@@ -28,4 +28,4 @@ test_vm """
   )
   n/m
 """, proc(r: Value) =
-  check r.to_ref().ns.name == "m"
+  check r.ref.ns.name == "m"

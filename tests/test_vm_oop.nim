@@ -7,14 +7,14 @@ import ./helpers
 test_vm """
   (class A)
 """, proc(r: Value) =
-  check r.to_ref().class.name == "A"
+  check r.ref.class.name == "A"
 
 test_vm """
   (class A)
   (class B < A)
 """, proc(r: Value) =
-  check r.to_ref().class.name == "B"
-  check r.to_ref().class.parent.name == "A"
+  check r.ref.class.name == "B"
+  check r.ref.class.parent.name == "A"
 
 test_vm """
   (class A
@@ -22,13 +22,13 @@ test_vm """
   )
   A/B
 """, proc(r: Value) =
-  check r.to_ref().class.name == "B"
+  check r.ref.class.name == "B"
 
 test_vm """
   (class A)
   (new A)
 """, proc(r: Value) =
-  check r.to_ref().instance_class.name == "A"
+  check r.ref.instance_class.name == "A"
 
 test_vm """
   (class A

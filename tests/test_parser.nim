@@ -125,9 +125,9 @@ test_parser_error "{^a^b 1 ^a 2}"
 test_parser_error "{^a^b 1 ^a {^c 2}}"
 
 test_parser "(_ ^a^b 1)", proc(r: Value) =
-  assert r.gene.props["a"].to_ref.map["b"] == 1
+  assert r.gene.props["a"].ref.map["b"] == 1
 test_parser "(_ ^a^^b 1)", proc(r: Value) =
-  assert r.gene.props["a"].to_ref.map["b"] == TRUE
+  assert r.gene.props["a"].ref.map["b"] == TRUE
   assert r.gene.children[0] == 1
 
 test_parser "[]", @[]
@@ -193,21 +193,21 @@ test_parser "(1 ^!a 2 3)", proc(r: Value) =
 
 test_parser "{^^x ^!y ^^z}", proc(r: Value) =
   check r.kind == VkMap
-  check r.to_ref.map == to_table({"x": TRUE, "y": NIL, "z": TRUE})
+  check r.ref.map == to_table({"x": TRUE, "y": NIL, "z": TRUE})
 
 test_parser ":foo", proc(r: Value) =
-  check r.to_ref.kind == VkQuote
-  check r.to_ref.quote == to_symbol_value("foo")
+  check r.ref.kind == VkQuote
+  check r.ref.quote == to_symbol_value("foo")
 
 test_parser "%foo", proc(r: Value) =
-  check r.to_ref.kind == VkUnquote
-  check r.to_ref.unquote == to_symbol_value("foo")
-  check r.to_ref.unquote_discard == false
+  check r.ref.kind == VkUnquote
+  check r.ref.unquote == to_symbol_value("foo")
+  check r.ref.unquote_discard == false
 
 test_parser "%_foo", proc(r: Value) =
-  check r.to_ref.kind == VkUnquote
-  check r.to_ref.unquote == to_symbol_value("foo")
-  check r.to_ref.unquote_discard == true
+  check r.ref.kind == VkUnquote
+  check r.ref.unquote == to_symbol_value("foo")
+  check r.ref.unquote_discard == true
 
 # # TODO: %_ is not allowed on gene type and property value
 # # (%_foo)         should throw error
@@ -344,9 +344,9 @@ test_parser """
 test_parser """
   {^p #@f a}
 """, proc(r: Value) =
-  check r.to_ref.map["p"].kind == VkGene
-  check r.to_ref.map["p"].gene.type.str == "f"
-  check r.to_ref.map["p"].gene.children[0].str == "a"
+  check r.ref.map["p"].kind == VkGene
+  check r.ref.map["p"].gene.type.str == "f"
+  check r.ref.map["p"].gene.children[0].str == "a"
 
 test_read_all "nil", proc(r: seq[Value]) =
   check r[0] == NIL
@@ -386,10 +386,10 @@ test_parser """
 """, 1
 
 test_parser "[a/[1 2]]", proc(r: Value) =
-  check r.to_ref.arr[0].to_ref.csymbol[0] == "a"
-  check r.to_ref.arr[0].to_ref.csymbol[1] == ""
-  check r.to_ref.arr[1].to_ref.arr[0] == 1
-  check r.to_ref.arr[1].to_ref.arr[1] == 2
+  check r.ref.arr[0].ref.csymbol[0] == "a"
+  check r.ref.arr[0].ref.csymbol[1] == ""
+  check r.ref.arr[1].ref.arr[0] == 1
+  check r.ref.arr[1].ref.arr[1] == 2
 
 test_parser """
   #< comment ># 1
@@ -438,8 +438,8 @@ test_parser """
 test_parser "\"\"\"a\"\"\"", "a"
 test_parser "[\"\"\"a\"\"\"]", proc(r: Value) =
   check r.kind == VkArray
-  check r.to_ref.arr.len == 1
-  check r.to_ref.arr[0] == "a"
+  check r.ref.arr.len == 1
+  check r.ref.arr[0] == "a"
 
 test_parser "\"\"\"a\"b\"\"\"", "a\"b"
 

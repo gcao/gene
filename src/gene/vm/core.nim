@@ -16,10 +16,10 @@ proc class_ctor(vm_data: VirtualMachineData, args: Value): Value =
   fn.ns = vm_data.registers.ns
   let r = new_ref(VkFunction)
   r.fn = fn
-  vm_data.registers.self.to_ref().class.constructor = r.to_ref_value()
+  vm_data.registers.self.ref.class.constructor = r.to_ref_value()
 
 proc class_fn(vm_data: VirtualMachineData, args: Value): Value =
-  let self = args.gene.type.to_ref().bound_method.self
+  let self = args.gene.type.ref.bound_method.self
   # define a fn like method on a class
   var fn = to_function(args)
 
@@ -31,7 +31,7 @@ proc class_fn(vm_data: VirtualMachineData, args: Value): Value =
   )
   case self.kind:
   of VkClass:
-    let class = self.to_ref().class
+    let class = self.ref.class
     m.class = class
     fn.ns = class.ns
     class.methods[m.name] = m
@@ -47,4 +47,4 @@ VMCreatedCallbacks.add proc() =
   class.def_native_macro_method "fn", class_fn
   let r = new_ref(VkClass)
   r.class = class
-  App.to_ref().app.class_class = r.to_ref_value()
+  App.ref.app.class_class = r.to_ref_value()

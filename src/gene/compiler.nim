@@ -93,7 +93,7 @@ proc translate_symbol(input: Value): Value =
         result = input
     of VkComplexSymbol:
 
-      var parts = input.to_ref().csymbol
+      var parts = input.ref.csymbol
       if parts[0].starts_with("$"):
         parts[0] = parts[0][1..^1]
         parts.insert("gene", 0)
@@ -108,12 +108,12 @@ proc compile_complex_symbol(self: var Compiler, input: Value) =
     self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
   else:
     let input = translate_symbol(input)
-    var first = input.to_ref().csymbol[0]
+    var first = input.ref.csymbol[0]
     if first == "":
       self.output.instructions.add(Instruction(kind: IkSelf))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: first))
-    for s in input.to_ref().csymbol[1..^1]:
+    for s in input.ref.csymbol[1..^1]:
       let (is_int, i) = to_int(s)
       if is_int:
         self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
@@ -134,14 +134,14 @@ proc compile_symbol(self: var Compiler, input: Value) =
 
 proc compile_array(self: var Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkArrayStart))
-  for child in input.to_ref().arr:
+  for child in input.ref.arr:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkArrayAddChild))
   self.output.instructions.add(Instruction(kind: IkArrayEnd))
 
 proc compile_map(self: var Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMapStart))
-  for k, v in input.to_ref().map:
+  for k, v in input.ref.map:
     self.compile(v)
     self.output.instructions.add(Instruction(kind: IkMapSetProp, arg0: k))
   self.output.instructions.add(Instruction(kind: IkMapEnd))
@@ -175,19 +175,19 @@ proc compile_assignment(self: var Compiler, gene: ptr Gene) =
     self.compile(gene.children[1])
     self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
   elif `type`.kind == VkComplexSymbol:
-    if `type`.to_ref().csymbol[0] == "":
-      `type`.to_ref().csymbol[0] = "self"
-    if `type`.to_ref().csymbol.len == 2:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`.to_ref().csymbol[0]))
+    if `type`.ref.csymbol[0] == "":
+      `type`.ref.csymbol[0] = "self"
+    if `type`.ref.csymbol.len == 2:
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`.ref.csymbol[0]))
       self.compile(gene.children[1])
-      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.to_ref().csymbol[1]))
+      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.ref.csymbol[1]))
     else:
       let r = new_ref(VkComplexSymbol)
-      r.csymbol = `type`.to_ref().csymbol[0..^2]
+      r.csymbol = `type`.ref.csymbol[0..^2]
       let arg0 = r.to_ref_value()
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: arg0))
       self.compile(gene.children[1])
-      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.to_ref().csymbol[^1]))
+      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.ref.csymbol[^1]))
   else:
     not_allowed($`type`)
 
@@ -489,10 +489,10 @@ proc compile(self: var Compiler, input: Value) =
       self.compile_complex_symbol(input)
     of VkQuote:
       self.quote_level.inc()
-      self.compile(input.to_ref.quote)
+      self.compile(input.ref.quote)
       self.quote_level.dec()
     of VkStream:
-      self.compile(input.to_ref.stream)
+      self.compile(input.ref.stream)
     of VkArray:
       self.compile_array(input)
     of VkMap:

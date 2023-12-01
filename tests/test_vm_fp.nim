@@ -11,7 +11,7 @@ test_vm """
   (fn f []
   )
 """, proc(r: Value) =
-  check r.to_ref().fn.name == "f"
+  check r.ref.fn.name == "f"
 
 test_vm """
   (fn f []

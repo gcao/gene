@@ -113,9 +113,9 @@ proc normalize_if*(self: ptr Gene) =
     if not self.props.has_key("else"):
       self.props["else"] = new_stream_value()
 
-    if self.props["then"].to_ref().stream.len == 0:
-      self.props["then"].to_ref().stream.add(NIL)
-    if self.props["else"].to_ref().stream.len == 0:
-      self.props["else"].to_ref().stream.add(NIL)
+    if self.props["then"].ref.stream.len == 0:
+      self.props["then"].ref.stream.add(NIL)
+    if self.props["else"].ref.stream.len == 0:
+      self.props["else"].ref.stream.add(NIL)
 
     self.children.reset  # Clear our gene_children as it's not needed any more

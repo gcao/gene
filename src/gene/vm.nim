@@ -156,8 +156,8 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
       #     m.name = name
     of VkArray:
       var i = 0
-      while i < v.to_ref().arr.len:
-        var item = v.to_ref().arr[i]
+      while i < v.ref.arr.len:
+        var item = v.ref.arr[i]
         i += 1
         if item.kind == VkArray:
           var m = new_matcher(self, MatchData)
@@ -165,10 +165,10 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
           self.parse(m.children, item)
         else:
           self.parse(group, item)
-          if i < v.to_ref().arr.len and v.to_ref().arr[i] == "=".to_symbol_value():
+          if i < v.ref.arr.len and v.ref.arr[i] == "=".to_symbol_value():
             i += 1
             var last_matcher = group[^1]
-            var value = v.to_ref().arr[i]
+            var value = v.ref.arr[i]
             i += 1
             last_matcher.default_value = value
     of VkQuote:
@@ -208,7 +208,7 @@ proc to_function*(node: Value): Function {.gcsafe.} =
       of VkSymbol, VkString:
         name = first.str
       of VkComplexSymbol:
-        name = first.to_ref.csymbol[^1]
+        name = first.ref.csymbol[^1]
       else:
         todo($first.kind)
 
@@ -229,7 +229,7 @@ proc to_macro(node: Value): Macro =
   if first.kind == VkSymbol:
     name = first.str
   elif first.kind == VkComplexSymbol:
-    name = first.to_ref.csymbol[^1]
+    name = first.ref.csymbol[^1]
 
   var matcher = new_arg_matcher()
   matcher.parse(node.gene.children[1])
@@ -348,15 +348,15 @@ proc exec*(self: VirtualMachine): Value =
         var target = self.data.registers.pop()
         case target.kind:
           of VkMap:
-            target.to_ref.map[name] = value
+            target.ref.map[name] = value
           of VkGene:
             target.gene.props[name] = value
           of VkNamespace:
-            target.to_ref.ns[name] = value
+            target.ref.ns[name] = value
           of VkClass:
-            target.to_ref.class.ns[name] = value
+            target.ref.class.ns[name] = value
           of VkInstance:
-            target.to_ref.instance_props[name] = value
+            target.ref.instance_props[name] = value
           else:
             todo($target.kind)
         self.data.registers.push(value)
@@ -366,15 +366,15 @@ proc exec*(self: VirtualMachine): Value =
         let value = self.data.registers.pop()
         case value.kind:
           of VkMap:
-            self.data.registers.push(value.to_ref.map[name])
+            self.data.registers.push(value.ref.map[name])
           of VkGene:
             self.data.registers.push(value.gene.props[name])
           of VkNamespace:
-            self.data.registers.push(value.to_ref.ns[name])
+            self.data.registers.push(value.ref.ns[name])
           of VkClass:
-            self.data.registers.push(value.to_ref.class.ns[name])
+            self.data.registers.push(value.ref.class.ns[name])
           of VkInstance:
-            self.data.registers.push(value.to_ref.instance_props[name])
+            self.data.registers.push(value.ref.instance_props[name])
           else:
             todo($value.kind)
 
@@ -383,7 +383,7 @@ proc exec*(self: VirtualMachine): Value =
         let value = self.data.registers.pop()
         case value.kind:
           of VkArray:
-            self.data.registers.push(value.to_ref.arr[i])
+            self.data.registers.push(value.ref.arr[i])
           of VkGene:
             self.data.registers.push(value.gene.children[i])
           else:
@@ -425,7 +425,7 @@ proc exec*(self: VirtualMachine): Value =
         self.data.registers.push(new_array_value())
       of IkArrayAddChild:
         let child = self.data.registers.pop()
-        self.data.registers.current().to_ref.arr.add(child)
+        self.data.registers.current().ref.arr.add(child)
       of IkArrayEnd:
         discard
 
@@ -434,7 +434,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkMapSetProp:
         let key = inst.arg0.str
         let val = self.data.registers.pop()
-        self.data.registers.current().to_ref.map[key] = val
+        self.data.registers.current().ref.map[key] = val
       of IkMapEnd:
         discard
 
@@ -471,7 +471,7 @@ proc exec*(self: VirtualMachine): Value =
             # TODO: delete non-macro-related instructions
             discard
           of VkBoundMethod:
-            if not v.to_ref().bound_method.method.is_macro:
+            if not v.ref.bound_method.method.is_macro:
               self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
               # TODO: delete non-macro-related instructions
               continue
@@ -501,18 +501,18 @@ proc exec*(self: VirtualMachine): Value =
               self.data.pc.inc()
               discard self.data.registers.pop()
 
-              gene_type.to_ref.fn.compile()
-              self.data.code_mgr.data[gene_type.to_ref.fn.body_compiled.id] = gene_type.to_ref.fn.body_compiled
+              gene_type.ref.fn.compile()
+              self.data.code_mgr.data[gene_type.ref.fn.body_compiled.id] = gene_type.ref.fn.body_compiled
 
               var caller = Caller(
                 address: Address(id: self.data.cur_block.id, pc: self.data.pc),
                 registers: self.data.registers,
               )
               self.data.registers = new_registers(caller)
-              self.data.registers.scope.set_parent(gene_type.to_ref.fn.parent_scope, gene_type.to_ref.fn.parent_scope_max)
-              self.data.registers.ns = gene_type.to_ref.fn.ns
+              self.data.registers.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
+              self.data.registers.ns = gene_type.ref.fn.ns
               self.data.registers.args = v
-              self.data.cur_block = gene_type.to_ref.fn.body_compiled
+              self.data.cur_block = gene_type.ref.fn.body_compiled
               self.data.pc = 0
               continue
 
@@ -520,18 +520,18 @@ proc exec*(self: VirtualMachine): Value =
               self.data.pc.inc()
               discard self.data.registers.pop()
 
-              gene_type.to_ref.macro.compile()
-              self.data.code_mgr.data[gene_type.to_ref.macro.body_compiled.id] = gene_type.to_ref.macro.body_compiled
+              gene_type.ref.macro.compile()
+              self.data.code_mgr.data[gene_type.ref.macro.body_compiled.id] = gene_type.ref.macro.body_compiled
 
               var caller = Caller(
                 address: Address(id: self.data.cur_block.id, pc: self.data.pc),
                 registers: self.data.registers,
               )
               self.data.registers = new_registers(caller)
-              self.data.registers.scope.set_parent(gene_type.to_ref.macro.parent_scope, gene_type.to_ref.macro.parent_scope_max)
-              self.data.registers.ns = gene_type.to_ref.macro.ns
+              self.data.registers.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
+              self.data.registers.ns = gene_type.ref.macro.ns
               self.data.registers.args = v
-              self.data.cur_block = gene_type.to_ref.macro.body_compiled
+              self.data.cur_block = gene_type.ref.macro.body_compiled
               self.data.pc = 0
               continue
 
@@ -541,14 +541,14 @@ proc exec*(self: VirtualMachine): Value =
             of VkBoundMethod:
               discard self.data.registers.pop()
 
-              let meth = gene_type.to_ref().bound_method.method
+              let meth = gene_type.ref.bound_method.method
               case meth.callable.kind:
                 of VkNativeFn:
-                  self.data.registers.push(meth.callable.to_ref().native_fn(self.data, v))
+                  self.data.registers.push(meth.callable.ref.native_fn(self.data, v))
                 of VkFunction:
                   self.data.pc.inc()
 
-                  var fn = meth.callable.to_ref().fn
+                  var fn = meth.callable.ref.fn
                   fn.compile()
                   self.data.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
@@ -559,7 +559,7 @@ proc exec*(self: VirtualMachine): Value =
                   self.data.registers = new_registers(caller)
                   self.data.registers.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
                   self.data.registers.ns = fn.ns
-                  self.data.registers.self = gene_type.to_ref().bound_method.self
+                  self.data.registers.self = gene_type.ref.bound_method.self
                   self.data.registers.args = v
                   self.data.cur_block = fn.body_compiled
                   self.data.pc = 0
@@ -637,9 +637,9 @@ proc exec*(self: VirtualMachine): Value =
         var ns: Namespace
         case obj.kind:
           of VkNamespace:
-            ns = obj.to_ref.ns
+            ns = obj.ref.ns
           of VkClass:
-            ns = obj.to_ref.class.ns
+            ns = obj.ref.class.ns
           else:
             todo($obj.kind)
 
@@ -708,14 +708,14 @@ proc exec*(self: VirtualMachine): Value =
       of IkNew:
         var v = self.data.registers.pop()
         var instance = new_ref(VkInstance)
-        instance.instance_class = v.gene.type.to_ref.class
+        instance.instance_class = v.gene.type.ref.class
         self.data.registers.push(instance.to_ref_value())
 
         let class = instance.instance_class
         case class.constructor.kind:
           of VkFunction:
-            class.constructor.to_ref().fn.compile()
-            let compiled = class.constructor.to_ref().fn.body_compiled
+            class.constructor.ref.fn.compile()
+            let compiled = class.constructor.ref.fn.body_compiled
             compiled.skip_return = true
 
             self.data.pc.inc()
@@ -725,7 +725,7 @@ proc exec*(self: VirtualMachine): Value =
             )
             self.data.registers = new_registers(caller)
             self.data.registers.self = instance.to_ref_value()
-            self.data.registers.ns = class.constructor.to_ref().fn.ns
+            self.data.registers.ns = class.constructor.ref.fn.ns
             self.data.cur_block = compiled
             self.data.pc = 0
             continue
@@ -737,7 +737,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkSubClass:
         var name = inst.arg0.str
         var class = new_class(name)
-        class.parent = self.data.registers.pop().to_ref.class
+        class.parent = self.data.registers.pop().ref.class
         let r = new_ref(VkClass)
         r.class = class
         self.data.registers.ns[name] = r.to_ref_value()
@@ -762,11 +762,11 @@ proc exec*(self: VirtualMachine): Value =
         let meth = class.get_method(inst.arg0.str)
         case meth.callable.kind:
           of VkNativeFn:
-            self.data.registers.push(meth.callable.to_ref().native_fn(self.data, v))
+            self.data.registers.push(meth.callable.ref.native_fn(self.data, v))
           of VkFunction:
             self.data.pc.inc()
 
-            var fn = meth.callable.to_ref().fn
+            var fn = meth.callable.ref.fn
             fn.compile()
             self.data.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 

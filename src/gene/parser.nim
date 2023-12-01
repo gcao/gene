@@ -664,7 +664,7 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
             map = result.addr
             for part in parts[0..^2]:
               if map[].has_key(part):
-                let r = map[][part].to_ref()
+                let r = map[][part].ref
                 map = r.map.addr
               else:
                 var m = new_ref(VkMap)

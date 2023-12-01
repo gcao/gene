@@ -592,7 +592,7 @@ proc `$`*(self: Value): string
 proc `$`*(self: ptr Reference): string
 proc `$`*(self: ptr Gene): string
 
-proc to_ref*(v: Value): ptr Reference
+proc `ref`*(v: Value): ptr Reference {.inline.}
 proc gene*(v: Value): ptr Gene {.inline.}
 
 proc new_str*(s: string): ptr String
@@ -703,7 +703,7 @@ proc new_ref*(kind: ValueKind): ptr Reference =
   {.cast(uncheckedAssign).}:
     result.kind = kind
 
-proc to_ref*(v: Value): ptr Reference =
+proc `ref`*(v: Value): ptr Reference {.inline.} =
   cast[ptr Reference](bitand(AND_MASK, v.uint64))
 
 proc to_ref_value*(v: ptr Reference): Value {.inline.} =
@@ -721,7 +721,7 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
   case cast[int64](v1.shr(48)):
     of REF_PREFIX:
       if cast[int64](v2.shr(48)) == REF_PREFIX:
-        return a.to_ref() == b.to_ref()
+        return a.ref == b.ref
     else:
       discard
 
@@ -738,7 +738,7 @@ proc kind*(v: Value): ValueKind {.inline.} =
       of POINTER_PREFIX:
         return VkPointer
       of REF_PREFIX:
-        return v.to_ref().kind
+        return v.ref.kind
       of GENE_PREFIX:
         return VkGene
       # of CHAR_PREFIX:
@@ -831,7 +831,7 @@ proc `[]`*(self: Value, i: int): Value {.inline.} =
     of NIL_PREFIX:
       return NIL
     of REF_PREFIX:
-      let r = self.to_ref()
+      let r = self.ref
       case r.kind:
         of VkArray:
           if i >= r.arr.len:
@@ -869,7 +869,7 @@ proc size*(self: Value): int {.inline.} =
     of REF_PREFIX:
       # It may not be a bad idea to store the reference kind in the value itself.
       # However we may later support changing reference in place, so it may not be a good idea.
-      let r = self.to_ref()
+      let r = self.ref
       case r.kind:
         of VkArray:
           return r.arr.len
@@ -1090,7 +1090,7 @@ proc new_gene_value*(`type`: Value): Value {.inline.} =
 #################### Application #################
 
 proc app*(self: Value): Application {.inline.} =
-  self.to_ref().app
+  self.ref.app
 
 proc new_app*(): Application =
   result = Application()
@@ -1100,7 +1100,7 @@ proc new_app*(): Application =
 #################### Namespace ###################
 
 proc ns*(self: Value): Namespace {.inline.} =
-  self.to_ref().ns
+  self.ref.ns
 
 proc to_value*(self: Namespace): Value {.inline.} =
   let r = new_ref(VkNamespace)
@@ -1156,13 +1156,13 @@ proc proxy*(self: Namespace, name: string, target: Value) =
 
 proc has_key*(self: Namespace, key: string): bool {.inline.} =
   if self.proxies.has_key(key):
-    return self.proxies[key].to_ref().ns.has_key(key)
+    return self.proxies[key].ref.ns.has_key(key)
   else:
     return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
 
 proc `[]`*(self: Namespace, key: string): Value {.inline.} =
   if self.proxies.has_key(key):
-    return self.proxies[key].to_ref().ns[key]
+    return self.proxies[key].ref.ns[key]
   elif self.members.has_key(key):
     return self.members[key]
   elif not self.stop_inheritance and self.parent != nil:
@@ -1451,27 +1451,27 @@ proc get_super_method*(self: Class, name: string): Method =
 proc get_class*(val: Value): Class =
   case val.kind:
     of VkApplication:
-      return App.to_ref().app.application_class.to_ref().class
+      return App.ref.app.application_class.ref.class
     of VkPackage:
-      return App.to_ref().app.package_class.to_ref().class
+      return App.ref.app.package_class.ref.class
     of VkInstance:
-      return val.to_ref().instance_class
+      return val.ref.instance_class
     # of VkCast:
     #   return val.cast_class
     of VkClass:
-      return App.to_ref().app.class_class.to_ref().class
+      return App.ref.app.class_class.ref.class
     # of VkMixin:
-    #   return App.to_ref().app.mixin_class.to_ref().class
+    #   return App.ref.app.mixin_class.ref.class
     of VkNamespace:
-      return App.to_ref().app.namespace_class.to_ref().class
+      return App.ref.app.namespace_class.ref.class
     # of VkFuture:
-    #   return App.to_ref().app.future_class.to_ref().class
+    #   return App.ref.app.future_class.ref.class
     # of VkThread:
-    #   return App.to_ref().app.thread_class.to_ref().class
+    #   return App.ref.app.thread_class.ref.class
     # of VkThreadMessage:
-    #   return App.to_ref().app.thread_message_class.to_ref().class
+    #   return App.ref.app.thread_message_class.ref.class
     # of VkNativeFile:
-    #   return App.to_ref().app.file_class.to_ref().class
+    #   return App.ref.app.file_class.ref.class
     # of VkException:
     #   var ex = val.exception
     #   if ex is ref Exception:
@@ -1479,53 +1479,53 @@ proc get_class*(val: Value): Class =
     #     if ex.instance != nil:
     #       return ex.instance.instance_class
     #     else:
-    #       return App.to_ref().app.exception_class.to_ref().class
+    #       return App.ref.app.exception_class.ref.class
     #   else:
-    #     return App.to_ref().app.exception_class.to_ref().class
+    #     return App.ref.app.exception_class.ref.class
     of VkNil:
-      return App.to_ref().app.nil_class.to_ref().class
+      return App.ref.app.nil_class.ref.class
     of VkBool:
-      return App.to_ref().app.bool_class.to_ref().class
+      return App.ref.app.bool_class.ref.class
     of VkInt:
-      return App.to_ref().app.int_class.to_ref().class
+      return App.ref.app.int_class.ref.class
     of VkChar:
-      return App.to_ref().app.char_class.to_ref().class
+      return App.ref.app.char_class.ref.class
     of VkString:
-      return App.to_ref().app.string_class.to_ref().class
+      return App.ref.app.string_class.ref.class
     of VkSymbol:
-      return App.to_ref().app.symbol_class.to_ref().class
+      return App.ref.app.symbol_class.ref.class
     of VkComplexSymbol:
-      return App.to_ref().app.complex_symbol_class.to_ref().class
+      return App.ref.app.complex_symbol_class.ref.class
     of VkArray:
-      return App.to_ref().app.array_class.to_ref().class
+      return App.ref.app.array_class.ref.class
     of VkMap:
-      return App.to_ref().app.map_class.to_ref().class
+      return App.ref.app.map_class.ref.class
     of VkSet:
-      return App.to_ref().app.set_class.to_ref().class
+      return App.ref.app.set_class.ref.class
     of VkGene:
-      return App.to_ref().app.gene_class.to_ref().class
+      return App.ref.app.gene_class.ref.class
     # of VkRegex:
-    #   return App.to_ref().app.regex_class.to_ref().class
+    #   return App.ref.app.regex_class.ref.class
     # of VkRange:
-    #   return App.to_ref().app.range_class.to_ref().class
+    #   return App.ref.app.range_class.ref.class
     # of VkDate:
-    #   return App.to_ref().app.date_class.to_ref().class
+    #   return App.ref.app.date_class.ref.class
     # of VkDateTime:
-    #   return App.to_ref().app.datetime_class.to_ref().class
+    #   return App.ref.app.datetime_class.ref.class
     # of VkTime:
-    #   return App.to_ref().app.time_class.to_ref().class
+    #   return App.ref.app.time_class.ref.class
     of VkFunction:
-      return App.to_ref().app.function_class.to_ref().class
+      return App.ref.app.function_class.ref.class
     # of VkTimezone:
-    #   return App.to_ref().app.timezone_class.to_ref().class
+    #   return App.ref.app.timezone_class.ref.class
     # of VkAny:
     #   if val.any_class == nil:
-    #     return App.to_ref().app.object_class.to_ref().class
+    #     return App.ref.app.object_class.ref.class
     #   else:
     #     return val.any_class
     # of VkCustom:
     #   if val.custom_class == nil:
-    #     return App.to_ref().app.object_class.to_ref().class
+    #     return App.ref.app.object_class.ref.class
     #   else:
     #     return val.custom_class
     else:
