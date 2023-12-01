@@ -20,45 +20,39 @@ proc init_app_and_vm*() =
   for callback in VmCreatedCallbacks:
     callback()
 
-proc new_registers(): Registers =
-  Registers(
-    next_slot: REG_DEFAULT,
+proc new_frame(): Frame =
+  Frame(
+    stack_index: REG_DEFAULT,
   )
 
-proc new_registers(ns: Namespace): Registers =
-  result = new_registers()
+proc new_frame(ns: Namespace): Frame =
+  result = new_frame()
   result.ns = ns
   result.scope = new_scope()
 
-proc new_registers(caller: Caller): Registers =
-  result = new_registers()
+proc new_frame(caller: Caller): Frame =
+  result = new_frame()
   result.caller = caller
   result.scope = new_scope()
 
-proc current(self: var Registers): Value =
-  self.data[self.next_slot - 1]
+proc current(self: var Frame): Value =
+  self.stack[self.stack_index - 1]
 
-proc push(self: var Registers, value: Value) =
-  self.data[self.next_slot] = value
-  self.next_slot.inc()
+proc push(self: var Frame, value: Value) =
+  self.stack[self.stack_index] = value
+  self.stack_index.inc()
 
-proc pop(self: var Registers): Value =
-  self.next_slot.dec()
-  result = self.data[self.next_slot]
-  self.data[self.next_slot] = nil
+proc pop(self: var Frame): Value =
+  self.stack_index.dec()
+  result = self.stack[self.stack_index]
+  self.stack[self.stack_index] = nil
 
-proc default(self: Registers): Value =
-  self.data[REG_DEFAULT]
-
-# proc new_vm_data(caller: Caller): VirtualMachineData =
-#   result = VirtualMachineData(
-#     registers: new_registers(caller),
-#     code_mgr: CodeManager(),
-#   )
+proc default(self: Frame): Value =
+  self.stack[REG_DEFAULT]
 
 proc new_vm_data*(ns: Namespace): VirtualMachineData =
   result = VirtualMachineData(
-    registers: new_registers(ns),
+    frame: new_frame(ns),
     code_mgr: CodeManager(),
   )
 
@@ -254,25 +248,25 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
           matcher: field,
           value: value,
         )
-        self.data.registers.scope.def_member(field.name, value)
+        self.data.frame.scope.def_member(field.name, value)
       for m in matcher.children:
         if not match_result.fields.has_key(m.name):
           match_result.fields[m.name] = MatchedField(
             kind: MfMissing,
             matcher: m,
           )
-      self.data.registers.match_result = match_result
+      self.data.frame.match_result = match_result
     else:
       todo($matcher.hint.mode)
 
-proc print_registers(self: VirtualMachine) =
-  var s = "Registers "
-  for i, reg in self.data.registers.data:
+proc print_frame(self: VirtualMachine) =
+  var s = "Frame "
+  for i, reg in self.data.frame.stack:
     if i > 0:
       s &= ", "
-    if i == self.data.registers.next_slot:
+    if i == self.data.frame.stack_index.int:
       s &= "=> "
-    s &= $self.data.registers.data[i]
+    s &= $self.data.frame.stack[i]
   echo s
 
 proc exec*(self: VirtualMachine): Value =
@@ -280,14 +274,14 @@ proc exec*(self: VirtualMachine): Value =
 
   App.app.gene_ns.ns["_trace_start"] = proc(vm_data: VirtualMachineData, args: Value): Value =
     self.trace = true
-    self.data.registers.push(NIL)
+    self.data.frame.push(NIL)
 
   while true:
     let inst = self.data.cur_block[self.data.pc]
     if inst.kind == IkStart:
       indent &= "  "
     if self.trace:
-      # self.print_registers()
+      # self.print_frame()
       echo fmt"{indent}{self.data.pc:03} {inst}"
     case inst.kind:
       of IkNoop:
@@ -296,56 +290,56 @@ proc exec*(self: VirtualMachine): Value =
       of IkStart:
         let matcher = self.data.cur_block.matcher
         if matcher != nil:
-          self.handle_args(matcher, self.data.registers.args)
+          self.handle_args(matcher, self.data.frame.args)
 
       of IkEnd:
         indent.delete(indent.len-2..indent.len-1)
-        let v = self.data.registers.default
-        let caller = self.data.registers.caller
+        let v = self.data.frame.default
+        let caller = self.data.frame.caller
         if caller == nil:
           return v
         else:
-          self.data.registers = caller.registers
+          self.data.frame = caller.frame
           if not self.data.cur_block.skip_return:
-            self.data.registers.push(v)
+            self.data.frame.push(v)
           self.data.cur_block = self.data.code_mgr.data[caller.address.id]
           self.data.pc = caller.address.pc
           continue
 
       of IkVar:
-        let value = self.data.registers.pop()
-        self.data.registers.scope.def_member(inst.arg0.str, value)
-        self.data.registers.push(value)
+        let value = self.data.frame.pop()
+        self.data.frame.scope.def_member(inst.arg0.str, value)
+        self.data.frame.push(value)
 
       of IkAssign:
-        let value = self.data.registers.current()
-        self.data.registers.scope[inst.arg0.str] = value
+        let value = self.data.frame.current()
+        self.data.frame.scope[inst.arg0.str] = value
 
       of IkResolveSymbol:
         case inst.arg0.str:
           of "_":
-            self.data.registers.push(PLACEHOLDER)
+            self.data.frame.push(PLACEHOLDER)
           of "self":
-            self.data.registers.push(self.data.registers.self)
+            self.data.frame.push(self.data.frame.self)
           of "gene":
-            self.data.registers.push(App.app.gene_ns)
+            self.data.frame.push(App.app.gene_ns)
           else:
-            let scope = self.data.registers.scope
+            let scope = self.data.frame.scope
             let name = inst.arg0.str
             if scope.has_key(name):
-              self.data.registers.push(scope[name])
-            elif self.data.registers.ns.has_key(name):
-              self.data.registers.push(self.data.registers.ns[name])
+              self.data.frame.push(scope[name])
+            elif self.data.frame.ns.has_key(name):
+              self.data.frame.push(self.data.frame.ns[name])
             else:
               not_allowed("Unknown symbol " & name)
 
       of IkSelf:
-        self.data.registers.push(self.data.registers.self)
+        self.data.frame.push(self.data.frame.self)
 
       of IkSetMember:
         let name = inst.arg0.str
-        let value = self.data.registers.pop()
-        var target = self.data.registers.pop()
+        let value = self.data.frame.pop()
+        var target = self.data.frame.pop()
         case target.kind:
           of VkMap:
             target.ref.map[name] = value
@@ -359,33 +353,33 @@ proc exec*(self: VirtualMachine): Value =
             target.ref.instance_props[name] = value
           else:
             todo($target.kind)
-        self.data.registers.push(value)
+        self.data.frame.push(value)
 
       of IkGetMember:
         let name = inst.arg0.str
-        let value = self.data.registers.pop()
+        let value = self.data.frame.pop()
         case value.kind:
           of VkMap:
-            self.data.registers.push(value.ref.map[name])
+            self.data.frame.push(value.ref.map[name])
           of VkGene:
-            self.data.registers.push(value.gene.props[name])
+            self.data.frame.push(value.gene.props[name])
           of VkNamespace:
-            self.data.registers.push(value.ref.ns[name])
+            self.data.frame.push(value.ref.ns[name])
           of VkClass:
-            self.data.registers.push(value.ref.class.ns[name])
+            self.data.frame.push(value.ref.class.ns[name])
           of VkInstance:
-            self.data.registers.push(value.ref.instance_props[name])
+            self.data.frame.push(value.ref.instance_props[name])
           else:
             todo($value.kind)
 
       of IkGetChild:
         let i = inst.arg0.int
-        let value = self.data.registers.pop()
+        let value = self.data.frame.pop()
         case value.kind:
           of VkArray:
-            self.data.registers.push(value.ref.arr[i])
+            self.data.frame.push(value.ref.arr[i])
           of VkGene:
-            self.data.registers.push(value.gene.children[i])
+            self.data.frame.push(value.gene.children[i])
           else:
             todo($value.kind)
 
@@ -393,12 +387,12 @@ proc exec*(self: VirtualMachine): Value =
         self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
         continue
       of IkJumpIfFalse:
-        if not self.data.registers.pop().to_bool():
+        if not self.data.frame.pop().to_bool():
           self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
           continue
 
       of IkJumpIfMatchSuccess:
-        let mr = self.data.registers.match_result
+        let mr = self.data.frame.match_result
         if mr.fields[inst.arg0.str].kind == MfSuccess:
           self.data.pc = self.data.cur_block.find_label(inst.arg1.Label)
           continue
@@ -415,53 +409,53 @@ proc exec*(self: VirtualMachine): Value =
         continue
 
       of IkPushValue:
-        self.data.registers.push(inst.arg0)
+        self.data.frame.push(inst.arg0)
       of IkPushNil:
-        self.data.registers.push(NIL)
+        self.data.frame.push(NIL)
       of IkPop:
-        discard self.data.registers.pop()
+        discard self.data.frame.pop()
 
       of IkArrayStart:
-        self.data.registers.push(new_array_value())
+        self.data.frame.push(new_array_value())
       of IkArrayAddChild:
-        let child = self.data.registers.pop()
-        self.data.registers.current().ref.arr.add(child)
+        let child = self.data.frame.pop()
+        self.data.frame.current().ref.arr.add(child)
       of IkArrayEnd:
         discard
 
       of IkMapStart:
-        self.data.registers.push(new_map_value())
+        self.data.frame.push(new_map_value())
       of IkMapSetProp:
         let key = inst.arg0.str
-        let val = self.data.registers.pop()
-        self.data.registers.current().ref.map[key] = val
+        let val = self.data.frame.pop()
+        self.data.frame.current().ref.map[key] = val
       of IkMapEnd:
         discard
 
       of IkGeneStart:
-        self.data.registers.push(new_gene_value())
+        self.data.frame.push(new_gene_value())
       of IkGeneStartDefault:
-        let v = self.data.registers.pop()
+        let v = self.data.frame.pop()
         if v.kind == VkMacro:
           not_allowed("Macro not allowed here")
-        self.data.registers.push(new_gene_value(v))
+        self.data.frame.push(new_gene_value(v))
       of IkGeneStartMacro:
-        let v = self.data.registers.pop()
+        let v = self.data.frame.pop()
         if v.kind != VkMacro:
           not_allowed("Macro expected")
-        self.data.registers.push(new_gene_value(v))
+        self.data.frame.push(new_gene_value(v))
       of IkGeneStartMethod:
-        let v = self.data.registers.pop()
+        let v = self.data.frame.pop()
         # if v.kind != VkBoundMethod or v.bound_method.method.is_macro:
         #   not_allowed("Macro method not allowed here")
-        self.data.registers.push(new_gene_value(v))
+        self.data.frame.push(new_gene_value(v))
       of IkGeneStartMacroMethod:
-        let v = self.data.registers.pop()
+        let v = self.data.frame.pop()
         # if v.kind != VkBoundMethod or not v.bound_method.method.is_macro:
         #   not_allowed("Macro method expected")
-        self.data.registers.push(new_gene_value(v))
+        self.data.frame.push(new_gene_value(v))
       of IkGeneCheckType:
-        let v = self.data.registers.current()
+        let v = self.data.frame.current()
         case v.kind:
           of VkFunction:
             self.data.pc = self.data.cur_block.find_label(inst.arg0.Label)
@@ -482,55 +476,55 @@ proc exec*(self: VirtualMachine): Value =
             todo($v.kind)
 
       of IkGeneSetType:
-        let val = self.data.registers.pop()
-        self.data.registers.current().gene.type = val
+        let val = self.data.frame.pop()
+        self.data.frame.current().gene.type = val
       of IkGeneSetProp:
         let key = inst.arg0.str
-        let val = self.data.registers.pop()
-        self.data.registers.current().gene.props[key] = val
+        let val = self.data.frame.pop()
+        self.data.frame.current().gene.props[key] = val
       of IkGeneAddChild:
-        let child = self.data.registers.pop()
-        self.data.registers.current().gene.children.add(child)
+        let child = self.data.frame.pop()
+        self.data.frame.current().gene.children.add(child)
 
       of IkGeneEnd:
-        let v = self.data.registers.current()
+        let v = self.data.frame.current()
         let gene_type = v.gene.type
         if gene_type != nil:
           case gene_type.kind:
             of VkFunction:
               self.data.pc.inc()
-              discard self.data.registers.pop()
+              discard self.data.frame.pop()
 
               gene_type.ref.fn.compile()
               self.data.code_mgr.data[gene_type.ref.fn.body_compiled.id] = gene_type.ref.fn.body_compiled
 
               var caller = Caller(
                 address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-                registers: self.data.registers,
+                frame: self.data.frame,
               )
-              self.data.registers = new_registers(caller)
-              self.data.registers.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
-              self.data.registers.ns = gene_type.ref.fn.ns
-              self.data.registers.args = v
+              self.data.frame = new_frame(caller)
+              self.data.frame.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
+              self.data.frame.ns = gene_type.ref.fn.ns
+              self.data.frame.args = v
               self.data.cur_block = gene_type.ref.fn.body_compiled
               self.data.pc = 0
               continue
 
             of VkMacro:
               self.data.pc.inc()
-              discard self.data.registers.pop()
+              discard self.data.frame.pop()
 
               gene_type.ref.macro.compile()
               self.data.code_mgr.data[gene_type.ref.macro.body_compiled.id] = gene_type.ref.macro.body_compiled
 
               var caller = Caller(
                 address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-                registers: self.data.registers,
+                frame: self.data.frame,
               )
-              self.data.registers = new_registers(caller)
-              self.data.registers.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
-              self.data.registers.ns = gene_type.ref.macro.ns
-              self.data.registers.args = v
+              self.data.frame = new_frame(caller)
+              self.data.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
+              self.data.frame.ns = gene_type.ref.macro.ns
+              self.data.frame.args = v
               self.data.cur_block = gene_type.ref.macro.body_compiled
               self.data.pc = 0
               continue
@@ -539,12 +533,12 @@ proc exec*(self: VirtualMachine): Value =
               todo($v)
 
             of VkBoundMethod:
-              discard self.data.registers.pop()
+              discard self.data.frame.pop()
 
               let meth = gene_type.ref.bound_method.method
               case meth.callable.kind:
                 of VkNativeFn:
-                  self.data.registers.push(meth.callable.ref.native_fn(self.data, v))
+                  self.data.frame.push(meth.callable.ref.native_fn(self.data, v))
                 of VkFunction:
                   self.data.pc.inc()
 
@@ -554,13 +548,13 @@ proc exec*(self: VirtualMachine): Value =
 
                   var caller = Caller(
                     address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-                    registers: self.data.registers,
+                    frame: self.data.frame,
                   )
-                  self.data.registers = new_registers(caller)
-                  self.data.registers.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-                  self.data.registers.ns = fn.ns
-                  self.data.registers.self = gene_type.ref.bound_method.self
-                  self.data.registers.args = v
+                  self.data.frame = new_frame(caller)
+                  self.data.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+                  self.data.frame.ns = fn.ns
+                  self.data.frame.self = gene_type.ref.bound_method.self
+                  self.data.frame.args = v
                   self.data.cur_block = fn.body_compiled
                   self.data.pc = 0
                   continue
@@ -571,69 +565,69 @@ proc exec*(self: VirtualMachine): Value =
               discard
 
       of IkAdd:
-        self.data.registers.push(self.data.registers.pop().int + self.data.registers.pop().int)
+        self.data.frame.push(self.data.frame.pop().int + self.data.frame.pop().int)
 
       of IkSub:
-        self.data.registers.push(-self.data.registers.pop().int + self.data.registers.pop().int)
+        self.data.frame.push(-self.data.frame.pop().int + self.data.frame.pop().int)
 
       of IkMul:
-        self.data.registers.push(self.data.registers.pop().int * self.data.registers.pop().int)
+        self.data.frame.push(self.data.frame.pop().int * self.data.frame.pop().int)
 
       of IkDiv:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first / second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first / second)
 
       of IkLt:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first < second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first < second)
 
       of IkLe:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first <= second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first <= second)
 
       of IkGt:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first > second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first > second)
 
       of IkGe:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first >= second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first >= second)
 
       of IkEq:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first == second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first == second)
 
       of IkNe:
-        let second = self.data.registers.pop().int
-        let first = self.data.registers.pop().int
-        self.data.registers.push(first != second)
+        let second = self.data.frame.pop().int
+        let first = self.data.frame.pop().int
+        self.data.frame.push(first != second)
 
       of IkAnd:
-        let second = self.data.registers.pop()
-        let first = self.data.registers.pop()
-        self.data.registers.push(first.to_bool and second.to_bool)
+        let second = self.data.frame.pop()
+        let first = self.data.frame.pop()
+        self.data.frame.push(first.to_bool and second.to_bool)
 
       of IkOr:
-        let second = self.data.registers.pop()
-        let first = self.data.registers.pop()
-        self.data.registers.push(first.to_bool or second.to_bool)
+        let second = self.data.frame.pop()
+        let first = self.data.frame.pop()
+        self.data.frame.push(first.to_bool or second.to_bool)
 
       of IkCompileInit:
-        let input = self.data.registers.pop()
+        let input = self.data.frame.pop()
         let compiled = compile_init(input)
         self.data.code_mgr.data[compiled.id] = compiled
-        self.data.registers.push(compiled.id.Value)
+        self.data.frame.push(compiled.id.Value)
 
       of IkCallInit:
-        let id = self.data.registers.pop().Id
+        let id = self.data.frame.pop().Id
         let compiled = self.data.code_mgr.data[id]
-        let obj = self.data.registers.current()
+        let obj = self.data.frame.current()
         var ns: Namespace
         case obj.kind:
           of VkNamespace:
@@ -646,45 +640,45 @@ proc exec*(self: VirtualMachine): Value =
         self.data.pc.inc()
         var caller = Caller(
           address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-          registers: self.data.registers,
+          frame: self.data.frame,
         )
-        self.data.registers = new_registers(caller)
-        self.data.registers.self = obj
-        self.data.registers.ns = ns
+        self.data.frame = new_frame(caller)
+        self.data.frame.self = obj
+        self.data.frame.ns = ns
         self.data.cur_block = compiled
         self.data.pc = 0
         continue
 
       of IkFunction:
         var f = to_function(inst.arg0)
-        f.ns = self.data.registers.ns
+        f.ns = self.data.frame.ns
         let r = new_ref(VkFunction)
         r.fn = f
         let v = r.to_ref_value()
         f.ns[f.name] = v
-        f.parent_scope = self.data.registers.scope
-        f.parent_scope_max = self.data.registers.scope.max
-        self.data.registers.push(v)
+        f.parent_scope = self.data.frame.scope
+        f.parent_scope_max = self.data.frame.scope.max
+        self.data.frame.push(v)
 
       of IkMacro:
         var m = to_macro(inst.arg0)
-        m.ns = self.data.registers.ns
+        m.ns = self.data.frame.ns
         let r = new_ref(VkMacro)
         r.macro = m
         var v = r.to_ref_value()
         m.ns[m.name] = v
-        self.data.registers.push(v)
+        self.data.frame.push(v)
 
       of IkReturn:
-        let caller = self.data.registers.caller
+        let caller = self.data.frame.caller
         if caller == nil:
           not_allowed("Return from top level")
         else:
-          let v = self.data.registers.pop()
-          self.data.registers = caller.registers
+          let v = self.data.frame.pop()
+          self.data.frame = caller.frame
           self.data.cur_block = self.data.code_mgr.data[caller.address.id]
           self.data.pc = caller.address.pc
-          self.data.registers.push(v)
+          self.data.frame.push(v)
           continue
 
       of IkNamespace:
@@ -693,8 +687,8 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkNamespace)
         r.ns = ns
         var v = r.to_ref_value()
-        self.data.registers.ns[name] = v
-        self.data.registers.push(v)
+        self.data.frame.ns[name] = v
+        self.data.frame.push(v)
 
       of IkClass:
         var name = inst.arg0.str
@@ -702,14 +696,14 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkClass)
         r.class = class
         var v = r.to_ref_value()
-        self.data.registers.ns[name] = v
-        self.data.registers.push(v)
+        self.data.frame.ns[name] = v
+        self.data.frame.push(v)
 
       of IkNew:
-        var v = self.data.registers.pop()
+        var v = self.data.frame.pop()
         var instance = new_ref(VkInstance)
         instance.instance_class = v.gene.type.ref.class
-        self.data.registers.push(instance.to_ref_value())
+        self.data.frame.push(instance.to_ref_value())
 
         let class = instance.instance_class
         case class.constructor.kind:
@@ -721,11 +715,11 @@ proc exec*(self: VirtualMachine): Value =
             self.data.pc.inc()
             var caller = Caller(
               address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-              registers: self.data.registers,
+              frame: self.data.frame,
             )
-            self.data.registers = new_registers(caller)
-            self.data.registers.self = instance.to_ref_value()
-            self.data.registers.ns = class.constructor.ref.fn.ns
+            self.data.frame = new_frame(caller)
+            self.data.frame.self = instance.to_ref_value()
+            self.data.frame.ns = class.constructor.ref.fn.ns
             self.data.cur_block = compiled
             self.data.pc = 0
             continue
@@ -737,14 +731,14 @@ proc exec*(self: VirtualMachine): Value =
       of IkSubClass:
         var name = inst.arg0.str
         var class = new_class(name)
-        class.parent = self.data.registers.pop().ref.class
+        class.parent = self.data.frame.pop().ref.class
         let r = new_ref(VkClass)
         r.class = class
-        self.data.registers.ns[name] = r.to_ref_value()
-        self.data.registers.push(r.to_ref_value())
+        self.data.frame.ns[name] = r.to_ref_value()
+        self.data.frame.push(r.to_ref_value())
 
       of IkResolveMethod:
-        var v = self.data.registers.pop()
+        var v = self.data.frame.pop()
         let class = v.get_class()
         let meth = class.get_method(inst.arg0.str)
         let r = new_ref(VkBoundMethod)
@@ -753,16 +747,16 @@ proc exec*(self: VirtualMachine): Value =
           # class: class,
           `method`: meth,
         )
-        self.data.registers.push(r.to_ref_value())
+        self.data.frame.push(r.to_ref_value())
 
       of IkCallMethodNoArgs:
-        let v = self.data.registers.pop()
+        let v = self.data.frame.pop()
 
         let class = v.get_class()
         let meth = class.get_method(inst.arg0.str)
         case meth.callable.kind:
           of VkNativeFn:
-            self.data.registers.push(meth.callable.ref.native_fn(self.data, v))
+            self.data.frame.push(meth.callable.ref.native_fn(self.data, v))
           of VkFunction:
             self.data.pc.inc()
 
@@ -772,12 +766,12 @@ proc exec*(self: VirtualMachine): Value =
 
             var caller = Caller(
               address: Address(id: self.data.cur_block.id, pc: self.data.pc),
-              registers: self.data.registers,
+              frame: self.data.frame,
             )
-            self.data.registers = new_registers(caller)
-            self.data.registers.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-            self.data.registers.ns = fn.ns
-            self.data.registers.self = v
+            self.data.frame = new_frame(caller)
+            self.data.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+            self.data.frame.ns = fn.ns
+            self.data.frame.self = v
             self.data.cur_block = fn.body_compiled
             self.data.pc = 0
             continue
@@ -788,23 +782,23 @@ proc exec*(self: VirtualMachine): Value =
       #   case inst.arg0.str:
       #     of "$_trace_start":
       #       self.trace = true
-      #       self.data.registers.push(NIL)
+      #       self.data.frame.push(NIL)
       #     of "$_trace_end":
       #       self.trace = false
-      #       self.data.registers.push(NIL)
+      #       self.data.frame.push(NIL)
       #     of "$_debug":
       #       if inst.arg1:
-      #         echo "$_debug ", self.data.registers.current()
+      #         echo "$_debug ", self.data.frame.current()
       #       else:
-      #         self.data.registers.push(NIL)
+      #         self.data.frame.push(NIL)
       #     of "$_print_instructions":
       #       echo self.data.cur_block
       #       if inst.arg1:
-      #         discard self.data.registers.pop()
-      #       self.data.registers.push(NIL)
-      #     of "$_print_registers":
-      #       self.print_registers()
-      #       self.data.registers.push(NIL)
+      #         discard self.data.frame.pop()
+      #       self.data.frame.push(NIL)
+      #     of "$_print_frame":
+      #       self.print_frame()
+      #       self.data.frame.push(NIL)
       #     else:
       #       todo(inst.arg0.str)
 

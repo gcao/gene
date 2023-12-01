@@ -494,22 +494,23 @@ type
     is_main*: bool
     cur_block*: CompilationUnit
     pc*: int
-    registers*: Registers
+    frame*: Frame
     code_mgr*: CodeManager
 
-  Registers* = ref object
+  Frame* = ref object
+    ref_count*: int32
     caller*: Caller
     ns*: Namespace
     scope*: Scope
     self*: Value
     args*: Value
     match_result*: MatchResult
-    data*: array[32, Value]
-    next_slot*: int
+    stack*: array[24, Value]
+    stack_index*: uint8
 
   Caller* = ref object
     address*: Address
-    registers*: Registers
+    frame*: Frame
 
   CodeManager* = ref object
     data*: Table[Id, CompilationUnit]
