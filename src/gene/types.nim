@@ -1,4 +1,4 @@
-import math, tables, sets, re, bitops, unicode, strformat
+import math, tables, sets, re, bitops, unicode, strutils, strformat
 import random
 import dynlib
 
@@ -1376,6 +1376,135 @@ proc prop_splat*(self: seq[Matcher]): string =
     if m.kind == MatchProp and m.is_splat:
       return m.name
 
+proc parse*(self: var RootMatcher, v: Value)
+
+proc calc_next*(self: var Matcher) =
+  var last: Matcher = nil
+  for m in self.children.mitems:
+    m.calc_next()
+    if m.kind in @[MatchData, MatchLiteral]:
+      if last != nil:
+        last.next = m
+      last = m
+
+proc calc_next*(self: var RootMatcher) =
+  var last: Matcher = nil
+  for m in self.children.mitems:
+    m.calc_next()
+    if m.kind in @[MatchData, MatchLiteral]:
+      if last != nil:
+        last.next = m
+      last = m
+
+proc calc_min_left*(self: var Matcher) =
+  var min_left = 0
+  var i = self.children.len
+  while i > 0:
+    i -= 1
+    var m = self.children[i]
+    m.calc_min_left()
+    m.min_left = min_left
+    if m.required:
+      min_left += 1
+
+proc calc_min_left*(self: var RootMatcher) =
+  var min_left = 0
+  var i = self.children.len
+  while i > 0:
+    i -= 1
+    var m = self.children[i]
+    m.calc_min_left()
+    m.min_left = min_left
+    if m.required:
+      min_left += 1
+
+proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
+  case v.kind:
+    of VkSymbol:
+      if v.str[0] == '^':
+        var m = new_matcher(self, MatchProp)
+        if v.str.ends_with("..."):
+          m.is_splat = true
+          if v.str[1] == '^':
+            m.name = v.str[2..^4]
+            m.is_prop = true
+          else:
+            m.name = v.str[1..^4]
+        else:
+          if v.str[1] == '^':
+            m.name = v.str[2..^1]
+            m.is_prop = true
+          else:
+            m.name = v.str[1..^1]
+        group.add(m)
+      else:
+        var m = new_matcher(self, MatchData)
+        group.add(m)
+        if v.str != "_":
+          if v.str.ends_with("..."):
+            m.is_splat = true
+            if v.str[0] == '^':
+              m.name = v.str[1..^4]
+              m.is_prop = true
+            else:
+              m.name = v.str[0..^4]
+          else:
+            if v.str[0] == '^':
+              m.name = v.str[1..^1]
+              m.is_prop = true
+            else:
+              m.name = v.str
+    of VkComplexSymbol:
+      todo($VkComplexSymbol)
+      # if v.csymbol[0] == '^':
+      #   todo("parse " & $v)
+      # else:
+      #   var m = new_matcher(self, MatchData)
+      #   group.add(m)
+      #   m.is_prop = true
+      #   var name = v.csymbol[1]
+      #   if name.ends_with("..."):
+      #     m.is_splat = true
+      #     m.name = name[0..^4]
+      #   else:
+      #     m.name = name
+    of VkArray:
+      var i = 0
+      while i < v.ref.arr.len:
+        var item = v.ref.arr[i]
+        i += 1
+        if item.kind == VkArray:
+          var m = new_matcher(self, MatchData)
+          group.add(m)
+          self.parse(m.children, item)
+        else:
+          self.parse(group, item)
+          if i < v.ref.arr.len and v.ref.arr[i] == "=".to_symbol_value():
+            i += 1
+            var last_matcher = group[^1]
+            var value = v.ref.arr[i]
+            i += 1
+            last_matcher.default_value = value
+    of VkQuote:
+      todo($VkQuote)
+      # var m = new_matcher(self, MatchLiteral)
+      # m.literal = v.quote
+      # m.name = "<literal>"
+      # group.add(m)
+    else:
+      todo("parse " & $v.kind)
+
+proc parse*(self: var RootMatcher, v: Value) =
+  if v == nil or v == to_symbol_value("_"):
+    return
+  self.parse(self.children, v)
+  self.calc_min_left()
+  self.calc_next()
+
+proc new_arg_matcher*(value: Value): RootMatcher =
+  result = new_arg_matcher()
+  result.parse(value)
+
 #################### Function ####################
 
 proc new_fn*(name: string, matcher: RootMatcher, body: seq[Value]): Function =
@@ -1386,6 +1515,38 @@ proc new_fn*(name: string, matcher: RootMatcher, body: seq[Value]): Function =
     body: body,
   )
 
+proc to_function*(node: Value): Function {.gcsafe.} =
+  var name: string
+  var matcher = new_arg_matcher()
+  var body_start: int
+  if node.gene.type == "fnx".to_symbol_value():
+    matcher.parse(node.gene.children[0])
+    name = "<unnamed>"
+    body_start = 1
+  elif node.gene.type == "fnxx".to_symbol_value():
+    name = "<unnamed>"
+    body_start = 0
+  else:
+    var first = node.gene.children[0]
+    case first.kind:
+      of VkSymbol, VkString:
+        name = first.str
+      of VkComplexSymbol:
+        name = first.ref.csymbol[^1]
+      else:
+        todo($first.kind)
+
+    matcher.parse(node.gene.children[1])
+    body_start = 2
+
+  var body: seq[Value] = @[]
+  for i in body_start..<node.gene.children.len:
+    body.add node.gene.children[i]
+
+  # body = wrap_with_try(body)
+  result = new_fn(name, matcher, body)
+  result.async = node.gene.props.get_or_default("async", false)
+
 #################### Macro #######################
 
 proc new_macro*(name: string, matcher: RootMatcher, body: seq[Value]): Macro =
@@ -1395,6 +1556,24 @@ proc new_macro*(name: string, matcher: RootMatcher, body: seq[Value]): Macro =
     matching_hint: matcher.hint,
     body: body,
   )
+
+proc to_macro*(node: Value): Macro =
+  var first = node.gene.children[0]
+  var name: string
+  if first.kind == VkSymbol:
+    name = first.str
+  elif first.kind == VkComplexSymbol:
+    name = first.ref.csymbol[^1]
+
+  var matcher = new_arg_matcher()
+  matcher.parse(node.gene.children[1])
+
+  var body: seq[Value] = @[]
+  for i in 2..<node.gene.children.len:
+    body.add node.gene.children[i]
+
+  # body = wrap_with_try(body)
+  result = new_macro(name, matcher, body)
 
 #################### Block #######################
 
@@ -1642,6 +1821,23 @@ proc pop*(self: var Frame): Value =
 
 proc default*(self: Frame): Value =
   self.stack[REG_DEFAULT]
+
+#################### VM ##########################
+
+proc init_app_and_vm*() =
+  VM = VirtualMachine(
+    state: VmWaiting,
+    code_mgr: CodeManager(),
+  )
+  let r = new_ref(VkApplication)
+  r.app = new_app()
+  r.app.global_ns = new_namespace("global").to_value()
+  r.app.gene_ns   = new_namespace("gene"  ).to_value()
+  r.app.genex_ns  = new_namespace("gene"  ).to_value()
+  App = r.to_ref_value()
+
+  for callback in VmCreatedCallbacks:
+    callback()
 
 #################### Helpers #####################
 

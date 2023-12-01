@@ -4,6 +4,9 @@ import random
 import ./types
 import "./compiler/if"
 
+#################### Definitions #################
+proc compile(self: var Compiler, input: Value)
+
 proc new_label(): Label =
   result = rand(int32.high).Label
 
@@ -70,8 +73,6 @@ proc find_loop_end*(self: CompilationUnit, pos: int): int =
     if self.instructions[pos].kind == IkLoopEnd:
       return pos
   not_allowed("Loop end not found")
-
-proc compile(self: var Compiler, input: Value)
 
 proc compile(self: var Compiler, input: seq[Value]) =
   for i, v in input:
