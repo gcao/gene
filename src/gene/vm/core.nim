@@ -13,10 +13,10 @@ proc to_ctor(node: Value): Function =
 
 proc class_ctor(vm_data: VirtualMachineData, args: Value): Value =
   var fn = to_ctor(args)
-  fn.ns = vm_data.frame.ns
+  fn.ns = vm_data.frame.data.ns
   let r = new_ref(VkFunction)
   r.fn = fn
-  vm_data.frame.self.ref.class.constructor = r.to_ref_value()
+  vm_data.frame.data.self.ref.class.constructor = r.to_ref_value()
 
 proc class_fn(vm_data: VirtualMachineData, args: Value): Value =
   let self = args.gene.type.ref.bound_method.self

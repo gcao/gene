@@ -497,7 +497,7 @@ type
     frame*: Frame
     code_mgr*: CodeManager
 
-  Frame* = ref object
+  FrameObj = object
     ref_count*: int32
     caller*: Caller
     ns*: Namespace
@@ -507,6 +507,9 @@ type
     match_result*: MatchResult
     stack*: array[24, Value]
     stack_index*: uint8
+
+  Frame* = object
+    data*: ptr FrameObj
 
   Caller* = ref object
     address*: Address
@@ -580,8 +583,6 @@ var VM* {.threadvar.}: VirtualMachine   # The current virtual machine
 var App* {.threadvar.}: Value
 
 var VmCreatedCallbacks*: seq[VmCallback] = @[]
-
-randomize()
 
 #################### Definitions #################
 
@@ -1194,7 +1195,6 @@ proc member_names*(self: Namespace): Value =
   # for k, _ in self.members:
   #   result.vec.add(k)
 
-# proc on_member_missing*(frame: Frame, self: Value, args: Value): Value =
 proc on_member_missing*(vm_data: VirtualMachineData, args: Value): Value =
   todo()
   # let self = args.gene_type
@@ -1610,10 +1610,62 @@ converter to_value*(f: NativeFn2): Value {.inline.} =
   r.native_fn2 = f
   result = r.to_ref_value()
 
+#################### Frame #######################
+
+const REG_DEFAULT = 6
+var FRAMES: seq[ptr FrameObj]
+
+proc `=destroy`*(self: Frame) =
+  self.data.ref_count.dec()
+  if self.data.ref_count == 0:
+    self.data.zero_mem(sizeof(FrameObj))
+    FRAMES.add(self.data)
+
+proc `=copy`*(a: var Frame, b: Frame) =
+  if not a.data.is_nil:
+    a.data.ref_count.dec()
+  a.data = b.data
+  a.data.ref_count.inc()
+
+proc new_frame*(): Frame =
+  if FRAMES.len == 0:
+    result = Frame(data: cast[ptr FrameObj](alloc0(sizeof(FrameObj))))
+  else:
+    result = Frame(data: FRAMES.pop())
+  result.data.ref_count.inc()
+  result.data.stack_index = REG_DEFAULT
+
+proc new_frame*(ns: Namespace): Frame =
+  result = new_frame()
+  result.data.ns = ns
+  result.data.scope = new_scope()
+
+proc new_frame*(caller: Caller): Frame =
+  result = new_frame()
+  result.data.caller = caller
+  result.data.scope = new_scope()
+
+proc current*(self: Frame): Value =
+  self.data.stack[self.data.stack_index - 1]
+
+proc push*(self: Frame, value: Value) =
+  self.data.stack[self.data.stack_index] = value
+  self.data.stack_index.inc()
+
+proc pop*(self: Frame): Value =
+  self.data.stack_index.dec()
+  result = self.data.stack[self.data.stack_index]
+  self.data.stack[self.data.stack_index] = nil
+
+proc default*(self: Frame): Value =
+  self.data.stack[REG_DEFAULT]
+
 #################### Helpers #####################
 
 proc init_values*() =
+  randomize()
   SYMBOLS = ManagedSymbols()
+  FRAMES = @[]
 
 init_values()
 
