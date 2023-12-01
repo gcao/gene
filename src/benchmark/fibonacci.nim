@@ -22,10 +22,9 @@ when isMainModule:
   let compiled = compile(read_all(code))
 
   var ns = new_namespace("fibonacci")
-  var vm_data = new_vm_data(ns)
-  vm_data.code_mgr.data[compiled.id] = compiled
-  vm_data.cur_block = compiled
-  VM.data = vm_data
+  VM.frame = new_frame(ns)
+  VM.code_mgr.data[compiled.id] = compiled
+  VM.cur_block = compiled
 
   let start = cpuTime()
   let result = VM.exec()

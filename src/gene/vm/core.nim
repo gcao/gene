@@ -11,14 +11,14 @@ proc to_ctor(node: Value): Function =
   # body = wrap_with_try(body)
   result = new_fn(name, matcher, body)
 
-proc class_ctor(vm_data: VirtualMachineData, args: Value): Value =
+proc class_ctor(self: VirtualMachine, args: Value): Value =
   var fn = to_ctor(args)
-  fn.ns = vm_data.frame.ns
+  fn.ns = self.frame.ns
   let r = new_ref(VkFunction)
   r.fn = fn
-  vm_data.frame.self.ref.class.constructor = r.to_ref_value()
+  self.frame.self.ref.class.constructor = r.to_ref_value()
 
-proc class_fn(vm_data: VirtualMachineData, args: Value): Value =
+proc class_fn(self: VirtualMachine, args: Value): Value =
   let self = args.gene.type.ref.bound_method.self
   # define a fn like method on a class
   var fn = to_function(args)

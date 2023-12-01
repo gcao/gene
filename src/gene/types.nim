@@ -483,19 +483,18 @@ type
     VmRunning
     VmPaused
 
+  # Virtual machine and its data can be separated however it doesn't
+  # bring much benefit. So we keep them together.
   VirtualMachine* = ref object
     state*: VirtualMachineState
-    data*: VirtualMachineData
-    trace*: bool
-
-  VmCallback* = proc() {.gcsafe.}
-
-  VirtualMachineData* = ref object
     is_main*: bool
     cur_block*: CompilationUnit
     pc*: int
     frame*: Frame
     code_mgr*: CodeManager
+    trace*: bool
+
+  VmCallback* = proc() {.gcsafe.}
 
   Frame* = ref object
     ref_count*: int32
@@ -528,8 +527,8 @@ type
   # Types related to command line argument parsing
   ArgumentError* = object of Exception
 
-  NativeFn* = proc(vm_data: VirtualMachineData, args: Value): Value {.gcsafe, nimcall.}
-  NativeFn2* = proc(vm_data: VirtualMachineData, args: Value): Value {.gcsafe.}
+  NativeFn* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe, nimcall.}
+  NativeFn2* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe.}
 
 const I64_MASK = 0xC000_0000_0000_0000u64
 const F64_ZERO = 0x2000_0000_0000_0000u64
@@ -1195,7 +1194,7 @@ proc member_names*(self: Namespace): Value =
   #   result.vec.add(k)
 
 # proc on_member_missing*(frame: Frame, self: Value, args: Value): Value =
-proc on_member_missing*(vm_data: VirtualMachineData, args: Value): Value =
+proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
   todo()
   # let self = args.gene_type
   # case self.kind
@@ -1609,6 +1608,40 @@ converter to_value*(f: NativeFn2): Value {.inline.} =
   let r = new_ref(VkNativeFn2)
   r.native_fn2 = f
   result = r.to_ref_value()
+
+#################### Frame #######################
+
+const REG_DEFAULT = 6
+
+proc new_frame*(): Frame =
+  Frame(
+    stack_index: REG_DEFAULT,
+  )
+
+proc new_frame*(ns: Namespace): Frame =
+  result = new_frame()
+  result.ns = ns
+  result.scope = new_scope()
+
+proc new_frame*(caller: Caller): Frame =
+  result = new_frame()
+  result.caller = caller
+  result.scope = new_scope()
+
+proc current*(self: var Frame): Value =
+  self.stack[self.stack_index - 1]
+
+proc push*(self: var Frame, value: Value) =
+  self.stack[self.stack_index] = value
+  self.stack_index.inc()
+
+proc pop*(self: var Frame): Value =
+  self.stack_index.dec()
+  result = self.stack[self.stack_index]
+  self.stack[self.stack_index] = nil
+
+proc default*(self: Frame): Value =
+  self.stack[REG_DEFAULT]
 
 #################### Helpers #####################
 
