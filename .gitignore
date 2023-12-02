@@ -16,6 +16,7 @@
 tmp/
 bin/
 build/
+benchmark-results/
 *.dylib
 callgrind.out*
 scratch*
