@@ -7,6 +7,6 @@ date "+%Y-%m-%d %H:%M:%S %A"
 echo Git commit: $(git rev-parse HEAD)
 nim -v
 
-CMD="nim c --hints:off --gc:orc -d:release -d:ssl -r src/benchmark/fibonacci.nim"
+CMD="nim c --hints:off --gc:orc -d:release -d:ssl --out:bin/fibonacci -r src/benchmark/fibonacci.nim"
 echo $CMD
 $CMD
