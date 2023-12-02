@@ -270,9 +270,8 @@ proc exec*(self: VirtualMachine): Value =
 
               var caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
-                frame: self.frame,
               )
-              self.frame.ref_count.inc()
+              caller.frame.update(self.frame)
               self.frame.update(new_frame(caller))
               self.frame.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
               self.frame.ns = gene_type.ref.fn.ns
@@ -290,9 +289,8 @@ proc exec*(self: VirtualMachine): Value =
 
               var caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
-                frame: self.frame,
               )
-              self.frame.ref_count.inc()
+              caller.frame.update(self.frame)
               self.frame.update(new_frame(caller))
               self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
               self.frame.ns = gene_type.ref.macro.ns
@@ -320,9 +318,8 @@ proc exec*(self: VirtualMachine): Value =
 
                   var caller = Caller(
                     address: Address(id: self.cur_block.id, pc: self.pc),
-                    frame: self.frame,
                   )
-                  self.frame.ref_count.inc()
+                  caller.frame.update(self.frame)
                   self.frame.update(new_frame(caller))
                   self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
                   self.frame.ns = fn.ns
@@ -413,9 +410,8 @@ proc exec*(self: VirtualMachine): Value =
         self.pc.inc()
         var caller = Caller(
           address: Address(id: self.cur_block.id, pc: self.pc),
-          frame: self.frame,
         )
-        self.frame.ref_count.inc()
+        caller.frame.update(self.frame)
         self.frame.update(new_frame(caller))
         self.frame.self = obj
         self.frame.ns = ns
@@ -489,9 +485,8 @@ proc exec*(self: VirtualMachine): Value =
             self.pc.inc()
             var caller = Caller(
               address: Address(id: self.cur_block.id, pc: self.pc),
-              frame: self.frame,
             )
-            self.frame.ref_count.inc()
+            caller.frame.update(self.frame)
             self.frame.update(new_frame(caller))
             self.frame.self = instance.to_ref_value()
             self.frame.ns = class.constructor.ref.fn.ns
@@ -541,9 +536,8 @@ proc exec*(self: VirtualMachine): Value =
 
             var caller = Caller(
               address: Address(id: self.cur_block.id, pc: self.pc),
-              frame: self.frame,
             )
-            self.frame.ref_count.inc()
+            caller.frame.update(self.frame)
             self.frame.update(new_frame(caller))
             self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
             self.frame.ns = fn.ns

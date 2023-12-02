@@ -1798,6 +1798,8 @@ var FRAMES: seq[Frame] = @[]
 proc free*(self: var Frame) =
   self.ref_count.dec()
   if self.ref_count == 0:
+    if self.caller != nil:
+      self.caller.frame.free()
     self[].reset()
     FRAMES.add(self)
 
@@ -1806,7 +1808,8 @@ proc new_frame*(): Frame =
     result = FRAMES.pop()
   else:
     result = cast[Frame](alloc0(sizeof(FrameObj)))
-  result.ref_count = 1
+  # Let the caller increment the ref_count
+  result.ref_count = 0
   result.stack_index = REG_DEFAULT
 
 proc new_frame*(ns: Namespace): Frame =
@@ -1820,11 +1823,10 @@ proc new_frame*(caller: Caller): Frame =
   result.scope = new_scope()
 
 proc update*(self: var Frame, f: Frame) =
+  f.ref_count.inc()
   if not self.is_nil:
     self.free()
   self = f
-  # `f` will be freed by the caller so there is no need to inc ref_count
-  # self.ref_count.inc()
 
 proc current*(self: var Frame): Value =
   self.stack[self.stack_index - 1]
