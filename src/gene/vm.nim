@@ -69,7 +69,7 @@ proc exec*(self: VirtualMachine): Value =
         if caller == nil:
           return v
         else:
-          self.frame = caller.frame
+          self.frame.update(caller.frame)
           if not self.cur_block.skip_return:
             self.frame.push(v)
           self.cur_block = self.code_mgr.data[caller.address.id]
@@ -272,7 +272,8 @@ proc exec*(self: VirtualMachine): Value =
                 address: Address(id: self.cur_block.id, pc: self.pc),
                 frame: self.frame,
               )
-              self.frame = new_frame(caller)
+              self.frame.ref_count.inc()
+              self.frame.update(new_frame(caller))
               self.frame.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
               self.frame.ns = gene_type.ref.fn.ns
               self.frame.args = v
@@ -291,7 +292,8 @@ proc exec*(self: VirtualMachine): Value =
                 address: Address(id: self.cur_block.id, pc: self.pc),
                 frame: self.frame,
               )
-              self.frame = new_frame(caller)
+              self.frame.ref_count.inc()
+              self.frame.update(new_frame(caller))
               self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
               self.frame.ns = gene_type.ref.macro.ns
               self.frame.args = v
@@ -320,7 +322,8 @@ proc exec*(self: VirtualMachine): Value =
                     address: Address(id: self.cur_block.id, pc: self.pc),
                     frame: self.frame,
                   )
-                  self.frame = new_frame(caller)
+                  self.frame.ref_count.inc()
+                  self.frame.update(new_frame(caller))
                   self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
                   self.frame.ns = fn.ns
                   self.frame.self = gene_type.ref.bound_method.self
@@ -412,7 +415,8 @@ proc exec*(self: VirtualMachine): Value =
           address: Address(id: self.cur_block.id, pc: self.pc),
           frame: self.frame,
         )
-        self.frame = new_frame(caller)
+        self.frame.ref_count.inc()
+        self.frame.update(new_frame(caller))
         self.frame.self = obj
         self.frame.ns = ns
         self.cur_block = compiled
@@ -445,7 +449,7 @@ proc exec*(self: VirtualMachine): Value =
           not_allowed("Return from top level")
         else:
           let v = self.frame.pop()
-          self.frame = caller.frame
+          self.frame.update(caller.frame)
           self.cur_block = self.code_mgr.data[caller.address.id]
           self.pc = caller.address.pc
           self.frame.push(v)
@@ -487,7 +491,8 @@ proc exec*(self: VirtualMachine): Value =
               address: Address(id: self.cur_block.id, pc: self.pc),
               frame: self.frame,
             )
-            self.frame = new_frame(caller)
+            self.frame.ref_count.inc()
+            self.frame.update(new_frame(caller))
             self.frame.self = instance.to_ref_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cur_block = compiled
@@ -538,7 +543,8 @@ proc exec*(self: VirtualMachine): Value =
               address: Address(id: self.cur_block.id, pc: self.pc),
               frame: self.frame,
             )
-            self.frame = new_frame(caller)
+            self.frame.ref_count.inc()
+            self.frame.update(new_frame(caller))
             self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
             self.frame.ns = fn.ns
             self.frame.self = v
@@ -583,7 +589,7 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))
 
   var ns = new_namespace(module_name)
-  self.frame = new_frame(ns)
+  self.frame.update(new_frame(ns))
   self.code_mgr.data[compiled.id] = compiled
   self.cur_block = compiled
 

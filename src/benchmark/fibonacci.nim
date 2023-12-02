@@ -22,7 +22,7 @@ when isMainModule:
   let compiled = compile(read_all(code))
 
   var ns = new_namespace("fibonacci")
-  VM.frame = new_frame(ns)
+  VM.frame.update(new_frame(ns))
   VM.code_mgr.data[compiled.id] = compiled
   VM.cur_block = compiled
 

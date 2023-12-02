@@ -496,7 +496,7 @@ type
 
   VmCallback* = proc() {.gcsafe.}
 
-  Frame* = ref object
+  FrameObj = object
     ref_count*: int32
     caller*: Caller
     ns*: Namespace
@@ -506,6 +506,8 @@ type
     match_result*: MatchResult
     stack*: array[24, Value]
     stack_index*: uint8
+
+  Frame* = ptr FrameObj
 
   Caller* = ref object
     address*: Address
@@ -1791,11 +1793,21 @@ converter to_value*(f: NativeFn2): Value {.inline.} =
 #################### Frame #######################
 
 const REG_DEFAULT = 6
+var FRAMES: seq[Frame] = @[]
+
+proc free*(self: var Frame) =
+  self.ref_count.dec()
+  if self.ref_count == 0:
+    self[].reset()
+    FRAMES.add(self)
 
 proc new_frame*(): Frame =
-  Frame(
-    stack_index: REG_DEFAULT,
-  )
+  if FRAMES.len > 0:
+    result = FRAMES.pop()
+  else:
+    result = cast[Frame](alloc0(sizeof(FrameObj)))
+  result.ref_count = 1
+  result.stack_index = REG_DEFAULT
 
 proc new_frame*(ns: Namespace): Frame =
   result = new_frame()
@@ -1806,6 +1818,13 @@ proc new_frame*(caller: Caller): Frame =
   result = new_frame()
   result.caller = caller
   result.scope = new_scope()
+
+proc update*(self: var Frame, f: Frame) =
+  if not self.is_nil:
+    self.free()
+  self = f
+  # `f` will be freed by the caller so there is no need to inc ref_count
+  # self.ref_count.inc()
 
 proc current*(self: var Frame): Value =
   self.stack[self.stack_index - 1]
