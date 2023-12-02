@@ -34,7 +34,7 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
     let class = self.ref.class
     m.class = class
     fn.ns = class.ns
-    class.methods[m.name] = m
+    class.methods[m.name.to_key()] = m
   # of VkMixin:
   #   fn.ns = self.mixin.ns
   #   self.mixin.methods[m.name] = m

@@ -2,7 +2,7 @@ import tables, logging
 
 type
   CommandManager* = ref object
-    data*: Table[string, Command]
+    data*: Table[int64, Command]
     help*: string
 
   Command* = proc(cmd: string, args: seq[string]): string

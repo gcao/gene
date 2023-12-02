@@ -152,14 +152,14 @@ proc compile_do(self: var Compiler, gene: ptr Gene) =
 
 proc compile_if(self: var Compiler, gene: ptr Gene) =
   normalize_if(gene)
-  self.compile(gene.props[COND_KEY])
+  self.compile(gene.props[COND_KEY.to_key()])
   var else_label = new_label()
   var end_label = new_label()
   self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
-  self.compile(gene.props[THEN_KEY])
+  self.compile(gene.props[THEN_KEY.to_key()])
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
   self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
-  self.compile(gene.props[ELSE_KEY])
+  self.compile(gene.props[ELSE_KEY.to_key()])
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
 proc compile_var(self: var Compiler, gene: ptr Gene) =

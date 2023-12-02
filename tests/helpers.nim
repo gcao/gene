@@ -21,7 +21,10 @@ converter seq_to_gene*(self: seq[string]): Value =
   result = r.to_ref_value()
 
 converter to_value*(self: openArray[(string, Value)]): Value =
-  new_map_value(self.to_table())
+  var map = Table[int64, Value]()
+  for (k, v) in self:
+    map[k.to_key()] = v
+  new_map_value(map)
 
 proc cleanup*(code: string): string =
   result = code

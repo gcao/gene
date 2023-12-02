@@ -60,7 +60,7 @@ type
       of VkSet:
         set*: HashSet[Value]
       of VkMap:
-        map*: Table[string, Value]
+        map*: Table[int64, Value]
       of VkStream:
         stream*: seq[Value]
         stream_index*: int64
@@ -94,7 +94,7 @@ type
         bound_method*: BoundMethod
       of VkInstance:
         instance_class*: Class
-        instance_props*: Table[string, Value]
+        instance_props*: Table[int64, Value]
       of VkNativeFn:
         native_fn*: NativeFn
       of VkNativeFn2:
@@ -107,7 +107,7 @@ type
   Gene* = object
     ref_count*: int32
     `type`*: Value
-    props*: Table[string, Value]
+    props*: Table[int64, Value]
     children*: seq[Value]
 
   String* = object
@@ -116,7 +116,7 @@ type
 
   Document* = ref object
     `type`: Value
-    props*: Table[string, Value]
+    props*: Table[int64, Value]
     children*: seq[Value]
     # references*: References # Uncomment this when it's needed.
 
@@ -130,7 +130,7 @@ type
     # Value of mappings is composed of two bytes:
     #   first is the optional index in self.mapping_history + 1
     #   second is the index in self.members
-    mappings*: Table[string, int]
+    mappings*: Table[int64, int]
     mapping_history*: seq[seq[NameIndexScope]]
 
   ## This is the root of a running application
@@ -142,7 +142,7 @@ type
     args*: seq[string]
     main_module*: Module
     # dep_root*: DependencyRoot
-    props*: Table[string, Value]  # Additional properties
+    props*: Table[int64, Value]  # Additional properties
 
     global_ns*     : Value
     gene_ns*       : Value
@@ -194,7 +194,7 @@ type
     version*: Value
     license*: Value
     globals*: seq[string] # Global variables defined by this package
-    # dependencies*: Table[string, Dependency]
+    # dependencies*: Table[int64, Dependency]
     homepage*: string
     src_path*: string     # Default to "src"
     test_path*: string    # Default to "tests"
@@ -202,7 +202,7 @@ type
     build_path*: string   # Default to "build"
     load_paths*: seq[string]
     init_modules*: seq[string]    # Modules that should be loaded when the package is used the first time
-    props*: Table[string, Value]  # Additional properties
+    props*: Table[int64, Value]  # Additional properties
     # doc*: Document        # content of package.gene
 
   SourceType* = enum
@@ -219,22 +219,22 @@ type
     name*: string
     ns*: Namespace
     handle*: LibHandle    # Optional handle for dynamic lib
-    props*: Table[string, Value]  # Additional properties
+    props*: Table[int64, Value]  # Additional properties
 
   Namespace* = ref object
     module*: Module
     parent*: Namespace
     stop_inheritance*: bool  # When set to true, stop looking up for members from parent namespaces
     name*: string
-    members*: Table[string, Value]
-    proxies*: Table[string, Value] # Ask the proxy to look it up instead of checking members and parent
+    members*: Table[int64, Value]
+    proxies*: Table[int64, Value] # Ask the proxy to look it up instead of checking members and parent
     on_member_missing*: seq[Value]
 
   Class* = ref object
     parent*: Class
     name*: string
     constructor*: Value
-    methods*: Table[string, Method]
+    methods*: Table[int64, Method]
     on_extended*: Value
     # method_missing*: Value
     ns*: Namespace # Class can act like a namespace
@@ -336,7 +336,7 @@ type
     value*: Value
 
   MatchResult* = ref object
-    fields*: Table[string, MatchedField]
+    fields*: Table[int64, MatchedField]
 
   Id* = uint64
   Label* = int32
@@ -496,7 +496,7 @@ type
 
   VmCallback* = proc() {.gcsafe.}
 
-  Frame* = ref object
+  FrameObj = object
     ref_count*: int32
     caller*: Caller
     ns*: Namespace
@@ -506,6 +506,8 @@ type
     match_result*: MatchResult
     stack*: array[24, Value]
     stack_index*: uint8
+
+  Frame* = ptr FrameObj
 
   Caller* = ref object
     address*: Address
@@ -570,8 +572,8 @@ const LONG_STR_MASK = 0xFFF9_0000_0000_0000u64
 
 const EMPTY_STRING = 0xFFF8_0000_0000_0000u64
 
-const SYMBOL_PREFIX  = 0xFFFA
-const EMPTY_SYMBOL = 0xFFFA_0000_0000_0000u64
+const SYMBOL_PREFIX  = 0x7FF9
+const EMPTY_SYMBOL = 0x7FF9_0000_0000_0000u64
 
 const BIGGEST_INT = 2^61 - 1
 
@@ -603,11 +605,12 @@ converter to_value*(v: char): Value {.inline.}
 converter to_value*(v: Rune): Value {.inline.}
 
 proc get_symbol*(i: int64): string {.inline.}
+proc to_key*(s: string): int64 {.inline.}
 
 proc new_namespace*(): Namespace {.gcsafe.}
 proc new_namespace*(name: string): Namespace {.gcsafe.}
 proc new_namespace*(parent: Namespace): Namespace {.gcsafe.}
-proc `[]=`*(self: Namespace, key: string, val: Value) {.inline.}
+proc `[]=`*(self: Namespace, key: int64, val: Value) {.inline.}
 
 #################### Common ######################
 
@@ -1012,6 +1015,9 @@ proc to_symbol_value*(s: string): Value {.inline.} =
       SYMBOLS.map[s] = SYMBOLS.store.len
       SYMBOLS.store.add(s)
 
+proc to_key*(s: string): int64 {.inline.} =
+  cast[int64](to_symbol_value(s))
+
 #################### ComplexSymbol ###############
 
 proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
@@ -1045,7 +1051,7 @@ proc new_map_value*(): Value =
   let r = new_ref(VkMap)
   result = r.to_ref_value()
 
-proc new_map_value*(map: Table[string, Value]): Value =
+proc new_map_value*(map: Table[int64, Value]): Value =
   let r = new_ref(VkMap)
   r.map = map
   result = r.to_ref_value()
@@ -1062,7 +1068,7 @@ proc gene*(v: Value): ptr Gene {.inline.} =
 proc `$`*(self: ptr Gene): string =
   result = "(" & $self.type
   for k, v in self.props:
-    result &= " ^" & k & " " & $v
+    result &= " ^" & get_symbol(k) & " " & $v
   for child in self.children:
     result &= " " & $child
   result &= ")"
@@ -1071,14 +1077,14 @@ proc new_gene*(): ptr Gene =
   result = cast[ptr Gene](alloc0(sizeof(Gene)))
   result.ref_count = 1
   result.type = NIL
-  result.props = Table[string, Value]()
+  result.props = Table[int64, Value]()
   result.children = @[]
 
 proc new_gene*(`type`: Value): ptr Gene =
   result = cast[ptr Gene](alloc0(sizeof(Gene)))
   result.ref_count = 1
   result.type = `type`
-  result.props = Table[string, Value]()
+  result.props = Table[int64, Value]()
   result.children = @[]
 
 proc new_gene_value*(): Value {.inline.} =
@@ -1110,27 +1116,27 @@ proc to_value*(self: Namespace): Value {.inline.} =
 proc new_namespace*(): Namespace =
   return Namespace(
     name: "<root>",
-    members: Table[string, Value](),
+    members: Table[int64, Value](),
   )
 
 proc new_namespace*(parent: Namespace): Namespace =
   return Namespace(
     parent: parent,
     name: "<root>",
-    members: Table[string, Value](),
+    members: Table[int64, Value](),
   )
 
 proc new_namespace*(name: string): Namespace =
   return Namespace(
     name: name,
-    members: Table[string, Value](),
+    members: Table[int64, Value](),
   )
 
 proc new_namespace*(parent: Namespace, name: string): Namespace =
   return Namespace(
     parent: parent,
     name: name,
-    members: Table[string, Value](),
+    members: Table[int64, Value](),
   )
 
 proc root*(self: Namespace): Namespace =
@@ -1152,15 +1158,15 @@ proc package*(self: Namespace): Package =
   self.get_module().pkg
 
 proc proxy*(self: Namespace, name: string, target: Value) =
-  self.proxies[name] = target
+  self.proxies[name.to_key()] = target
 
-proc has_key*(self: Namespace, key: string): bool {.inline.} =
+proc has_key*(self: Namespace, key: int64): bool {.inline.} =
   if self.proxies.has_key(key):
     return self.proxies[key].ref.ns.has_key(key)
   else:
     return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
 
-proc `[]`*(self: Namespace, key: string): Value {.inline.} =
+proc `[]`*(self: Namespace, key: int64): Value {.inline.} =
   if self.proxies.has_key(key):
     return self.proxies[key].ref.ns[key]
   elif self.members.has_key(key):
@@ -1168,9 +1174,9 @@ proc `[]`*(self: Namespace, key: string): Value {.inline.} =
   elif not self.stop_inheritance and self.parent != nil:
     return self.parent[key]
   else:
-    raise new_exception(NotDefinedException, key & " is not defined")
+    raise new_exception(NotDefinedException, get_symbol(key) & " is not defined")
 
-proc locate*(self: Namespace, key: string): (Value, Namespace) {.inline.} =
+proc locate*(self: Namespace, key: int64): (Value, Namespace) {.inline.} =
   if self.members.has_key(key):
     result = (self.members[key], self)
   elif not self.stop_inheritance and self.parent != nil:
@@ -1178,7 +1184,7 @@ proc locate*(self: Namespace, key: string): (Value, Namespace) {.inline.} =
   else:
     not_allowed()
 
-proc `[]=`*(self: Namespace, key: string, val: Value) {.inline.} =
+proc `[]=`*(self: Namespace, key: int64, val: Value) {.inline.} =
   self.members[key] = val
 
 proc get_members*(self: Namespace): Value =
@@ -1211,7 +1217,7 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 proc new_scope*(): Scope = Scope(
   members: @[],
-  mappings: Table[string, int](),
+  mappings: Table[int64, int](),
   mapping_history: @[],
 )
 
@@ -1226,7 +1232,7 @@ proc reset*(self: var Scope) {.inline.} =
   self.parent = nil
   self.members.setLen(0)
 
-proc has_key(self: Scope, key: string, max: int): bool {.inline.} =
+proc has_key(self: Scope, key: int64, max: int): bool {.inline.} =
   if self.mappings.has_key(key):
     var found = self.mappings[key]
     if found < max:
@@ -1244,13 +1250,13 @@ proc has_key(self: Scope, key: string, max: int): bool {.inline.} =
   if self.parent != nil:
     return self.parent.has_key(key, self.parent_index_max.int)
 
-proc has_key*(self: Scope, key: string): bool {.inline.} =
+proc has_key*(self: Scope, key: int64): bool {.inline.} =
   if self.mappings.has_key(key):
     return true
   elif self.parent != nil:
     return self.parent.has_key(key, self.parent_index_max.int)
 
-proc def_member*(self: var Scope, key: string, val: Value) {.inline.} =
+proc def_member*(self: var Scope, key: int64, val: Value) {.inline.} =
   var index = self.members.len
   self.members.add(val)
   if self.mappings.has_key_or_put(key, index):
@@ -1265,7 +1271,7 @@ proc def_member*(self: var Scope, key: string, val: Value) {.inline.} =
       self.mapping_history.add(@[NameIndexScope(cur)])
       self.mappings[key] = (history_index + 1).shl(8) + index
 
-proc `[]`(self: Scope, key: string, max: int): Value {.inline.} =
+proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
   if self.mappings.has_key(key):
     var found = self.mappings[key]
     if found > 255:
@@ -1287,7 +1293,7 @@ proc `[]`(self: Scope, key: string, max: int): Value {.inline.} =
   if self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
 
-proc `[]`*(self: Scope, key: string): Value {.inline.} =
+proc `[]`*(self: Scope, key: int64): Value {.inline.} =
   if self.mappings.has_key(key):
     var found = self.mappings[key]
     if found > 255:
@@ -1296,7 +1302,7 @@ proc `[]`*(self: Scope, key: string): Value {.inline.} =
   elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
 
-proc `[]=`(self: var Scope, key: string, val: Value, max: int) {.inline.} =
+proc `[]=`(self: var Scope, key: int64, val: Value, max: int) {.inline.} =
   if self.mappings.has_key(key):
     var found = self.mappings[key]
     if found > 255:
@@ -1320,7 +1326,7 @@ proc `[]=`(self: var Scope, key: string, val: Value, max: int) {.inline.} =
   else:
     not_allowed()
 
-proc `[]=`*(self: var Scope, key: string, val: Value) {.inline.} =
+proc `[]=`*(self: var Scope, key: int64, val: Value) {.inline.} =
   if self.mappings.has_key(key):
     self.members[self.mappings[key].int] = val
   elif self.parent != nil:
@@ -1545,7 +1551,7 @@ proc to_function*(node: Value): Function {.gcsafe.} =
 
   # body = wrap_with_try(body)
   result = new_fn(name, matcher, body)
-  result.async = node.gene.props.get_or_default("async", false)
+  result.async = node.gene.props.get_or_default("async".to_key(), false)
 
 #################### Macro #######################
 
@@ -1607,19 +1613,25 @@ proc get_constructor*(self: Class): Value =
   else:
     return self.constructor
 
-proc has_method*(self: Class, name: string): bool =
+proc has_method*(self: Class, name: int64): bool =
   if self.methods.has_key(name):
     return true
   elif self.parent != nil:
     return self.parent.has_method(name)
 
-proc get_method*(self: Class, name: string): Method =
+proc has_method*(self: Class, name: string): bool {.inline.} =
+  self.has_method(name.to_key)
+
+proc get_method*(self: Class, name: int64): Method =
   if self.methods.has_key(name):
     return self.methods[name]
   elif self.parent != nil:
     return self.parent.get_method(name)
   # else:
   #   not_allowed("No method available: " & name.to_s)
+
+proc get_method*(self: Class, name: string): Method {.inline.} =
+  self.get_method(name.to_key)
 
 proc get_super_method*(self: Class, name: string): Method =
   if self.parent != nil:
@@ -1723,7 +1735,7 @@ proc is_a*(self: Value, class: Class): bool =
 proc def_native_method*(self: Class, name: string, f: NativeFn) =
   let r = new_ref(VkNativeFn)
   r.native_fn = f
-  self.methods[name] = Method(
+  self.methods[name.to_key()] = Method(
     class: self,
     name: name,
     callable: r.to_ref_value(),
@@ -1732,7 +1744,7 @@ proc def_native_method*(self: Class, name: string, f: NativeFn) =
 proc def_native_method*(self: Class, name: string, f: NativeFn2) =
   let r = new_ref(VkNativeFn2)
   r.native_fn2 = f
-  self.methods[name] = Method(
+  self.methods[name.to_key()] = Method(
     class: self,
     name: name,
     callable: r.to_ref_value(),
@@ -1741,7 +1753,7 @@ proc def_native_method*(self: Class, name: string, f: NativeFn2) =
 proc def_native_macro_method*(self: Class, name: string, f: NativeFn) =
   let r = new_ref(VkNativeFn)
   r.native_fn = f
-  self.methods[name] = Method(
+  self.methods[name.to_key()] = Method(
     class: self,
     name: name,
     callable: r.to_ref_value(),
@@ -1791,11 +1803,24 @@ converter to_value*(f: NativeFn2): Value {.inline.} =
 #################### Frame #######################
 
 const REG_DEFAULT = 6
+var FRAMES: seq[Frame] = @[]
+
+proc free*(self: var Frame) =
+  self.ref_count.dec()
+  if self.ref_count == 0:
+    if self.caller != nil:
+      self.caller.frame.free()
+    self[].reset()
+    FRAMES.add(self)
 
 proc new_frame*(): Frame =
-  Frame(
-    stack_index: REG_DEFAULT,
-  )
+  if FRAMES.len > 0:
+    result = FRAMES.pop()
+  else:
+    result = cast[Frame](alloc0(sizeof(FrameObj)))
+  # Let the caller increment the ref_count
+  result.ref_count = 0
+  result.stack_index = REG_DEFAULT
 
 proc new_frame*(ns: Namespace): Frame =
   result = new_frame()
@@ -1806,6 +1831,12 @@ proc new_frame*(caller: Caller): Frame =
   result = new_frame()
   result.caller = caller
   result.scope = new_scope()
+
+proc update*(self: var Frame, f: Frame) =
+  f.ref_count.inc()
+  if not self.is_nil:
+    self.free()
+  self = f
 
 proc current*(self: var Frame): Value =
   self.stack[self.stack_index - 1]
