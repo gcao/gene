@@ -789,6 +789,8 @@ proc `$`*(self: Value): string =
         result = "\"" & $self.str & "\""
       of VkSymbol:
         result = $self.str
+      of VkComplexSymbol:
+        result = self.ref.csymbol.join("/")
       of VkGene:
         result = $self.gene
       else:
