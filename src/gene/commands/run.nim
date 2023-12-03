@@ -1,7 +1,6 @@
 import parseopt, times
 
 import ../types
-import ../vm
 import ./base
 
 const DEFAULT_COMMAND = "run"

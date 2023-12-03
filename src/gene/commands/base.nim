@@ -2,7 +2,7 @@ import tables, logging
 
 type
   CommandManager* = ref object
-    data*: Table[int64, Command]
+    data*: Table[string, Command]
     help*: string
 
   Command* = proc(cmd: string, args: seq[string]): string
@@ -15,15 +15,15 @@ proc setup_logger*(debugging: bool) =
     console_logger.level_threshold = Level.lvlDebug
 
 proc `[]`*(self: CommandManager, cmd: string): Command =
-  if self.stack.has_key(cmd):
-    return self.stack[cmd]
+  if self.data.has_key(cmd):
+    return self.data[cmd]
 
 proc register*(self: CommandManager, c: string, cmd: Command) =
-  self.stack[c] = cmd
+  self.data[c] = cmd
 
 proc register*(self: CommandManager, cmds: seq[string], cmd: Command) =
   for c in cmds:
-    self.stack[c] = cmd
+    self.data[c] = cmd
 
 proc add_help*(self: CommandManager, help: string) =
   self.help &= help & "\n"
