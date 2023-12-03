@@ -527,7 +527,7 @@ proc compile*(f: var Function) =
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name.to_symbol_value()))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))
