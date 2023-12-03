@@ -47,12 +47,12 @@ proc exec*(self: VirtualMachine): Value =
     self.frame.push(NIL)
 
   while true:
-    let inst = self.cur_block[self.pc]
+    let inst = self.cur_block.instructions[self.pc].addr
     if inst.kind == IkStart:
       indent &= "  "
     if self.trace:
       # self.print_stack()
-      echo fmt"{indent}{self.pc:03} {inst}"
+      echo fmt"{indent}{self.pc:03} {inst[]}"
     case inst.kind:
       of IkNoop:
         discard
