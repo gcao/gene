@@ -314,7 +314,7 @@ type
     root*: RootMatcher
     kind*: MatcherKind
     next*: Matcher  # if kind is MatchData and is_splat is true, we may need to check next matcher
-    name*: string
+    name_key*: int64
     is_prop*: bool
     literal*: Value # if kind is MatchLiteral, this is required
     # match_name*: bool # Match symbol to name - useful for (myif true then ... else ...)
@@ -1374,15 +1374,15 @@ proc hint*(self: RootMatcher): MatchingHint =
 #     value: value,
 #   )
 
-proc props*(self: seq[Matcher]): HashSet[string] =
+proc props*(self: seq[Matcher]): HashSet[int64] =
   for m in self:
     if m.kind == MatchProp and not m.is_splat:
-      result.incl(m.name)
+      result.incl(m.name_key)
 
-proc prop_splat*(self: seq[Matcher]): string =
+proc prop_splat*(self: seq[Matcher]): int64 =
   for m in self:
     if m.kind == MatchProp and m.is_splat:
-      return m.name
+      return m.name_key
 
 proc parse*(self: var RootMatcher, v: Value)
 
@@ -1434,16 +1434,16 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
         if v.str.ends_with("..."):
           m.is_splat = true
           if v.str[1] == '^':
-            m.name = v.str[2..^4]
+            m.name_key = v.str[2..^4].to_key()
             m.is_prop = true
           else:
-            m.name = v.str[1..^4]
+            m.name_key = v.str[1..^4].to_key()
         else:
           if v.str[1] == '^':
-            m.name = v.str[2..^1]
+            m.name_key = v.str[2..^1].to_key()
             m.is_prop = true
           else:
-            m.name = v.str[1..^1]
+            m.name_key = v.str[1..^1].to_key()
         group.add(m)
       else:
         var m = new_matcher(self, MatchData)
@@ -1452,16 +1452,16 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
           if v.str.ends_with("..."):
             m.is_splat = true
             if v.str[0] == '^':
-              m.name = v.str[1..^4]
+              m.name_key = v.str[1..^4].to_key()
               m.is_prop = true
             else:
-              m.name = v.str[0..^4]
+              m.name_key = v.str[0..^4].to_key()
           else:
             if v.str[0] == '^':
-              m.name = v.str[1..^1]
+              m.name_key = v.str[1..^1].to_key()
               m.is_prop = true
             else:
-              m.name = v.str
+              m.name_key = v.str.to_key()
     of VkComplexSymbol:
       todo($VkComplexSymbol)
       # if v.csymbol[0] == '^':

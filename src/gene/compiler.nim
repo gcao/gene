@@ -522,12 +522,12 @@ proc compile*(f: var Function) =
     let label = cast[Label](rand(int32.high))
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: m.name.to_symbol_value(),
+      arg0: m.name_key.Value,
       arg1: label.Value,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name.to_symbol_value()))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))

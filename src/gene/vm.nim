@@ -12,15 +12,15 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
       var match_result = MatchResult()
       for i, value in args.gene.children:
         let field = matcher.children[i]
-        match_result.fields[field.name.to_key()] = MatchedField(
+        match_result.fields[field.name_key] = MatchedField(
           kind: MfSuccess,
           matcher: field,
           value: value,
         )
-        self.frame.scope.def_member(field.name.to_key(), value)
+        self.frame.scope.def_member(field.name_key, value)
       for m in matcher.children:
-        if not match_result.fields.has_key(m.name.to_key()):
-          match_result.fields[m.name.to_key()] = MatchedField(
+        if not match_result.fields.has_key(m.name_key):
+          match_result.fields[m.name_key] = MatchedField(
             kind: MfMissing,
             matcher: m,
           )
