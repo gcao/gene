@@ -518,11 +518,11 @@ proc compile*(f: var Function) =
   self.output.instructions.add(Instruction(kind: IkStart))
 
   # generate code for arguments
-  for m in f.matcher.children:
+  for i, m in f.matcher.children:
     let label = cast[Label](rand(int32.high))
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: m.name_key.Value,
+      arg0: i.Value,
       arg1: label.Value,
     ))
     if m.default_value != nil:

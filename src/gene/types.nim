@@ -333,10 +333,10 @@ type
   MatchedField* = ref object
     kind*: MatchedFieldKind
     matcher*: Matcher
-    value*: Value
+    # value*: Value
 
   MatchResult* = ref object
-    fields*: Table[int64, MatchedField]
+    fields*: seq[MatchedField]
 
   Id* = uint64
   Label* = int32
