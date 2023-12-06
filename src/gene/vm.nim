@@ -155,17 +155,17 @@ proc exec*(self: VirtualMachine): Value =
             todo($value.kind)
 
       of IkJump:
-        self.pc = self.cur_block.find_label(inst.arg0.Label)
+        self.pc = inst.arg0.int
         continue
       of IkJumpIfFalse:
         if not self.frame.pop().to_bool():
-          self.pc = self.cur_block.find_label(inst.arg0.Label)
+          self.pc = inst.arg0.int
           continue
 
       of IkJumpIfMatchSuccess:
         let mr = self.frame.match_result
         if mr.fields[inst.arg0.int64].kind == MfSuccess:
-          self.pc = self.cur_block.find_label(inst.arg1.Label)
+          self.pc = inst.arg1.int
           continue
 
       of IkLoopStart, IkLoopEnd:
@@ -229,7 +229,7 @@ proc exec*(self: VirtualMachine): Value =
         let v = self.frame.current()
         case v.kind:
           of VkFunction:
-            self.pc = self.cur_block.find_label(inst.arg0.Label)
+            self.pc = inst.arg0.int
             # TODO: delete macro-related instructions
             continue
           of VkMacro:
@@ -237,11 +237,11 @@ proc exec*(self: VirtualMachine): Value =
             discard
           of VkBoundMethod:
             if not v.ref.bound_method.method.is_macro:
-              self.pc = self.cur_block.find_label(inst.arg0.Label)
+              self.pc = inst.arg0.int
               # TODO: delete non-macro-related instructions
               continue
           of VkNativeFn, VkNativeFn2:
-            self.pc = self.cur_block.find_label(inst.arg0.Label)
+            self.pc = inst.arg0.int
             continue
           else:
             todo($v.kind)

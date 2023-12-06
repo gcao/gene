@@ -504,6 +504,16 @@ proc compile(self: var Compiler, input: Value) =
     else:
       todo($input.kind)
 
+proc update_jumps(self: var CompilationUnit) =
+  for i, inst in self.instructions:
+    case inst.kind
+      of IkJump, IkJumpIfFalse, IkContinue, IkGeneCheckType:
+        self.instructions[i].arg0 = self.find_label(inst.arg0.Label).Value
+      of IkJumpIfMatchSuccess:
+        self.instructions[i].arg1 = self.find_label(inst.arg1.Label).Value
+      else:
+        discard
+
 proc compile*(input: seq[Value]): CompilationUnit =
   var self = Compiler(output: CompilationUnit(id: new_id()))
   self.output.instructions.add(Instruction(kind: IkStart))
@@ -514,6 +524,7 @@ proc compile*(input: seq[Value]): CompilationUnit =
       self.output.instructions.add(Instruction(kind: IkPop))
 
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.update_jumps()
   result = self.output
 
 proc compile*(f: var Function) =
@@ -541,6 +552,7 @@ proc compile*(f: var Function) =
 
   self.compile(f.body)
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.update_jumps()
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
 
@@ -559,4 +571,5 @@ proc compile_init*(input: Value): CompilationUnit =
   self.compile(input)
 
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.update_jumps()
   result = self.output
