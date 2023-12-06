@@ -377,8 +377,11 @@ proc compile_gene(self: var Compiler, input: Value) =
           return
         of "-":
           self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkSub))
+          if gene.children[1].is_literal():
+            self.output.instructions.add(Instruction(kind: IkSubValue, arg0: gene.children[1]))
+          else:
+            self.compile(gene.children[1])
+            self.output.instructions.add(Instruction(kind: IkSub))
           return
         of "*":
           self.compile(`type`)
@@ -392,8 +395,11 @@ proc compile_gene(self: var Compiler, input: Value) =
           return
         of "<":
           self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkLt))
+          if gene.children[1].is_literal():
+            self.output.instructions.add(Instruction(kind: IkLtValue, arg0: gene.children[1]))
+          else:
+            self.compile(gene.children[1])
+            self.output.instructions.add(Instruction(kind: IkLt))
           return
         of "<=":
           self.compile(`type`)
