@@ -375,6 +375,7 @@ type
     IkAdd
     IkAddValue    # args: literal value
     IkSub
+    IkSubValue
     IkMul
     IkDiv
     IkPow
@@ -773,6 +774,38 @@ proc kind*(v: Value): ValueKind {.inline.} =
           return VkInt
         else:
           return VkFloat
+
+proc is_literal*(self: Value): bool =
+  {.cast(gcsafe).}:
+    let v1 = cast[uint64](self)
+    case cast[int64](v1.shr(48)):
+      of NIL_PREFIX, BOOL_PREFIX, SHORT_STR_PREFIX, LONG_STR_PREFIX:
+        result = true
+      of OTHER_PREFIX:
+        result = true
+      of SYMBOL_PREFIX:
+        result = false
+      of POINTER_PREFIX:
+        result = false
+      of REF_PREFIX:
+        let r = self.ref
+        case r.kind:
+          of VkArray:
+            for v in r.arr:
+              if not is_literal(v):
+                return false
+            return true
+          of VkMap:
+            for v in r.map.values:
+              if not is_literal(v):
+                return false
+            return true
+          else:
+            result = false
+      of GENE_PREFIX:
+        result = false
+      else:
+        result = true
 
 proc `$`*(self: Value): string =
   {.cast(gcsafe).}:

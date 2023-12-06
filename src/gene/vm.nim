@@ -341,6 +341,9 @@ proc exec*(self: VirtualMachine): Value =
       of IkSub:
         self.frame.push(-self.frame.pop().int + self.frame.pop().int)
 
+      of IkSubValue:
+        self.frame.push(-inst.arg0.int + self.frame.pop().int)
+
       of IkMul:
         self.frame.push(self.frame.pop().int * self.frame.pop().int)
 
@@ -351,6 +354,11 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkLt:
         let second = self.frame.pop().int
+        let first = self.frame.pop().int
+        self.frame.push(first < second)
+
+      of IkLtValue:
+        let second = inst.arg0.int
         let first = self.frame.pop().int
         self.frame.push(first < second)
 
