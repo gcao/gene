@@ -125,9 +125,9 @@ test_parser_error "{^a^b 1 ^a 2}"
 test_parser_error "{^a^b 1 ^a {^c 2}}"
 
 test_parser "(_ ^a^b 1)", proc(r: Value) =
-  assert r.gene.props["a"].ref.map["b"] == 1
+  assert r.gene.props["a".to_key()].ref.map["b".to_key()] == 1
 test_parser "(_ ^a^^b 1)", proc(r: Value) =
-  assert r.gene.props["a"].ref.map["b"] == TRUE
+  assert r.gene.props["a".to_key()].ref.map["b".to_key()] == TRUE
   assert r.gene.children[0] == 1
 
 test_parser "[]", @[]
@@ -173,27 +173,27 @@ test_parser """
 
 test_parser "(1 ^a 2 3 4)", proc(r: Value) =
   check r.gene.type == 1
-  check r.gene.props == to_table({"a": to_value(2)})
+  check r.gene.props == to_table({"a".to_key(): to_value(2)})
   check r.gene.children == @[to_value(3), to_value(4)]
 
 test_parser "(1 2 ^a 3 4)", proc(r: Value) =
   check r.gene.type == 1
-  check r.gene.props == to_table({"a": to_value(3)})
+  check r.gene.props == to_table({"a".to_key(): to_value(3)})
   check r.gene.children == @[to_value(2), to_value(4)]
 
 test_parser "(1 ^^a 2 3)", proc(r: Value) =
   check r.gene.type == 1
-  check r.gene.props == to_table({"a": TRUE})
+  check r.gene.props == to_table({"a".to_key(): TRUE})
   check r.gene.children == @[to_value(2), to_value(3)]
 
 test_parser "(1 ^!a 2 3)", proc(r: Value) =
   check r.gene.type == 1
-  check r.gene.props == to_table({"a": NIL})
+  check r.gene.props == to_table({"a".to_key(): NIL})
   check r.gene.children == @[to_value(2), to_value(3)]
 
 test_parser "{^^x ^!y ^^z}", proc(r: Value) =
   check r.kind == VkMap
-  check r.ref.map == to_table({"x": TRUE, "y": NIL, "z": TRUE})
+  check r.ref.map == to_table({"x".to_key(): TRUE, "y".to_key(): NIL, "z".to_key(): TRUE})
 
 test_parser ":foo", proc(r: Value) =
   check r.ref.kind == VkQuote
@@ -344,9 +344,9 @@ test_parser """
 test_parser """
   {^p #@f a}
 """, proc(r: Value) =
-  check r.ref.map["p"].kind == VkGene
-  check r.ref.map["p"].gene.type.str == "f"
-  check r.ref.map["p"].gene.children[0].str == "a"
+  check r.ref.map["p".to_key()].kind == VkGene
+  check r.ref.map["p".to_key()].gene.type.str == "f"
+  check r.ref.map["p".to_key()].gene.children[0].str == "a"
 
 test_read_all "nil", proc(r: seq[Value]) =
   check r[0] == NIL

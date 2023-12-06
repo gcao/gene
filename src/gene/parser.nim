@@ -57,9 +57,9 @@ type
 
   # ParseScope* = ref object
   #   parent*: ParseScope
-  #   mappings*: Table[string, Value]
+  #   mappings*: Table[int64, Value]
 
-  # ParseFunction* = proc(self: var Parser, scope: ParseScope, props: Table[string, Value], children: seq[Value]): Value
+  # ParseFunction* = proc(self: var Parser, scope: ParseScope, props: Table[int64, Value], children: seq[Value]): Value
 
   # ParseHandlerType* = enum
   #   PhDefault
@@ -89,7 +89,7 @@ type
 
   DelimitedListResult = object
     list: seq[Value]
-    map: Table[string, Value]
+    map: Table[int64, Value]
 
   Handler = proc(self: var Parser, input: Value): Value {.gcsafe.}
 
@@ -106,7 +106,7 @@ var DATETIME_FORMAT {.threadvar.}: TimeFormat
 var macros {.threadvar.}: MacroArray
 var dispatch_macros {.threadvar.}: MacroArray
 
-var handlers {.threadvar.}: Table[string, Handler]
+var handlers {.threadvar.}: Table[int64, Handler]
 
 #################### Interfaces ##################
 
@@ -119,7 +119,7 @@ proc read*(self: var Parser): Value {.gcsafe.}
 proc skip_comment(self: var Parser)
 proc skip_block_comment(self: var Parser) {.gcsafe.}
 proc skip_ws(self: var Parser) {.gcsafe.}
-proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.}
+proc read_map(self: var Parser, mode: MapKind): Table[int64, Value] {.gcsafe.}
 
 #################### Implementations #############
 
@@ -142,8 +142,8 @@ proc new_options*(prototype: ParseOptions): ParseOptions =
 proc extend*(self: ParseOptions): ParseOptions =
   ParseOptions(
     parent: self,
-    data: init_table[string, Value](),
-    units: init_table[string, Value](),
+    data: init_Table[string, Value](),
+    units: init_Table[string, Value](),
   )
 
 proc keys*(self: ParseOptions): HashSet[string] =
@@ -626,12 +626,12 @@ proc to_keys(self: string): seq[string] =
 
   result.add(key)
 
-proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} =
+proc read_map(self: var Parser, mode: MapKind): Table[int64, Value] {.gcsafe.} =
   var ch: char
   var key: string
   var state = PropState.PropKey
 
-  result = init_table[string, Value]()
+  result = init_Table[int64, Value]()
   var map = result.addr
 
   while true:
@@ -652,31 +652,32 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
         if self.buf[self.bufPos] == '^':
           self.bufPos.inc()
           key = self.read_token(false)
-          result[key] = TRUE
+          result[key.to_key()] = TRUE
         elif self.buf[self.bufPos] == '!':
           self.bufPos.inc()
           key = self.read_token(false)
-          result[key] = NIL
+          result[key.to_key()] = NIL
         else:
           key = self.read_token(false)
           if key.contains('^'):
             let parts = key.to_keys()
             map = result.addr
             for part in parts[0..^2]:
-              if map[].has_key(part):
-                let r = map[][part].ref
+              let key = part.to_key()
+              if map[].has_key(key):
+                let r = map[][key].ref
                 map = r.map.addr
               else:
                 var m = new_ref(VkMap)
-                map[][part] = m.to_ref_value()
+                map[][key] = m.to_ref_value()
                 map = m.map.addr
             key = parts[^1]
             case key[0]:
             of '^':
-              map[][key[1..^1]] = TRUE
+              map[][key[1..^1].to_key()] = TRUE
               continue
             of '!':
-              map[][key[1..^1]] = FALSE
+              map[][key[1..^1].to_key()] = FALSE
               continue
             else:
               discard
@@ -703,7 +704,7 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
       state = PropState.PropKey
 
       var value = self.read()
-      if map[].has_key(key):
+      if map[].has_key(key.to_key()):
         raise new_exception(ParseError, "Bad input at " & $self.bufpos & " (conflict with property shortcut found earlier.)")
         # if value.kind == VkMap:
         #   for k, v in value.map:
@@ -711,7 +712,7 @@ proc read_map(self: var Parser, mode: MapKind): Table[string, Value] {.gcsafe.} 
         # else:
         #   raise new_exception(ParseError, "Bad input: mixing map with non-map")
       else:
-        map[][key] = value
+        map[][key.to_key()] = value
 
       map = result.addr
 
@@ -776,8 +777,9 @@ proc read_gene(self: var Parser): Value {.gcsafe.} =
   gene.props = result_list.map
   gene.children = result_list.list
   if not gene.type.is_nil() and gene.type.kind == VkSymbol:
-    if handlers.has_key(gene.type.str):
-      let handler = handlers[gene.type.str]
+    let key = gene.type.int64
+    if handlers.has_key(key):
+      let handler = handlers[key]
       result = gene.to_gene_value()
       return handler(self, result)
 

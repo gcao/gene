@@ -31,9 +31,9 @@ proc `$`*(self: Instruction): string =
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()}"
     of IkJumpIfMatchSuccess:
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0.int32.to_hex()} ${$self.arg1.int32.to_hex()}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0} ${$self.arg1.int32.to_hex()}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()} ${$self.arg1.int32.to_hex()}"
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} ${$self.arg1.int32.to_hex()}"
     else:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
@@ -93,14 +93,13 @@ proc translate_symbol(input: Value): Value =
       else:
         result = input
     of VkComplexSymbol:
-
-      var parts = input.ref.csymbol
-      if parts[0].starts_with("$"):
-        parts[0] = parts[0][1..^1]
-        parts.insert("gene", 0)
-        result = parts.to_complex_symbol()
-      else:
-        result = input
+      result = input
+      let r = input.ref
+      if r.csymbol[0] == "":
+        r.csymbol[0] = "self"
+      elif r.csymbol[0].starts_with("$"):
+        r.csymbol.insert("gene", 0)
+        r.csymbol[1] = r.csymbol[1][1..^1]
     else:
       not_allowed($input)
 
@@ -108,20 +107,16 @@ proc compile_complex_symbol(self: var Compiler, input: Value) =
   if self.quote_level > 0:
     self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
   else:
-    let input = translate_symbol(input)
-    var first = input.ref.csymbol[0]
-    if first == "":
-      self.output.instructions.add(Instruction(kind: IkSelf))
-    else:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: first))
-    for s in input.ref.csymbol[1..^1]:
+    let r = translate_symbol(input).ref
+    self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+    for s in r.csymbol[1..^1]:
       let (is_int, i) = to_int(s)
       if is_int:
         self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
       elif s.starts_with("."):
         self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
       else:
-        self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s))
+        self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
 
 proc compile_symbol(self: var Compiler, input: Value) =
   if self.quote_level > 0:
@@ -152,14 +147,14 @@ proc compile_do(self: var Compiler, gene: ptr Gene) =
 
 proc compile_if(self: var Compiler, gene: ptr Gene) =
   normalize_if(gene)
-  self.compile(gene.props[COND_KEY])
+  self.compile(gene.props[COND_KEY.to_key()])
   var else_label = new_label()
   var end_label = new_label()
   self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
-  self.compile(gene.props[THEN_KEY])
+  self.compile(gene.props[THEN_KEY.to_key()])
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
   self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
-  self.compile(gene.props[ELSE_KEY])
+  self.compile(gene.props[ELSE_KEY.to_key()])
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
 proc compile_var(self: var Compiler, gene: ptr Gene) =
@@ -171,24 +166,24 @@ proc compile_var(self: var Compiler, gene: ptr Gene) =
     self.output.instructions.add(Instruction(kind: IkVarValue, arg0: name, arg1: NIL))
 
 proc compile_assignment(self: var Compiler, gene: ptr Gene) =
-  let `type` = gene.type
+  var `type` = gene.type
   if `type`.kind == VkSymbol:
     self.compile(gene.children[1])
     self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
   elif `type`.kind == VkComplexSymbol:
-    if `type`.ref.csymbol[0] == "":
-      `type`.ref.csymbol[0] = "self"
-    if `type`.ref.csymbol.len == 2:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`.ref.csymbol[0]))
-      self.compile(gene.children[1])
-      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.ref.csymbol[1]))
-    else:
-      let r = new_ref(VkComplexSymbol)
-      r.csymbol = `type`.ref.csymbol[0..^2]
-      let arg0 = r.to_ref_value()
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: arg0))
-      self.compile(gene.children[1])
-      self.output.instructions.add(Instruction(kind: IkSetMember, arg0: `type`.ref.csymbol[^1]))
+    let r = translate_symbol(`type`).ref
+    self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+    if r.csymbol.len > 2:
+      for s in r.csymbol[1..^2]:
+        let (is_int, i) = to_int(s)
+        if is_int:
+          self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
+        elif s.starts_with("."):
+          self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
+        else:
+          self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
+    self.compile(gene.children[1])
+    self.output.instructions.add(Instruction(kind: IkSetMember, arg0: r.csymbol[^1].to_key()))
   else:
     not_allowed($`type`)
 
@@ -523,16 +518,16 @@ proc compile*(f: var Function) =
   self.output.instructions.add(Instruction(kind: IkStart))
 
   # generate code for arguments
-  for m in f.matcher.children:
+  for i, m in f.matcher.children:
     let label = cast[Label](rand(int32.high))
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: m.name,
+      arg0: i.Value,
       arg1: label.Value,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))

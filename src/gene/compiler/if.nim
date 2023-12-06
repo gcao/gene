@@ -16,7 +16,7 @@ type
 
 proc normalize_if*(self: ptr Gene) =
   # TODO: return a tuple to be used by the translator
-  if self.props.has_key("cond"):
+  if self.props.has_key("cond".to_key()):
     return
   var `type` = self.type
   if `type` == "if".to_symbol_value():
@@ -33,12 +33,12 @@ proc normalize_if*(self: ptr Gene) =
         elif input == "not".to_symbol_value():
           state = IsIfNot
         else:
-          self.props["cond"] = input
+          self.props["cond".to_key()] = input
           state = IsIfCond
       of IsIfNot:
         let g = new_gene("not".to_symbol_value())
         g.children.add(input)
-        self.props["cond"] = g.to_gene_value()
+        self.props["cond".to_key()] = g.to_gene_value()
         state = IsIfCond
       of IsIfCond:
         state = IsIfLogic
@@ -52,12 +52,12 @@ proc normalize_if*(self: ptr Gene) =
           logic.add(input)
       of IsIfLogic:
         if input == nil:
-          self.props["then"] = new_stream_value(logic)
+          self.props["then".to_key()] = new_stream_value(logic)
         elif input == "elif".to_symbol_value():
-          self.props["then"] = new_stream_value(logic)
+          self.props["then".to_key()] = new_stream_value(logic)
           state = IsElif
         elif input == "else".to_symbol_value():
-          self.props["then"] = new_stream_value(logic)
+          self.props["then".to_key()] = new_stream_value(logic)
           state = IsElse
           logic = @[]
         else:
@@ -85,21 +85,21 @@ proc normalize_if*(self: ptr Gene) =
       of IsElifLogic:
         if input == nil:
           elifs.add(new_stream_value(logic))
-          self.props["elif"] = new_array_value(elifs)
+          self.props["elif".to_key()] = new_array_value(elifs)
         elif input == "elif".to_symbol_value():
           elifs.add(new_stream_value(logic))
-          self.props["elif"] = new_array_value(elifs)
+          self.props["elif".to_key()] = new_array_value(elifs)
           state = IsElif
         elif input == "else".to_symbol_value():
           elifs.add(new_stream_value(logic))
-          self.props["elif"] = new_array_value(elifs)
+          self.props["elif".to_key()] = new_array_value(elifs)
           state = IsElse
           logic = @[]
         else:
           logic.add(input)
       of IsElse:
         if input == nil:
-          self.props["else"] = new_stream_value(logic)
+          self.props["else".to_key()] = new_stream_value(logic)
         else:
           logic.add(input)
 
@@ -108,14 +108,14 @@ proc normalize_if*(self: ptr Gene) =
     handler(nil)
 
     # Add empty blocks when they are missing
-    if not self.props.has_key("then"):
-      self.props["then"] = new_stream_value()
-    if not self.props.has_key("else"):
-      self.props["else"] = new_stream_value()
+    if not self.props.has_key("then".to_key()):
+      self.props["then".to_key()] = new_stream_value()
+    if not self.props.has_key("else".to_key()):
+      self.props["else".to_key()] = new_stream_value()
 
-    if self.props["then"].ref.stream.len == 0:
-      self.props["then"].ref.stream.add(NIL)
-    if self.props["else"].ref.stream.len == 0:
-      self.props["else"].ref.stream.add(NIL)
+    if self.props["then".to_key()].ref.stream.len == 0:
+      self.props["then".to_key()].ref.stream.add(NIL)
+    if self.props["else".to_key()].ref.stream.len == 0:
+      self.props["else".to_key()].ref.stream.add(NIL)
 
     self.children.reset  # Clear our gene_children as it's not needed any more

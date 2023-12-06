@@ -20,7 +20,7 @@ test_vm """
   )
 """, proc(r: Value) =
   check r.ref.ns.name == "n"
-  check r.ref.ns["m"].ref.ns.name == "m"
+  check r.ref.ns["m".to_key()].ref.ns.name == "m"
 
 test_vm """
   (ns n

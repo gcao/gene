@@ -17,7 +17,7 @@ test_vm "[]", new_array_value()
 test_vm "[1 2]", new_array_value(1, 2)
 
 test_vm "{}", new_map_value()
-test_vm "{^a 1}", new_map_value({"a": 1.to_value()}.to_table())
+test_vm "{^a 1}", new_map_value({"a".to_key(): 1.to_value()}.to_table())
 
 test_vm "1 2 3", 3
 
@@ -110,7 +110,7 @@ test_vm """
   (var a 1)
   (var b 2)
   {^a a ^b b}
-""", new_map_value({"a": 1.Value, "b": 2.Value}.to_table)
+""", new_map_value({"a".to_key(): 1.Value, "b".to_key(): 2.Value}.to_table)
 
 test_vm """
   (var i 1)

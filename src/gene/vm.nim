@@ -12,18 +12,19 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
       var match_result = MatchResult()
       for i, value in args.gene.children:
         let field = matcher.children[i]
-        match_result.fields[field.name] = MatchedField(
+        match_result.fields.add(MatchedField(
           kind: MfSuccess,
           matcher: field,
-          value: value,
-        )
-        self.frame.scope.def_member(field.name, value)
-      for m in matcher.children:
-        if not match_result.fields.has_key(m.name):
-          match_result.fields[m.name] = MatchedField(
+          # value: value,
+        ))
+        self.frame.scope.def_member(field.name_key, value)
+      if args.gene.children.len < matcher.children.len:
+        for i in args.gene.children.len..matcher.children.len-1:
+          let field = matcher.children[i]
+          match_result.fields.add(MatchedField(
             kind: MfMissing,
-            matcher: m,
-          )
+            matcher: field,
+          ))
       self.frame.match_result = match_result
     else:
       todo($matcher.hint.mode)
@@ -42,17 +43,17 @@ proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
   var indent = ""
 
-  App.app.gene_ns.ns["_trace_start"] = proc(vm_data: VirtualMachine, args: Value): Value =
+  App.app.gene_ns.ns["_trace_start".to_key()] = proc(vm_data: VirtualMachine, args: Value): Value =
     self.trace = true
     self.frame.push(NIL)
 
   while true:
-    let inst = self.cur_block[self.pc]
+    let inst = self.cur_block.instructions[self.pc].addr
     if inst.kind == IkStart:
       indent &= "  "
     if self.trace:
       # self.print_stack()
-      echo fmt"{indent}{self.pc:03} {inst}"
+      echo fmt"{indent}{self.pc:03} {inst[]}"
     case inst.kind:
       of IkNoop:
         discard
@@ -78,12 +79,12 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVar:
         let value = self.frame.pop()
-        self.frame.scope.def_member(inst.arg0.str, value)
+        self.frame.scope.def_member(inst.arg0.int64, value)
         self.frame.push(value)
 
       of IkAssign:
         let value = self.frame.current()
-        self.frame.scope[inst.arg0.str] = value
+        self.frame.scope[inst.arg0.int64] = value
 
       of IkResolveSymbol:
         case inst.arg0.str:
@@ -95,19 +96,19 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(App.app.gene_ns)
           else:
             let scope = self.frame.scope
-            let name = inst.arg0.str
+            let name = inst.arg0.int64
             if scope.has_key(name):
               self.frame.push(scope[name])
             elif self.frame.ns.has_key(name):
               self.frame.push(self.frame.ns[name])
             else:
-              not_allowed("Unknown symbol " & name)
+              not_allowed("Unknown symbol " & name.get_symbol())
 
       of IkSelf:
         self.frame.push(self.frame.self)
 
       of IkSetMember:
-        let name = inst.arg0.str
+        let name = inst.arg0.int64
         let value = self.frame.pop()
         var target = self.frame.pop()
         case target.kind:
@@ -126,7 +127,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(value)
 
       of IkGetMember:
-        let name = inst.arg0.str
+        let name = inst.arg0.int64
         let value = self.frame.pop()
         case value.kind:
           of VkMap:
@@ -163,7 +164,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkJumpIfMatchSuccess:
         let mr = self.frame.match_result
-        if mr.fields[inst.arg0.str].kind == MfSuccess:
+        if mr.fields[inst.arg0.int64].kind == MfSuccess:
           self.pc = self.cur_block.find_label(inst.arg1.Label)
           continue
 
@@ -196,7 +197,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkMapStart:
         self.frame.push(new_map_value())
       of IkMapSetProp:
-        let key = inst.arg0.str
+        let key = inst.arg0.int64
         let val = self.frame.pop()
         self.frame.current().ref.map[key] = val
       of IkMapEnd:
@@ -249,7 +250,7 @@ proc exec*(self: VirtualMachine): Value =
         let val = self.frame.pop()
         self.frame.current().gene.type = val
       of IkGeneSetProp:
-        let key = inst.arg0.str
+        let key = inst.arg0.int64
         let val = self.frame.pop()
         self.frame.current().gene.props[key] = val
       of IkGeneAddChild:
@@ -425,7 +426,7 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkFunction)
         r.fn = f
         let v = r.to_ref_value()
-        f.ns[f.name] = v
+        f.ns[f.name.to_key()] = v
         f.parent_scope = self.frame.scope
         f.parent_scope_max = self.frame.scope.max
         self.frame.push(v)
@@ -436,7 +437,7 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkMacro)
         r.macro = m
         var v = r.to_ref_value()
-        m.ns[m.name] = v
+        m.ns[m.name.to_key()] = v
         self.frame.push(v)
 
       of IkReturn:
@@ -452,21 +453,21 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkNamespace:
-        var name = inst.arg0.str
-        var ns = new_namespace(name)
+        var name = inst.arg0
+        var ns = new_namespace(name.str)
         let r = new_ref(VkNamespace)
         r.ns = ns
         var v = r.to_ref_value()
-        self.frame.ns[name] = v
+        self.frame.ns[name.int64] = v
         self.frame.push(v)
 
       of IkClass:
-        var name = inst.arg0.str
-        var class = new_class(name)
+        var name = inst.arg0
+        var class = new_class(name.str)
         let r = new_ref(VkClass)
         r.class = class
         var v = r.to_ref_value()
-        self.frame.ns[name] = v
+        self.frame.ns[name.int64] = v
         self.frame.push(v)
 
       of IkNew:
@@ -499,12 +500,12 @@ proc exec*(self: VirtualMachine): Value =
             todo($class.constructor.kind)
 
       of IkSubClass:
-        var name = inst.arg0.str
-        var class = new_class(name)
+        var name = inst.arg0
+        var class = new_class(name.str)
         class.parent = self.frame.pop().ref.class
         let r = new_ref(VkClass)
         r.class = class
-        self.frame.ns[name] = r.to_ref_value()
+        self.frame.ns[name.int64] = r.to_ref_value()
         self.frame.push(r.to_ref_value())
 
       of IkResolveMethod:
