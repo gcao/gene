@@ -1840,7 +1840,7 @@ converter to_value*(f: NativeFn2): Value {.inline.} =
 const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
-proc free*(self: var Frame) =
+proc free*(self: var Frame) {.inline.} =
   self.ref_count.dec()
   if self.ref_count == 0:
     if self.caller != nil:
@@ -1848,7 +1848,7 @@ proc free*(self: var Frame) =
     self[].reset()
     FRAMES.add(self)
 
-proc new_frame*(): Frame =
+proc new_frame*(): Frame {.inline.} =
   if FRAMES.len > 0:
     result = FRAMES.pop()
   else:
@@ -1857,35 +1857,35 @@ proc new_frame*(): Frame =
   result.ref_count = 0
   result.stack_index = REG_DEFAULT
 
-proc new_frame*(ns: Namespace): Frame =
+proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
   result.ns = ns
   result.scope = new_scope()
 
-proc new_frame*(caller: Caller): Frame =
+proc new_frame*(caller: Caller): Frame {.inline.} =
   result = new_frame()
   result.caller = caller
   result.scope = new_scope()
 
-proc update*(self: var Frame, f: Frame) =
+proc update*(self: var Frame, f: Frame) {.inline.} =
   f.ref_count.inc()
   if not self.is_nil:
     self.free()
   self = f
 
-proc current*(self: var Frame): Value =
+proc current*(self: var Frame): Value {.inline.} =
   self.stack[self.stack_index - 1]
 
-proc push*(self: var Frame, value: Value) =
+proc push*(self: var Frame, value: Value) {.inline.} =
   self.stack[self.stack_index] = value
   self.stack_index.inc()
 
-proc pop*(self: var Frame): Value =
+proc pop*(self: var Frame): Value {.inline.} =
   self.stack_index.dec()
   result = self.stack[self.stack_index]
   self.stack[self.stack_index] = nil
 
-proc default*(self: Frame): Value =
+proc default*(self: Frame): Value {.inline.} =
   self.stack[REG_DEFAULT]
 
 #################### VM ##########################
