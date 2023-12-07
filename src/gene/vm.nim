@@ -77,12 +77,12 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.scope[inst.arg0.int64] = value
 
       of IkResolveSymbol:
-        case inst.arg0.str:
-          of "_":
+        case inst.arg0.int64:
+          of SYM_UNDERSCORE:
             self.frame.push(PLACEHOLDER)
-          of "self":
+          of SYM_SELF:
             self.frame.push(self.frame.self)
-          of "gene":
+          of SYM_GENE:
             self.frame.push(App.app.gene_ns)
           else:
             let scope = self.frame.scope

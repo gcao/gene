@@ -1925,8 +1925,15 @@ proc init_app_and_vm*() =
 
 #################### Helpers #####################
 
+const SYM_UNDERSCORE* = 0x7FF9_0000_0000_0000
+const SYM_SELF* = 0x7FF9_0000_0000_0001
+const SYM_GENE* = 0x7FF9_0000_0000_0002
+
 proc init_values*() =
   SYMBOLS = ManagedSymbols()
+  discard "_".to_symbol_value()
+  discard "self".to_symbol_value()
+  discard "gene".to_symbol_value()
 
 init_values()
 
