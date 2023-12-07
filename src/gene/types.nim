@@ -121,9 +121,10 @@ type
     # references*: References # Uncomment this when it's needed.
 
   # index of a name in a scope
-  NameIndexScope* = distinct int
+  NameIndexScope* = distinct int32
 
-  Scope* = ref object
+  ScopeObj* = object
+    ref_count*: int32
     parent*: Scope
     parent_index_max*: NameIndexScope
     members*:  seq[Value]
@@ -132,6 +133,8 @@ type
     #   second is the index in self.members
     mappings*: Table[int64, int]
     mapping_history*: seq[seq[NameIndexScope]]
+
+  Scope* = ptr ScopeObj
 
   ## This is the root of a running application
   Application* = ref object
@@ -1245,11 +1248,28 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 #################### Scope #######################
 
-proc new_scope*(): Scope = Scope(
-  members: @[],
-  mappings: Table[int64, int](),
-  mapping_history: @[],
-)
+var SCOPES: seq[Scope] = @[]
+
+proc free(self: var Scope) {.inline.} =
+  if self.is_nil:
+    return
+  self.ref_count.dec()
+  if self.ref_count == 0:
+    self[].reset()
+    SCOPES.add(self)
+
+proc update*(self: var Scope, scope: Scope) {.inline.} =
+  scope.ref_count.inc()
+  self.free()
+  self = scope
+
+proc new_scope*(): Scope =
+  if SCOPES.len > 0:
+    result = SCOPES.pop()
+  else:
+    result = cast[Scope](alloc0(sizeof(ScopeObj)))
+  # Let the caller increment the ref_count
+  result.ref_count = 0
 
 proc max*(self: Scope): NameIndexScope {.inline.} =
   return self.members.len.NameIndexScope
@@ -1836,10 +1856,13 @@ const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
 proc free*(self: var Frame) {.inline.} =
+  if self.is_nil:
+    return
   self.ref_count.dec()
   if self.ref_count == 0:
     if self.caller != nil:
       self.caller.frame.free()
+    self.scope.free()
     self[].reset()
     FRAMES.add(self)
 
@@ -1855,17 +1878,16 @@ proc new_frame*(): Frame {.inline.} =
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
   result.ns = ns
-  result.scope = new_scope()
+  result.scope.update(new_scope())
 
 proc new_frame*(caller: Caller): Frame {.inline.} =
   result = new_frame()
   result.caller = caller
-  result.scope = new_scope()
+  result.scope.update(new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   f.ref_count.inc()
-  if not self.is_nil:
-    self.free()
+  self.free()
   self = f
 
 proc current*(self: var Frame): Value {.inline.} =
