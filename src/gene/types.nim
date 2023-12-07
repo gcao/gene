@@ -1256,6 +1256,7 @@ proc free(self: var Scope) {.inline.} =
   self.ref_count.dec()
   if self.ref_count == 0:
     self[].reset()
+    self.mappings = init_table[int64, int](8)
     SCOPES.add(self)
 
 proc update*(self: var Scope, scope: Scope) {.inline.} =
@@ -1269,6 +1270,7 @@ proc new_scope*(): Scope =
     result = SCOPES.pop()
   else:
     result = cast[Scope](alloc0(sizeof(ScopeObj)))
+    result.mappings = init_table[int64, int](8)
   # Let the caller increment the ref_count
   result.ref_count = 0
 
