@@ -9,23 +9,13 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
     of MhNone:
       discard
     of MhSimpleData:
-      var match_result = MatchResult()
       for i, value in args.gene.children:
         let field = matcher.children[i]
-        match_result.fields.add(MatchedField(
-          kind: MfSuccess,
-          matcher: field,
-          # value: value,
-        ))
+        self.frame.match_result.fields.add(MfSuccess)
         self.frame.scope.def_member(field.name_key, value)
       if args.gene.children.len < matcher.children.len:
         for i in args.gene.children.len..matcher.children.len-1:
-          let field = matcher.children[i]
-          match_result.fields.add(MatchedField(
-            kind: MfMissing,
-            matcher: field,
-          ))
-      self.frame.match_result = match_result
+          self.frame.match_result.fields.add(MfMissing)
     else:
       todo($matcher.hint.mode)
 
@@ -164,7 +154,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkJumpIfMatchSuccess:
         let mr = self.frame.match_result
-        if mr.fields[inst.arg0.int64].kind == MfSuccess:
+        if mr.fields[inst.arg0.int64] == MfSuccess:
           self.pc = inst.arg1.int
           continue
 

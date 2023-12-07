@@ -330,13 +330,8 @@ type
     MfSuccess
     MfTypeMismatch # E.g. map is passed but array or gene is expected
 
-  MatchedField* = ref object
-    kind*: MatchedFieldKind
-    matcher*: Matcher
-    # value*: Value
-
-  MatchResult* = ref object
-    fields*: seq[MatchedField]
+  MatchResult* = object
+    fields*: seq[MatchedFieldKind]
 
   Id* = uint64
   Label* = int32
