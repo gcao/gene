@@ -230,7 +230,6 @@ type
     stop_inheritance*: bool  # When set to true, stop looking up for members from parent namespaces
     name*: string
     members*: Table[int64, Value]
-    proxies*: Table[int64, Value] # Ask the proxy to look it up instead of checking members and parent
     on_member_missing*: seq[Value]
 
   Class* = ref object
@@ -555,6 +554,8 @@ const OTHER_PREFIX = 0x7FFE
 
 const VOID* = cast[Value](0x7FFE_0000_0000_0000u64)
 const PLACEHOLDER* = cast[Value](0x7FFE_0100_0000_0000u64)
+# Used when a key does not exist in a map
+const NOT_FOUND* = cast[Value](0x7FFE_0200_0000_0000u64)
 
 # Special variable used by the parser
 const PARSER_IGNORE* = cast[Value](0x7FFE_0200_0000_0000u64)
@@ -1040,8 +1041,9 @@ proc get_symbol*(i: int64): string {.inline.} =
 
 proc to_symbol_value*(s: string): Value {.inline.} =
   {.cast(gcsafe).}:
-    if SYMBOLS.map.has_key(s):
-      let i = SYMBOLS.map[s].uint64
+    let found = SYMBOLS.map.get_or_default(s, -1)
+    if found != -1:
+      let i = found.uint64
       result = cast[Value](bitor(EMPTY_SYMBOL, i))
     else:
       result = cast[Value](bitor(EMPTY_SYMBOL, SYMBOLS.store.len.uint64))
@@ -1190,28 +1192,22 @@ proc get_module*(self: Namespace): Module =
 proc package*(self: Namespace): Package =
   self.get_module().pkg
 
-proc proxy*(self: Namespace, name: string, target: Value) =
-  self.proxies[name.to_key()] = target
-
 proc has_key*(self: Namespace, key: int64): bool {.inline.} =
-  if self.proxies.has_key(key):
-    return self.proxies[key].ref.ns.has_key(key)
-  else:
-    return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
+  return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
 
 proc `[]`*(self: Namespace, key: int64): Value {.inline.} =
-  if self.proxies.has_key(key):
-    return self.proxies[key].ref.ns[key]
-  elif self.members.has_key(key):
-    return self.members[key]
+  var found = self.members.get_or_default(key, NOT_FOUND)
+  if found != NOT_FOUND:
+    return found
   elif not self.stop_inheritance and self.parent != nil:
     return self.parent[key]
   else:
     raise new_exception(NotDefinedException, get_symbol(key) & " is not defined")
 
 proc locate*(self: Namespace, key: int64): (Value, Namespace) {.inline.} =
-  if self.members.has_key(key):
-    result = (self.members[key], self)
+  let found = self.members.get_or_default(key, NOT_FOUND)
+  if found != NOT_FOUND:
+    result = (found, self)
   elif not self.stop_inheritance and self.parent != nil:
     result = self.parent.locate(key)
   else:
@@ -1286,8 +1282,8 @@ proc set_parent*(self: var Scope, parent: Scope, max: NameIndexScope) {.inline.}
 #   self.members.setLen(0)
 
 proc has_key(self: Scope, key: int64, max: int): bool {.inline.} =
-  if self.mappings.has_key(key):
-    var found = self.mappings[key]
+  var found = self.mappings.get_or_default(key, -1)
+  if found != -1:
     if found < max:
       return true
     if found > 255:
@@ -1325,8 +1321,8 @@ proc def_member*(self: var Scope, key: int64, val: Value) {.inline.} =
       self.mappings[key] = (history_index + 1).shl(8) + index
 
 proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
-  if self.mappings.has_key(key):
-    var found = self.mappings[key]
+  var found = self.mappings.get_or_default(key, -1)
+  if found != -1:
     if found > 255:
       var cur = found and 0xFF
       if cur < max:
@@ -1347,8 +1343,8 @@ proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
     return self.parent[key, self.parent_index_max.int]
 
 proc `[]`*(self: Scope, key: int64): Value {.inline.} =
-  if self.mappings.has_key(key):
-    var found = self.mappings[key]
+  var found = self.mappings.get_or_default(key, -1)
+  if found != -1:
     if found > 255:
       found = found and 0xFF
     return self.members[found]
@@ -1356,8 +1352,8 @@ proc `[]`*(self: Scope, key: int64): Value {.inline.} =
     return self.parent[key, self.parent_index_max.int]
 
 proc `[]=`(self: var Scope, key: int64, val: Value, max: int) {.inline.} =
-  if self.mappings.has_key(key):
-    var found = self.mappings[key]
+  var found = self.mappings.get_or_default(key, -1)
+  if found != -1:
     if found > 255:
       var index = found and 0xFF
       if index < max:
@@ -1380,8 +1376,9 @@ proc `[]=`(self: var Scope, key: int64, val: Value, max: int) {.inline.} =
     not_allowed()
 
 proc `[]=`*(self: var Scope, key: int64, val: Value) {.inline.} =
-  if self.mappings.has_key(key):
-    self.members[self.mappings[key].int] = val
+  var found = self.mappings.get_or_default(key, -1)
+  if found != -1:
+    self.members[found] = val
   elif self.parent != nil:
     self.parent.`[]=`(key, val, self.parent_index_max.int)
   else:
@@ -1676,8 +1673,9 @@ proc has_method*(self: Class, name: string): bool {.inline.} =
   self.has_method(name.to_key)
 
 proc get_method*(self: Class, name: int64): Method =
-  if self.methods.has_key(name):
-    return self.methods[name]
+  var found = self.methods.get_or_default(name, nil)
+  if not found.is_nil:
+    return found
   elif self.parent != nil:
     return self.parent.get_method(name)
   # else:
