@@ -1259,7 +1259,8 @@ proc free(self: var Scope) {.inline.} =
     SCOPES.add(self)
 
 proc update*(self: var Scope, scope: Scope) {.inline.} =
-  scope.ref_count.inc()
+  if not scope.is_nil:
+    scope.ref_count.inc()
   self.free()
   self = scope
 
@@ -1275,12 +1276,12 @@ proc max*(self: Scope): NameIndexScope {.inline.} =
   return self.members.len.NameIndexScope
 
 proc set_parent*(self: var Scope, parent: Scope, max: NameIndexScope) {.inline.} =
-  self.parent = parent
+  self.parent.update(parent)
   self.parent_index_max = max
 
-proc reset*(self: var Scope) {.inline.} =
-  self.parent = nil
-  self.members.setLen(0)
+# proc reset*(self: var Scope) {.inline.} =
+#   self.parent = nil
+#   self.members.setLen(0)
 
 proc has_key(self: Scope, key: int64, max: int): bool {.inline.} =
   if self.mappings.has_key(key):

@@ -425,7 +425,7 @@ proc exec*(self: VirtualMachine): Value =
         r.fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
-        f.parent_scope = self.frame.scope
+        f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         self.frame.push(v)
 
