@@ -1,4 +1,4 @@
-import math, tables, sets, re, bitops, unicode, strutils, strformat
+import math, hashes, tables, sets, re, bitops, unicode, strutils, strformat
 import random
 import dynlib
 
@@ -725,6 +725,9 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
       discard
 
   # Default to false
+
+proc hash*(v: int64): Hash {.inline.} =
+  cast[Hash](v)
 
 proc kind*(v: Value): ValueKind {.inline.} =
   {.cast(gcsafe).}:
