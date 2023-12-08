@@ -338,10 +338,10 @@ proc exec*(self: VirtualMachine): Value =
               discard
 
       of IkAdd:
-        self.frame.push(self.frame.pop().int + self.frame.pop().int)
+        self.frame.replace(self.frame.pop().int + self.frame.current().int)
 
       of IkSub:
-        self.frame.push(-self.frame.pop().int + self.frame.pop().int)
+        self.frame.replace(-self.frame.pop().int + self.frame.current().int)
 
       of IkSubValue:
         self.frame.push(-inst.arg0.int + self.frame.pop().int)
@@ -356,8 +356,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkLt:
         let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first < second)
+        self.frame.replace(self.frame.current().int < second)
 
       of IkLtValue:
         let second = inst.arg0.int
