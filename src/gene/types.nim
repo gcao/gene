@@ -427,11 +427,6 @@ type
 
     IkGeneStart
     IkGeneStartDefault
-    IkGeneStartFn
-    IkGeneStartMacro
-    IkGeneStartMethod
-    IkGeneStartMacroMethod
-    IkGeneCheckType           # if type is function like, jump to label in arg0
     IkGeneSetType
     IkGeneSetProp
     IkGeneSetPropValue        # args: key, literal value

@@ -195,49 +195,58 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGeneStart:
         self.frame.push(new_gene_value())
+
       of IkGeneStartDefault:
         let v = self.frame.pop()
         self.frame.push(new_gene_value(v))
-      of IkGeneStartFn:
-        let v = self.frame.pop()
-        if v.kind == VkMacro:
-          not_allowed("Macro not allowed here")
-        self.frame.push(new_gene_value(v))
-      of IkGeneStartMacro:
-        let v = self.frame.pop()
-        if v.kind != VkMacro:
-          not_allowed("Macro expected")
-        self.frame.push(new_gene_value(v))
-      of IkGeneStartMethod:
-        let v = self.frame.pop()
-        # if v.kind != VkBoundMethod or v.bound_method.method.is_macro:
-        #   not_allowed("Macro method not allowed here")
-        self.frame.push(new_gene_value(v))
-      of IkGeneStartMacroMethod:
-        let v = self.frame.pop()
-        # if v.kind != VkBoundMethod or not v.bound_method.method.is_macro:
-        #   not_allowed("Macro method expected")
-        self.frame.push(new_gene_value(v))
-      of IkGeneCheckType:
-        let v = self.frame.current()
-        case v.kind:
-          of VkFunction:
-            self.pc = inst.arg0.int
-            # TODO: delete macro-related instructions
-            continue
-          of VkMacro:
-            # TODO: delete non-macro-related instructions
-            discard
-          of VkBoundMethod:
-            if not v.ref.bound_method.method.is_macro:
-              self.pc = inst.arg0.int
-              # TODO: delete non-macro-related instructions
-              continue
-          of VkNativeFn, VkNativeFn2:
-            self.pc = inst.arg0.int
-            continue
-          else:
-            todo($v.kind)
+        case inst.arg1.int:
+          of 1:   # Fn
+            case v.kind:
+              of VkFunction, VkNativeFn, VkNativeFn2:
+                self.pc = inst.arg0.int
+                continue
+              of VkMacro:
+                not_allowed("Macro not allowed here")
+              of VkBoundMethod:
+                if v.ref.bound_method.method.is_macro:
+                  not_allowed("Macro not allowed here")
+                else:
+                  self.pc = inst.arg0.int
+                  continue
+              else:
+                todo($v.kind)
+
+          of 2:   # Macro
+            case v.kind:
+              of VkFunction, VkNativeFn, VkNativeFn2:
+                not_allowed("Macro expected here")
+              of VkMacro:
+                discard
+              of VkBoundMethod:
+                if v.ref.bound_method.method.is_macro:
+                  discard
+                else:
+                  not_allowed("Macro expected here")
+              else:
+                todo($v.kind)
+
+          else:   # Not sure
+            case v.kind:
+              of VkFunction, VkNativeFn, VkNativeFn2:
+                inst.arg1 = 1.Value
+                self.pc = inst.arg0.int
+                continue
+              of VkMacro:
+                inst.arg1 = 2.Value
+              of VkBoundMethod:
+                if v.ref.bound_method.method.is_macro:
+                  inst.arg1 = 2.Value
+                else:
+                  inst.arg1 = 1.Value
+                  self.pc = inst.arg0.int
+                  continue
+              else:
+                todo($v.kind)
 
       of IkGeneSetType:
         let val = self.frame.pop()

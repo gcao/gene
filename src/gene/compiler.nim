@@ -282,46 +282,41 @@ proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
 proc compile_gene_unknown(self: var Compiler, gene: ptr Gene) {.inline.} =
   self.compile(gene.type)
 
-  if gene.args_are_literal():
-    self.output.instructions.add(Instruction(kind: IkGeneStartDefault))
-    for k, v in gene.props:
-      self.compile(v)
-      self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-    for child in gene.children:
-      self.compile(child)
-      self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-    self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  # if gene.args_are_literal():
+  #   self.output.instructions.add(Instruction(kind: IkGeneStartDefault))
+  #   for k, v in gene.props:
+  #     self.compile(v)
+  #     self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  #   for child in gene.children:
+  #     self.compile(child)
+  #     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  #   self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  #   return
 
-  else:
-    let fn_label = new_label()
-    let end_label = new_label()
-    self.output.instructions.add(
-      Instruction(
-        kind: IkGeneCheckType,
-        arg0: fn_label.Value,
-        # arg1: end_label.Value,
-      )
-    )
+  let fn_label = new_label()
+  let end_label = new_label()
+  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.Value))
 
-    self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
-    self.quote_level.inc()
-    for k, v in gene.props:
-      self.compile(v)
-      self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-    for child in gene.children:
-      self.compile(child)
-      self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-    self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
-    self.quote_level.dec()
+  # self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
+  self.quote_level.inc()
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.quote_level.dec()
 
-    self.output.instructions.add(Instruction(kind: IkGeneStartFn, label: fn_label))
-    for k, v in gene.props:
-      self.compile(v)
-      self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
-    for child in gene.children:
-      self.compile(child)
-      self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-    self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
+  # self.output.instructions.add(Instruction(kind: IkGeneStartFn, label: fn_label))
+  self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
+  for k, v in gene.props:
+    self.compile(v)
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
 
 # TODO: handle special cases:
 # 1. No arguments
@@ -342,15 +337,8 @@ proc compile_method_call(self: var Compiler, gene: ptr Gene) {.inline.} =
 
   let fn_label = new_label()
   let end_label = new_label()
-  self.output.instructions.add(
-    Instruction(
-      kind: IkGeneCheckType,
-      arg0: fn_label.Value,
-      arg1: end_label.Value,
-    )
-  )
+  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.Value))
 
-  self.output.instructions.add(Instruction(kind: IkGeneStartMacroMethod))
   self.quote_level.inc()
   for k, v in gene.props:
     self.compile(v)
@@ -361,7 +349,7 @@ proc compile_method_call(self: var Compiler, gene: ptr Gene) {.inline.} =
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
   self.quote_level.dec()
 
-  self.output.instructions.add(Instruction(kind: IkGeneStartMethod, label: fn_label))
+  self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
   for k, v in gene.props:
     self.compile(v)
     self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
@@ -527,7 +515,7 @@ proc compile(self: var Compiler, input: Value) =
 proc update_jumps(self: var CompilationUnit) =
   for i, inst in self.instructions:
     case inst.kind
-      of IkJump, IkJumpIfFalse, IkContinue, IkGeneCheckType:
+      of IkJump, IkJumpIfFalse, IkContinue, IkGeneStartDefault:
         self.instructions[i].arg0 = self.find_label(inst.arg0.Label).Value
       of IkJumpIfMatchSuccess:
         self.instructions[i].arg1 = self.find_label(inst.arg1.Label).Value
