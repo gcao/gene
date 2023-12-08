@@ -427,6 +427,7 @@ type
 
     IkGeneStart
     IkGeneStartDefault
+    IkGeneStartFn
     IkGeneStartMacro
     IkGeneStartMethod
     IkGeneStartMacroMethod

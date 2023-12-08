@@ -197,6 +197,9 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(new_gene_value())
       of IkGeneStartDefault:
         let v = self.frame.pop()
+        self.frame.push(new_gene_value(v))
+      of IkGeneStartFn:
+        let v = self.frame.pop()
         if v.kind == VkMacro:
           not_allowed("Macro not allowed here")
         self.frame.push(new_gene_value(v))
