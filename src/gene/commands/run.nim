@@ -53,7 +53,7 @@ proc parse_options(args: seq[string]): Options =
       discard
 
 proc handle*(cmd: string, args: seq[string]): string =
-  var options = parse_options(args)
+  let options = parse_options(args)
   setup_logger(options.debugging)
 
   # let thread_id = get_free_thread()
@@ -63,7 +63,7 @@ proc handle*(cmd: string, args: seq[string]): string =
   # VM.repl_on_error = options.repl_on_error
   # VM.app.args = options.args
 
-  var file = options.file
+  let file = options.file
   let start = cpu_time()
   var value: Value
   todo()
@@ -77,8 +77,8 @@ proc handle*(cmd: string, args: seq[string]): string =
     echo "Time: " & $(cpu_time() - start)
 
 when isMainModule:
-  var cmd = DEFAULT_COMMAND
-  var args: seq[string] = @[]
-  var status = handle(cmd, args)
+  let cmd = DEFAULT_COMMAND
+  let args: seq[string] = @[]
+  let status = handle(cmd, args)
   if status.len > 0:
     echo "Failed with error: " & status

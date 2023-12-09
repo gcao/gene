@@ -953,7 +953,7 @@ proc str*(v: Value): string {.inline.} =
     # echo v1.shr(48).int64.to_binstr
     case cast[int64](v1.shr(48)):
       of SHORT_STR_PREFIX:
-        var x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
+        let x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
         # echo x.to_binstr
         if x > 0xFF_FFFF:
           if x > 0xFFFF_FFFF:
@@ -982,11 +982,11 @@ proc str*(v: Value): string {.inline.} =
               result = ""
 
       of LONG_STR_PREFIX:
-        var x = cast[ptr String](bitand(cast[uint64](v1), AND_MASK))
+        let x = cast[ptr String](bitand(cast[uint64](v1), AND_MASK))
         result = x.str
 
       of SYMBOL_PREFIX:
-        var x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
+        let x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
         result = get_symbol(x)
 
       else:
@@ -1134,7 +1134,7 @@ proc app*(self: Value): Application {.inline.} =
 
 proc new_app*(): Application =
   result = Application()
-  var global = new_namespace("global")
+  let global = new_namespace("global")
   result.ns = global
 
 #################### Namespace ###################
@@ -1195,7 +1195,7 @@ proc has_key*(self: Namespace, key: int64): bool {.inline.} =
   return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
 
 proc `[]`*(self: Namespace, key: int64): Value {.inline.} =
-  var found = self.members.get_or_default(key, NOT_FOUND)
+  let found = self.members.get_or_default(key, NOT_FOUND)
   if found != NOT_FOUND:
     return found
   elif not self.stop_inheritance and self.parent != nil:
@@ -1245,7 +1245,7 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 var SCOPES: seq[Scope] = @[]
 
-proc free(self: var Scope) {.inline.} =
+proc free(self: Scope) {.inline.} =
   if self.is_nil:
     return
   self.ref_count.dec()
@@ -1272,11 +1272,11 @@ proc new_scope*(): Scope =
 proc max*(self: Scope): NameIndexScope {.inline.} =
   return self.members.len.NameIndexScope
 
-proc set_parent*(self: var Scope, parent: Scope, max: NameIndexScope) {.inline.} =
+proc set_parent*(self: Scope, parent: Scope, max: NameIndexScope) {.inline.} =
   self.parent.update(parent)
   self.parent_index_max = max
 
-# proc reset*(self: var Scope) {.inline.} =
+# proc reset*(self: Scope) {.inline.} =
 #   self.parent = nil
 #   self.members.setLen(0)
 
@@ -1304,7 +1304,7 @@ proc has_key*(self: Scope, key: int64): bool {.inline.} =
   elif self.parent != nil:
     return self.parent.has_key(key, self.parent_index_max.int)
 
-proc def_member*(self: var Scope, key: int64, val: Value) {.inline.} =
+proc def_member*(self: Scope, key: int64, val: Value) {.inline.} =
   var index = self.members.len
   self.members.add(val)
   if self.mappings.has_key_or_put(key, index):
@@ -1350,7 +1350,7 @@ proc `[]`*(self: Scope, key: int64): Value {.inline.} =
   elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
 
-proc `[]=`(self: var Scope, key: int64, val: Value, max: int) {.inline.} =
+proc `[]=`(self: Scope, key: int64, val: Value, max: int) {.inline.} =
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
     if found > 255:
@@ -1374,7 +1374,7 @@ proc `[]=`(self: var Scope, key: int64, val: Value, max: int) {.inline.} =
   else:
     not_allowed()
 
-proc `[]=`*(self: var Scope, key: int64, val: Value) {.inline.} =
+proc `[]=`*(self: Scope, key: int64, val: Value) {.inline.} =
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
     self.members[found] = val
@@ -1431,9 +1431,9 @@ proc prop_splat*(self: seq[Matcher]): int64 =
     if m.kind == MatchProp and m.is_splat:
       return m.name_key
 
-proc parse*(self: var RootMatcher, v: Value)
+proc parse*(self: RootMatcher, v: Value)
 
-proc calc_next*(self: var Matcher) =
+proc calc_next*(self: Matcher) =
   var last: Matcher = nil
   for m in self.children.mitems:
     m.calc_next()
@@ -1442,7 +1442,7 @@ proc calc_next*(self: var Matcher) =
         last.next = m
       last = m
 
-proc calc_next*(self: var RootMatcher) =
+proc calc_next*(self: RootMatcher) =
   var last: Matcher = nil
   for m in self.children.mitems:
     m.calc_next()
@@ -1451,7 +1451,7 @@ proc calc_next*(self: var RootMatcher) =
         last.next = m
       last = m
 
-proc calc_min_left*(self: var Matcher) =
+proc calc_min_left*(self: Matcher) =
   var min_left = 0
   var i = self.children.len
   while i > 0:
@@ -1462,7 +1462,7 @@ proc calc_min_left*(self: var Matcher) =
     if m.required:
       min_left += 1
 
-proc calc_min_left*(self: var RootMatcher) =
+proc calc_min_left*(self: RootMatcher) =
   var min_left = 0
   var i = self.children.len
   while i > 0:
@@ -1473,7 +1473,7 @@ proc calc_min_left*(self: var RootMatcher) =
     if m.required:
       min_left += 1
 
-proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
+proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
   case v.kind:
     of VkSymbol:
       if v.str[0] == '^':
@@ -1549,7 +1549,7 @@ proc parse(self: var RootMatcher, group: var seq[Matcher], v: Value) =
     else:
       todo("parse " & $v.kind)
 
-proc parse*(self: var RootMatcher, v: Value) =
+proc parse*(self: RootMatcher, v: Value) =
   if v == nil or v == to_symbol_value("_"):
     return
   self.parse(self.children, v)

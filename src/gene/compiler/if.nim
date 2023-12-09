@@ -18,7 +18,7 @@ proc normalize_if*(self: ptr Gene) =
   # TODO: return a tuple to be used by the translator
   if self.props.has_key("cond".to_key()):
     return
-  var `type` = self.type
+  let `type` = self.type
   if `type` == "if".to_symbol_value():
     # Store if/elif/else block
     var logic: seq[Value]

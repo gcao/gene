@@ -8,7 +8,7 @@ when isMainModule:
 
   init_app_and_vm()
 
-  var code = """
+  let code = """
     (fn fib n
       (if (n < 2)
         n
@@ -21,7 +21,7 @@ when isMainModule:
 
   let compiled = compile(read_all(code))
 
-  var ns = new_namespace("fibonacci")
+  let ns = new_namespace("fibonacci")
   VM.frame.update(new_frame(ns))
   VM.code_mgr.data[compiled.id] = compiled
   VM.cur_block = compiled

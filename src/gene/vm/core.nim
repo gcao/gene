@@ -1,7 +1,7 @@
 proc to_ctor(node: Value): Function =
-  var name = "ctor"
+  let name = "ctor"
 
-  var matcher = new_arg_matcher()
+  let matcher = new_arg_matcher()
   matcher.parse(node.gene.children[0])
 
   var body: seq[Value] = @[]
@@ -12,7 +12,7 @@ proc to_ctor(node: Value): Function =
   result = new_fn(name, matcher, body)
 
 proc class_ctor(self: VirtualMachine, args: Value): Value =
-  var fn = to_ctor(args)
+  let fn = to_ctor(args)
   fn.ns = self.frame.ns
   let r = new_ref(VkFunction)
   r.fn = fn
@@ -21,11 +21,11 @@ proc class_ctor(self: VirtualMachine, args: Value): Value =
 proc class_fn(self: VirtualMachine, args: Value): Value =
   let self = args.gene.type.ref.bound_method.self
   # define a fn like method on a class
-  var fn = to_function(args)
+  let fn = to_function(args)
 
   let r = new_ref(VkFunction)
   r.fn = fn
-  var m = Method(
+  let m = Method(
      name: fn.name,
     callable: r.to_ref_value(),
   )

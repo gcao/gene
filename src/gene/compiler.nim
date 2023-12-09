@@ -5,7 +5,7 @@ import ./types
 import "./compiler/if"
 
 #################### Definitions #################
-proc compile(self: var Compiler, input: Value)
+proc compile(self: Compiler, input: Value)
 
 proc new_label(): Label =
   result = rand(int32.high).Label
@@ -83,13 +83,13 @@ proc args_are_literal(self: ptr Gene): bool =
       return false
   true
 
-proc compile(self: var Compiler, input: seq[Value]) =
+proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:
     self.compile(v)
     if i < input.len - 1:
       self.output.instructions.add(Instruction(kind: IkPop))
 
-proc compile_literal(self: var Compiler, input: Value) =
+proc compile_literal(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
 
 # Translate $x to gene/x and $x/y to gene/x/y
@@ -112,7 +112,7 @@ proc translate_symbol(input: Value): Value =
     else:
       not_allowed($input)
 
-proc compile_complex_symbol(self: var Compiler, input: Value) =
+proc compile_complex_symbol(self: Compiler, input: Value) =
   if self.quote_level > 0:
     self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
   else:
@@ -127,7 +127,7 @@ proc compile_complex_symbol(self: var Compiler, input: Value) =
       else:
         self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
 
-proc compile_symbol(self: var Compiler, input: Value) =
+proc compile_symbol(self: Compiler, input: Value) =
   if self.quote_level > 0:
     self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
   else:
@@ -137,28 +137,28 @@ proc compile_symbol(self: var Compiler, input: Value) =
     elif input.kind == VkComplexSymbol:
       self.compile_complex_symbol(input)
 
-proc compile_array(self: var Compiler, input: Value) =
+proc compile_array(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkArrayStart))
   for child in input.ref.arr:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkArrayAddChild))
   self.output.instructions.add(Instruction(kind: IkArrayEnd))
 
-proc compile_map(self: var Compiler, input: Value) =
+proc compile_map(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMapStart))
   for k, v in input.ref.map:
     self.compile(v)
     self.output.instructions.add(Instruction(kind: IkMapSetProp, arg0: k))
   self.output.instructions.add(Instruction(kind: IkMapEnd))
 
-proc compile_do(self: var Compiler, gene: ptr Gene) =
+proc compile_do(self: Compiler, gene: ptr Gene) =
   self.compile(gene.children)
 
-proc compile_if(self: var Compiler, gene: ptr Gene) =
+proc compile_if(self: Compiler, gene: ptr Gene) =
   normalize_if(gene)
   self.compile(gene.props[COND_KEY.to_key()])
-  var else_label = new_label()
-  var end_label = new_label()
+  let else_label = new_label()
+  let end_label = new_label()
   self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
   self.compile(gene.props[THEN_KEY.to_key()])
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
@@ -166,7 +166,7 @@ proc compile_if(self: var Compiler, gene: ptr Gene) =
   self.compile(gene.props[ELSE_KEY.to_key()])
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
-proc compile_var(self: var Compiler, gene: ptr Gene) =
+proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
   if gene.children.len > 1:
     self.compile(gene.children[1])
@@ -174,8 +174,8 @@ proc compile_var(self: var Compiler, gene: ptr Gene) =
   else:
     self.output.instructions.add(Instruction(kind: IkVarValue, arg0: name, arg1: NIL))
 
-proc compile_assignment(self: var Compiler, gene: ptr Gene) =
-  var `type` = gene.type
+proc compile_assignment(self: Compiler, gene: ptr Gene) =
+  let `type` = gene.type
   if `type`.kind == VkSymbol:
     self.compile(gene.children[1])
     self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
@@ -196,34 +196,34 @@ proc compile_assignment(self: var Compiler, gene: ptr Gene) =
   else:
     not_allowed($`type`)
 
-proc compile_loop(self: var Compiler, gene: ptr Gene) =
-  var label = new_label()
+proc compile_loop(self: Compiler, gene: ptr Gene) =
+  let label = new_label()
   self.output.instructions.add(Instruction(kind: IkLoopStart, label: label))
   self.compile(gene.children)
   self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.Value))
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: label))
 
-proc compile_break(self: var Compiler, gene: ptr Gene) =
+proc compile_break(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   self.output.instructions.add(Instruction(kind: IkBreak))
 
-proc compile_fn(self: var Compiler, input: Value) =
+proc compile_fn(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
 
-proc compile_return(self: var Compiler, gene: ptr Gene) =
+proc compile_return(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   self.output.instructions.add(Instruction(kind: IkReturn))
 
-proc compile_macro(self: var Compiler, input: Value) =
+proc compile_macro(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMacro, arg0: input))
 
-proc compile_ns(self: var Compiler, gene: ptr Gene) =
+proc compile_ns(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkNamespace, arg0: gene.children[0]))
   if gene.children.len > 1:
     let body = new_stream_value(gene.children[1..^1])
@@ -231,7 +231,7 @@ proc compile_ns(self: var Compiler, gene: ptr Gene) =
     self.output.instructions.add(Instruction(kind: IkCompileInit))
     self.output.instructions.add(Instruction(kind: IkCallInit))
 
-proc compile_class(self: var Compiler, gene: ptr Gene) =
+proc compile_class(self: Compiler, gene: ptr Gene) =
   var body_start = 1
   if gene.children.len >= 3 and gene.children[1] == "<".to_symbol_value():
     body_start = 3
@@ -248,7 +248,7 @@ proc compile_class(self: var Compiler, gene: ptr Gene) =
 
 # Construct a Gene object whose type is the class
 # The Gene object will be used as the arguments to the constructor
-proc compile_new(self: var Compiler, gene: ptr Gene) =
+proc compile_new(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkGeneStart))
   self.compile(gene.children[0])
   self.output.instructions.add(Instruction(kind: IkGeneSetType))
@@ -257,7 +257,7 @@ proc compile_new(self: var Compiler, gene: ptr Gene) =
   # self.output.instructions.add(Instruction(kind: IkGeneEnd))
   self.output.instructions.add(Instruction(kind: IkNew))
 
-proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
+proc compile_gene_default(self: Compiler, gene: ptr Gene) {.inline.} =
   self.output.instructions.add(Instruction(kind: IkGeneStart))
   self.compile(gene.type)
   self.output.instructions.add(Instruction(kind: IkGeneSetType))
@@ -279,7 +279,7 @@ proc compile_gene_default(self: var Compiler, gene: ptr Gene) {.inline.} =
 # * Compile arguments assuming it is a function call
 # * GeneLabel: GeneEnd
 # Similar logic is used for regular method calls and macro-method calls
-proc compile_gene_unknown(self: var Compiler, gene: ptr Gene) {.inline.} =
+proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
   self.compile(gene.type)
 
   # if gene.args_are_literal():
@@ -325,7 +325,7 @@ proc compile_gene_unknown(self: var Compiler, gene: ptr Gene) {.inline.} =
 # self, method_name, arguments
 # self + method_name => bounded_method_object (is composed of self, class, method_object(is composed of name, logic))
 # (bounded_method_object ...arguments)
-proc compile_method_call(self: var Compiler, gene: ptr Gene) {.inline.} =
+proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
   if gene.type.kind == VkSymbol and gene.type.str.starts_with("."):
     self.output.instructions.add(Instruction(kind: IkSelf))
     self.output.instructions.add(Instruction(kind: IkResolveMethod, arg0: gene.type.str[1..^1]))
@@ -359,7 +359,7 @@ proc compile_method_call(self: var Compiler, gene: ptr Gene) {.inline.} =
 
   self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
 
-proc compile_gene(self: var Compiler, input: Value) =
+proc compile_gene(self: Compiler, input: Value) =
   let gene = input.gene
   if self.quote_level > 0 or gene.type == "_".to_symbol_value() or gene.type.kind == VkQuote:
     self.compile_gene_default(gene)
@@ -367,7 +367,7 @@ proc compile_gene(self: var Compiler, input: Value) =
 
   let `type` = gene.type
   if gene.children.len > 0:
-    var first = gene.children[0]
+    let first = gene.children[0]
     if first.kind == VkSymbol:
       case first.str:
         of "=":
@@ -487,7 +487,7 @@ proc compile_gene(self: var Compiler, input: Value) =
 
   self.compile_gene_unknown(gene)
 
-proc compile(self: var Compiler, input: Value) =
+proc compile(self: Compiler, input: Value) =
   case input.kind:
     of VkInt, VkBool, VkNil:
       self.compile_literal(input)
@@ -512,7 +512,7 @@ proc compile(self: var Compiler, input: Value) =
     else:
       todo($input.kind)
 
-proc update_jumps(self: var CompilationUnit) =
+proc update_jumps(self: CompilationUnit) =
   for i, inst in self.instructions:
     case inst.kind
       of IkJump, IkJumpIfFalse, IkContinue, IkGeneStartDefault:
@@ -523,7 +523,7 @@ proc update_jumps(self: var CompilationUnit) =
         discard
 
 proc compile*(input: seq[Value]): CompilationUnit =
-  var self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: CompilationUnit(id: new_id()))
   self.output.instructions.add(Instruction(kind: IkStart))
 
   for i, v in input:
@@ -535,11 +535,11 @@ proc compile*(input: seq[Value]): CompilationUnit =
   self.output.update_jumps()
   result = self.output
 
-proc compile*(f: var Function) =
+proc compile*(f: Function) =
   if f.body_compiled != nil:
     return
 
-  var self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: CompilationUnit(id: new_id()))
   self.output.instructions.add(Instruction(kind: IkStart))
 
   # generate code for arguments
@@ -564,7 +564,7 @@ proc compile*(f: var Function) =
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
 
-proc compile*(m: var Macro) =
+proc compile*(m: Macro) =
   if m.body_compiled != nil:
     return
 
@@ -572,7 +572,7 @@ proc compile*(m: var Macro) =
   m.body_compiled.matcher = m.matcher
 
 proc compile_init*(input: Value): CompilationUnit =
-  var self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: CompilationUnit(id: new_id()))
   self.output.skip_return = true
   self.output.instructions.add(Instruction(kind: IkStart))
 

@@ -100,7 +100,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkSetMember:
         let name = inst.arg0.int64
         let value = self.frame.pop()
-        var target = self.frame.pop()
+        let target = self.frame.pop()
         case target.kind:
           of VkMap:
             target.ref.map[name] = value
@@ -271,7 +271,7 @@ proc exec*(self: VirtualMachine): Value =
               gene_type.ref.fn.compile()
               self.code_mgr.data[gene_type.ref.fn.body_compiled.id] = gene_type.ref.fn.body_compiled
 
-              var caller = Caller(
+              let caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
               )
               caller.frame.update(self.frame)
@@ -290,7 +290,7 @@ proc exec*(self: VirtualMachine): Value =
               gene_type.ref.macro.compile()
               self.code_mgr.data[gene_type.ref.macro.body_compiled.id] = gene_type.ref.macro.body_compiled
 
-              var caller = Caller(
+              let caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
               )
               caller.frame.update(self.frame)
@@ -315,11 +315,11 @@ proc exec*(self: VirtualMachine): Value =
                 of VkFunction:
                   self.pc.inc()
 
-                  var fn = meth.callable.ref.fn
+                  let fn = meth.callable.ref.fn
                   fn.compile()
                   self.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
-                  var caller = Caller(
+                  let caller = Caller(
                     address: Address(id: self.cur_block.id, pc: self.pc),
                   )
                   caller.frame.update(self.frame)
@@ -418,7 +418,7 @@ proc exec*(self: VirtualMachine): Value =
             todo($obj.kind)
 
         self.pc.inc()
-        var caller = Caller(
+        let caller = Caller(
           address: Address(id: self.cur_block.id, pc: self.pc),
         )
         caller.frame.update(self.frame)
@@ -430,7 +430,7 @@ proc exec*(self: VirtualMachine): Value =
         continue
 
       of IkFunction:
-        var f = to_function(inst.arg0)
+        let f = to_function(inst.arg0)
         f.ns = self.frame.ns
         let r = new_ref(VkFunction)
         r.fn = f
@@ -441,11 +441,11 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(v)
 
       of IkMacro:
-        var m = to_macro(inst.arg0)
+        let m = to_macro(inst.arg0)
         m.ns = self.frame.ns
         let r = new_ref(VkMacro)
         r.macro = m
-        var v = r.to_ref_value()
+        let v = r.to_ref_value()
         m.ns[m.name.to_key()] = v
         self.frame.push(v)
 
@@ -462,26 +462,26 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkNamespace:
-        var name = inst.arg0
-        var ns = new_namespace(name.str)
+        let name = inst.arg0
+        let ns = new_namespace(name.str)
         let r = new_ref(VkNamespace)
         r.ns = ns
-        var v = r.to_ref_value()
+        let v = r.to_ref_value()
         self.frame.ns[name.int64] = v
         self.frame.push(v)
 
       of IkClass:
-        var name = inst.arg0
-        var class = new_class(name.str)
+        let name = inst.arg0
+        let class = new_class(name.str)
         let r = new_ref(VkClass)
         r.class = class
-        var v = r.to_ref_value()
+        let v = r.to_ref_value()
         self.frame.ns[name.int64] = v
         self.frame.push(v)
 
       of IkNew:
-        var v = self.frame.pop()
-        var instance = new_ref(VkInstance)
+        let v = self.frame.pop()
+        let instance = new_ref(VkInstance)
         instance.instance_class = v.gene.type.ref.class
         self.frame.push(instance.to_ref_value())
 
@@ -493,7 +493,7 @@ proc exec*(self: VirtualMachine): Value =
             compiled.skip_return = true
 
             self.pc.inc()
-            var caller = Caller(
+            let caller = Caller(
               address: Address(id: self.cur_block.id, pc: self.pc),
             )
             caller.frame.update(self.frame)
@@ -509,8 +509,8 @@ proc exec*(self: VirtualMachine): Value =
             todo($class.constructor.kind)
 
       of IkSubClass:
-        var name = inst.arg0
-        var class = new_class(name.str)
+        let name = inst.arg0
+        let class = new_class(name.str)
         class.parent = self.frame.pop().ref.class
         let r = new_ref(VkClass)
         r.class = class
@@ -518,7 +518,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(r.to_ref_value())
 
       of IkResolveMethod:
-        var v = self.frame.pop()
+        let v = self.frame.pop()
         let class = v.get_class()
         let meth = class.get_method(inst.arg0.str)
         let r = new_ref(VkBoundMethod)
@@ -540,11 +540,11 @@ proc exec*(self: VirtualMachine): Value =
           of VkFunction:
             self.pc.inc()
 
-            var fn = meth.callable.ref.fn
+            let fn = meth.callable.ref.fn
             fn.compile()
             self.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
-            var caller = Caller(
+            let caller = Caller(
               address: Address(id: self.cur_block.id, pc: self.pc),
             )
             caller.frame.update(self.frame)
@@ -592,7 +592,7 @@ proc exec*(self: VirtualMachine): Value =
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))
 
-  var ns = new_namespace(module_name)
+  let ns = new_namespace(module_name)
   self.frame.update(new_frame(ns))
   self.code_mgr.data[compiled.id] = compiled
   self.cur_block = compiled
