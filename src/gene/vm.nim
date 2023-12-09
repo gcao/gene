@@ -10,7 +10,9 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
       discard
     of MhSimpleData:
       for i, value in args.gene.children:
+        {.push checks: off}
         let field = matcher.children[i]
+        {.pop.}
         self.frame.match_result.fields.add(MfSuccess)
         self.frame.scope.def_member(field.name_key, value)
       if args.gene.children.len < matcher.children.len:
@@ -38,7 +40,9 @@ proc exec*(self: VirtualMachine): Value =
     self.frame.push(NIL)
 
   while true:
+    {.push checks: off}
     let inst = self.cur_block.instructions[self.pc].addr
+    {.pop.}
     if inst.kind == IkStart:
       indent &= "  "
     if self.trace:

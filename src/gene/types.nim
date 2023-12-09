@@ -955,6 +955,7 @@ proc str*(v: Value): string {.inline.} =
       of SHORT_STR_PREFIX:
         let x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
         # echo x.to_binstr
+        {.push checks: off}
         if x > 0xFF_FFFF:
           if x > 0xFFFF_FFFF:
             if x > 0xFF_FFFF_FFFF: # 6 chars
@@ -980,6 +981,7 @@ proc str*(v: Value): string {.inline.} =
               copy_mem(result[0].addr, x.addr, 1)
             else: # 0 char
               result = ""
+        {.pop.}
 
       of LONG_STR_PREFIX:
         let x = cast[ptr String](bitand(cast[uint64](v1), AND_MASK))
@@ -993,6 +995,7 @@ proc str*(v: Value): string {.inline.} =
         not_allowed(fmt"${v} is not a string.")
 
 converter to_value*(v: string): Value {.inline.} =
+  {.push checks: off}
   case v.len:
     of 0:
       return cast[Value](EMPTY_STRING)
@@ -1019,6 +1022,7 @@ converter to_value*(v: string): Value {.inline.} =
       s.ref_count = 1
       s.str = v
       result = cast[Value](bitor(LONG_STR_MASK, cast[uint64](s)))
+  {.pop.}
 
 converter to_value*(v: Rune): Value {.inline.} =
   let rune_value = v.ord.uint64
@@ -1320,6 +1324,7 @@ proc def_member*(self: Scope, key: int64, val: Value) {.inline.} =
       self.mappings[key] = (history_index + 1).shl(8) + index
 
 proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
+  {.push checks: off}
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
     if found > 255:
@@ -1340,8 +1345,10 @@ proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
 
   if self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
+  {.pop.}
 
 proc `[]`*(self: Scope, key: int64): Value {.inline.} =
+  {.push checks: off}
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
     if found > 255:
@@ -1349,8 +1356,10 @@ proc `[]`*(self: Scope, key: int64): Value {.inline.} =
     return self.members[found]
   elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
+  {.pop.}
 
 proc `[]=`(self: Scope, key: int64, val: Value, max: int) {.inline.} =
+  {.push checks: off}
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
     if found > 255:
@@ -1373,8 +1382,10 @@ proc `[]=`(self: Scope, key: int64, val: Value, max: int) {.inline.} =
     self.parent.`[]=`(key, val, self.parent_index_max.int)
   else:
     not_allowed()
+  {.pop.}
 
 proc `[]=`*(self: Scope, key: int64, val: Value) {.inline.} =
+  {.push checks: off}
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
     self.members[found] = val
@@ -1382,6 +1393,7 @@ proc `[]=`*(self: Scope, key: int64, val: Value) {.inline.} =
     self.parent.`[]=`(key, val, self.parent_index_max.int)
   else:
     not_allowed()
+  {.pop.}
 
 #################### Pattern Matching ############
 
@@ -1452,6 +1464,7 @@ proc calc_next*(self: RootMatcher) =
       last = m
 
 proc calc_min_left*(self: Matcher) =
+  {.push checks: off}
   var min_left = 0
   var i = self.children.len
   while i > 0:
@@ -1461,8 +1474,10 @@ proc calc_min_left*(self: Matcher) =
     m.min_left = min_left
     if m.required:
       min_left += 1
+  {.pop.}
 
 proc calc_min_left*(self: RootMatcher) =
+  {.push checks: off}
   var min_left = 0
   var i = self.children.len
   while i > 0:
@@ -1472,8 +1487,10 @@ proc calc_min_left*(self: RootMatcher) =
     m.min_left = min_left
     if m.required:
       min_left += 1
+  {.pop.}
 
 proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
+  {.push checks: off}
   case v.kind:
     of VkSymbol:
       if v.str[0] == '^':
@@ -1548,6 +1565,7 @@ proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
       # group.add(m)
     else:
       todo("parse " & $v.kind)
+  {.pop.}
 
 proc parse*(self: RootMatcher, v: Value) =
   if v == nil or v == to_symbol_value("_"):
