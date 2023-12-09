@@ -1,3 +1,7 @@
+proc trace_start(self: VirtualMachine, args: Value): Value =
+  self.trace = true
+  self.frame.push(NIL)
+
 proc to_ctor(node: Value): Function =
   let name = "ctor"
 
@@ -42,9 +46,11 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
     not_allowed()
 
 VMCreatedCallbacks.add proc() =
+  App.app.gene_ns.ns["_trace_start".to_key()] = trace_start
+
   let class = new_class("Class")
   class.def_native_macro_method "ctor", class_ctor
   class.def_native_macro_method "fn", class_fn
   let r = new_ref(VkClass)
   r.class = class
-  App.ref.app.class_class = r.to_ref_value()
+  App.app.class_class = r.to_ref_value()

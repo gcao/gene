@@ -35,10 +35,6 @@ proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
   var indent = ""
 
-  App.app.gene_ns.ns["_trace_start".to_key()] = proc(vm_data: VirtualMachine, args: Value): Value =
-    self.trace = true
-    self.frame.push(NIL)
-
   while true:
     {.push checks: off}
     let inst = self.cur_block.instructions[self.pc].addr
