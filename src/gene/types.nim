@@ -1914,14 +1914,14 @@ proc current*(self: var Frame): Value {.inline.} =
 proc replace*(self: var Frame, v: Value) {.inline.} =
   self.stack[self.stack_index - 1] = v
 
-proc push*(self: var Frame, value: Value) {.inline.} =
+proc push*(self: var Frame, value: sink Value) {.inline.} =
   self.stack[self.stack_index] = value
   self.stack_index.inc()
 
 proc pop*(self: var Frame): Value {.inline.} =
   self.stack_index.dec()
   result = self.stack[self.stack_index]
-  self.stack[self.stack_index] = nil
+  self.stack[self.stack_index] = NIL
 
 proc default*(self: Frame): Value {.inline.} =
   self.stack[REG_DEFAULT]
