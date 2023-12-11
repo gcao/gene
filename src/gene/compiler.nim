@@ -74,14 +74,14 @@ proc find_loop_end*(self: CompilationUnit, pos: int): int =
       return pos
   not_allowed("Loop end not found")
 
-proc args_are_literal(self: ptr Gene): bool =
-  for k, v in self.props:
-    if not v.is_literal():
-      return false
-  for v in self.children:
-    if not v.is_literal():
-      return false
-  true
+# proc args_are_literal(self: ptr Gene): bool =
+#   for k, v in self.props:
+#     if not v.is_literal():
+#       return false
+#   for v in self.children:
+#     if not v.is_literal():
+#       return false
+#   true
 
 proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:

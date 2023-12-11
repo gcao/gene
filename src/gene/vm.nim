@@ -68,9 +68,7 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkVar:
-        let value = self.frame.pop()
-        self.frame.scope.def_member(inst.arg0.int64, value)
-        self.frame.push(value)
+        self.frame.scope.def_member(inst.arg0.int64, self.frame.current())
 
       of IkAssign:
         let value = self.frame.current()
@@ -148,7 +146,9 @@ proc exec*(self: VirtualMachine): Value =
         self.pc = inst.arg0.int
         continue
       of IkJumpIfFalse:
-        if not self.frame.pop().to_bool():
+        var value: Value
+        self.frame.pop2(value)
+        if not value.to_bool():
           self.pc = inst.arg0.int
           continue
 
@@ -197,7 +197,8 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(new_gene_value())
 
       of IkGeneStartDefault:
-        let v = self.frame.pop()
+        var v: Value
+        self.frame.pop2(v)
         self.frame.push(new_gene_value(v))
         case inst.arg1.int:
           of 1:   # Fn
@@ -257,6 +258,8 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.current().gene.props[key] = val
       of IkGeneAddChild:
         let child = self.frame.pop()
+        # var child: Value
+        # self.frame.pop2(child)
         self.frame.current().gene.children.add(child)
 
       of IkGeneEnd:
@@ -338,13 +341,16 @@ proc exec*(self: VirtualMachine): Value =
               discard
 
       of IkAdd:
-        self.frame.replace(self.frame.pop().int + self.frame.current().int)
+        var second: Value
+        self.frame.pop2(second)
+        self.frame.replace(self.frame.current().int + second.int)
 
       of IkSub:
-        self.frame.replace(-self.frame.pop().int + self.frame.current().int)
-
+        var second: Value
+        self.frame.pop2(second)
+        self.frame.replace(self.frame.current().int - second.int)
       of IkSubValue:
-        self.frame.push(-inst.arg0.int + self.frame.pop().int)
+        self.frame.replace(self.frame.current().int - inst.arg0.int)
 
       of IkMul:
         self.frame.push(self.frame.pop().int * self.frame.pop().int)
@@ -355,13 +361,13 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(first / second)
 
       of IkLt:
-        let second = self.frame.pop().int
-        self.frame.replace(self.frame.current().int < second)
-
+        var second: Value
+        self.frame.pop2(second)
+        self.frame.replace(self.frame.current().int < second.int)
       of IkLtValue:
-        let second = inst.arg0.int
-        let first = self.frame.pop().int
-        self.frame.push(first < second)
+        var first: Value
+        self.frame.pop2(first)
+        self.frame.push(first.int < inst.arg0.int)
 
       of IkLe:
         let second = self.frame.pop().int

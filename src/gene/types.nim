@@ -1923,6 +1923,11 @@ proc pop*(self: var Frame): Value {.inline.} =
   result = self.stack[self.stack_index]
   self.stack[self.stack_index] = NIL
 
+proc pop2*(self: var Frame, to: var Value) {.inline.} =
+  self.stack_index.dec()
+  copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
+  self.stack[self.stack_index] = NIL
+
 proc default*(self: Frame): Value {.inline.} =
   self.stack[REG_DEFAULT]
 
