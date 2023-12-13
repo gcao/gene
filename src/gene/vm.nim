@@ -5,7 +5,7 @@ import ./parser
 import ./compiler
 
 proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
-  case matcher.hint.mode:
+  case matcher.hint_mode:
     of MhNone:
       discard
     of MhSimpleData:
@@ -19,7 +19,7 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
         for i in args.gene.children.len..matcher.children.len-1:
           self.frame.match_result.fields.add(MfMissing)
     else:
-      todo($matcher.hint.mode)
+      todo($matcher.hint_mode)
 
 # proc print_stack(self: VirtualMachine) =
 #   var s = "Stack: "

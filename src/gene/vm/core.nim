@@ -7,6 +7,7 @@ proc to_ctor(node: Value): Function =
 
   let matcher = new_arg_matcher()
   matcher.parse(node.gene.children[0])
+  matcher.check_hint()
 
   var body: seq[Value] = @[]
   for i in 1..<node.gene.children.len:
