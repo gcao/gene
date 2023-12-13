@@ -1872,7 +1872,7 @@ proc pop*(self: var Frame): Value {.inline.} =
   result = self.stack[self.stack_index]
   self.stack[self.stack_index] = NIL
 
-proc pop2*(self: var Frame, to: var Value) {.inline.} =
+template pop2*(self: var Frame, to: var Value) =
   self.stack_index.dec()
   copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
   self.stack[self.stack_index] = NIL
