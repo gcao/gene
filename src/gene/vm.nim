@@ -97,8 +97,10 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkSetMember:
         let name = inst.arg0.int64
-        let value = self.frame.pop()
-        let target = self.frame.pop()
+        var value: Value
+        self.frame.pop2(value)
+        var target: Value
+        self.frame.pop2(target)
         case target.kind:
           of VkMap:
             target.ref.map[name] = value
@@ -116,7 +118,8 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGetMember:
         let name = inst.arg0.int64
-        let value = self.frame.pop()
+        var value: Value
+        self.frame.pop2(value)
         case value.kind:
           of VkMap:
             self.frame.push(value.ref.map[name])
@@ -133,7 +136,8 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGetChild:
         let i = inst.arg0.int
-        let value = self.frame.pop()
+        var value: Value
+        self.frame.pop2(value)
         case value.kind:
           of VkArray:
             self.frame.push(value.ref.arr[i])
@@ -178,7 +182,8 @@ proc exec*(self: VirtualMachine): Value =
       of IkArrayStart:
         self.frame.push(new_array_value())
       of IkArrayAddChild:
-        let child = self.frame.pop()
+        var child: Value
+        self.frame.pop2(child)
         self.frame.current().ref.arr.add(child)
       of IkArrayEnd:
         discard
@@ -187,8 +192,9 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(new_map_value())
       of IkMapSetProp:
         let key = inst.arg0.int64
-        let val = self.frame.pop()
-        self.frame.current().ref.map[key] = val
+        var value: Value
+        self.frame.pop2(value)
+        self.frame.current().ref.map[key] = value
       of IkMapEnd:
         discard
 
@@ -249,16 +255,17 @@ proc exec*(self: VirtualMachine): Value =
                 todo($v.kind)
 
       of IkGeneSetType:
-        let val = self.frame.pop()
-        self.frame.current().gene.type = val
+        var value: Value
+        self.frame.pop2(value)
+        self.frame.current().gene.type = value
       of IkGeneSetProp:
         let key = inst.arg0.int64
-        let val = self.frame.pop()
-        self.frame.current().gene.props[key] = val
+        var value: Value
+        self.frame.pop2(value)
+        self.frame.current().gene.props[key] = value
       of IkGeneAddChild:
-        let child = self.frame.pop()
-        # var child: Value
-        # self.frame.pop2(child)
+        var child: Value
+        self.frame.pop2(child)
         self.frame.current().gene.children.add(child)
 
       of IkGeneEnd:
