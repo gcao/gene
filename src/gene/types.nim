@@ -132,7 +132,6 @@ type
     #   first is the optional index in self.mapping_history + 1
     #   second is the index in self.members
     mappings*: Table[int64, int]
-    mapping_history*: seq[seq[NameIndexScope]]
 
   Scope* = ptr ScopeObj
 
@@ -1285,21 +1284,10 @@ proc set_parent*(self: Scope, parent: Scope, max: NameIndexScope) {.inline.} =
 #   self.members.setLen(0)
 
 proc has_key(self: Scope, key: int64, max: int): bool {.inline.} =
-  var found = self.mappings.get_or_default(key, -1)
-  if found != -1:
-    if found < max:
-      return true
-    if found > 255:
-      var index = found and 0xFF
-      if index < max:
-        return true
-      var history_index = found.shr(8) - 1
-      var history = self.mapping_history[history_index]
-      # If first >= max, all others will be >= max
-      if history[0].int < max:
-        return true
-
-  if self.parent != nil:
+  var found = self.mappings.get_or_default(key, max)
+  if found < max:
+    return true
+  elif self.parent != nil:
     return self.parent.has_key(key, self.parent_index_max.int)
 
 proc has_key*(self: Scope, key: int64): bool {.inline.} =
@@ -1309,41 +1297,19 @@ proc has_key*(self: Scope, key: int64): bool {.inline.} =
     return self.parent.has_key(key, self.parent_index_max.int)
 
 proc def_member*(self: Scope, key: int64, val: Value) {.inline.} =
-  var index = self.members.len
-  self.members.add(val)
-  if self.mappings.has_key_or_put(key, index):
-    var cur = self.mappings[key]
-    if cur > 255:
-      todo()
-      # var history_index = cur.shr(8) - 1
-      # self.mapping_history[history_index].add(cur and 0xFF)
-      # self.mappings[key] = (cur and 0b1111111100000000) + index
-    else:
-      var history_index = self.mapping_history.len
-      self.mapping_history.add(@[NameIndexScope(cur)])
-      self.mappings[key] = (history_index + 1).shl(8) + index
+  if self.mappings.has_key(key):
+    not_allowed("Duplicate key: " & get_symbol(key))
+  else:
+    var index = self.members.len
+    self.members.add(val)
+    self.mappings[key] = index
 
 proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
   {.push checks: off}
-  var found = self.mappings.get_or_default(key, -1)
-  if found != -1:
-    if found > 255:
-      var cur = found and 0xFF
-      if cur < max:
-        return self.members[cur]
-      else:
-        var history_index = found.shr(8) - 1
-        var history = self.mapping_history[history_index]
-        var i = history.len - 1
-        while i >= 0:
-          var index: int = history[i].int
-          if index < max:
-            return self.members[index]
-          i -= 1
-    elif found < max:
-      return self.members[found.int]
-
-  if self.parent != nil:
+  var found = self.mappings.get_or_default(key, max)
+  if found < max:
+    return self.members[found]
+  elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
   {.pop.}
 
@@ -1351,8 +1317,6 @@ proc `[]`*(self: Scope, key: int64): Value {.inline.} =
   {.push checks: off}
   var found = self.mappings.get_or_default(key, -1)
   if found != -1:
-    if found > 255:
-      found = found and 0xFF
     return self.members[found]
   elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
@@ -1360,24 +1324,9 @@ proc `[]`*(self: Scope, key: int64): Value {.inline.} =
 
 proc `[]=`(self: Scope, key: int64, val: Value, max: int) {.inline.} =
   {.push checks: off}
-  var found = self.mappings.get_or_default(key, -1)
-  if found != -1:
-    if found > 255:
-      var index = found and 0xFF
-      if index < max:
-        self.members[index] = val
-      else:
-        var history_index = found.shr(8) - 1
-        var history = self.mapping_history[history_index]
-        var i = history.len - 1
-        while i >= 0:
-          var index: int = history[history_index].int
-          if index < max:
-            self.members[index] = val
-          i -= 1
-    elif found < max:
-      self.members[found.int] = val
-
+  var found = self.mappings.get_or_default(key, max)
+  if found < max:
+    self.members[found] = val
   elif self.parent != nil:
     self.parent.`[]=`(key, val, self.parent_index_max.int)
   else:
