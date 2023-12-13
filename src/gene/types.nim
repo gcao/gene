@@ -260,7 +260,7 @@ type
     parent_scope*: Scope
     parent_scope_max*: NameIndexScope
     matcher*: RootMatcher
-    matching_hint*: MatchingHint
+    # matching_hint*: MatchingHint
     body*: seq[Value]
     body_compiled*: CompilationUnit
     # ret*: Expr
@@ -271,7 +271,7 @@ type
     parent_scope*: Scope
     parent_scope_max*: NameIndexScope
     matcher*: RootMatcher
-    matching_hint*: MatchingHint
+    # matching_hint*: MatchingHint
     body*: seq[Value]
     body_compiled*: CompilationUnit
 
@@ -281,12 +281,12 @@ type
     parent_scope*: Scope
     parent_scope_max*: NameIndexScope
     matcher*: RootMatcher
-    matching_hint*: MatchingHint
+    # matching_hint*: MatchingHint
     body*: seq[Value]
     # body_compiled*: Expr
     body_compiled*: CompilationUnit
 
-  MatchingMode* = enum
+  MatchingMode* {.size: sizeof(int16) .} = enum
     MatchArguments # (fn f [a b] ...)
     MatchExpression # (match [a b] input): a and b will be defined
     MatchAssignment # ([a b] = input): a and b must be defined first
@@ -295,15 +295,16 @@ type
   # Can have name, match nothing, or have group of children
   RootMatcher* = ref object
     mode*: MatchingMode
+    hint_mode*: MatchingHintMode
     children*: seq[Matcher]
 
-  MatchingHintMode* = enum
+  MatchingHintMode* {.size: sizeof(int16) .} = enum
     MhDefault
     MhNone
     MhSimpleData  # E.g. [a b]
 
-  MatchingHint* = object
-    mode*: MatchingHintMode
+  # MatchingHint* = object
+  #   mode*: MatchingHintMode
 
   MatcherKind* = enum
     MatchType
@@ -1284,7 +1285,7 @@ proc set_parent*(self: Scope, parent: Scope, max: NameIndexScope) {.inline.} =
 #   self.members.setLen(0)
 
 proc has_key(self: Scope, key: int64, max: int): bool {.inline.} =
-  var found = self.mappings.get_or_default(key, max)
+  let found = self.mappings.get_or_default(key, max)
   if found < max:
     return true
   elif self.parent != nil:
@@ -1300,13 +1301,13 @@ proc def_member*(self: Scope, key: int64, val: Value) {.inline.} =
   if self.mappings.has_key(key):
     not_allowed("Duplicate key: " & get_symbol(key))
   else:
-    var index = self.members.len
+    let index = self.members.len
     self.members.add(val)
     self.mappings[key] = index
 
 proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
   {.push checks: off}
-  var found = self.mappings.get_or_default(key, max)
+  let found = self.mappings.get_or_default(key, max)
   if found < max:
     return self.members[found]
   elif self.parent != nil:
@@ -1315,7 +1316,7 @@ proc `[]`(self: Scope, key: int64, max: int): Value {.inline.} =
 
 proc `[]`*(self: Scope, key: int64): Value {.inline.} =
   {.push checks: off}
-  var found = self.mappings.get_or_default(key, -1)
+  let found = self.mappings.get_or_default(key, -1)
   if found != -1:
     return self.members[found]
   elif self.parent != nil:
@@ -1324,7 +1325,7 @@ proc `[]`*(self: Scope, key: int64): Value {.inline.} =
 
 proc `[]=`(self: Scope, key: int64, val: Value, max: int) {.inline.} =
   {.push checks: off}
-  var found = self.mappings.get_or_default(key, max)
+  let found = self.mappings.get_or_default(key, max)
   if found < max:
     self.members[found] = val
   elif self.parent != nil:
@@ -1335,7 +1336,7 @@ proc `[]=`(self: Scope, key: int64, val: Value, max: int) {.inline.} =
 
 proc `[]=`*(self: Scope, key: int64, val: Value) {.inline.} =
   {.push checks: off}
-  var found = self.mappings.get_or_default(key, -1)
+  let found = self.mappings.get_or_default(key, -1)
   if found != -1:
     self.members[found] = val
   elif self.parent != nil:
@@ -1366,15 +1367,25 @@ proc required*(self: Matcher): bool =
   # return self.default_value_expr == nil and not self.is_splat
   return not self.is_splat
 
-proc hint*(self: RootMatcher): MatchingHint =
+proc check_hint*(self: RootMatcher) {.inline.} =
   if self.children.len == 0:
-    result.mode = MhNone
+    self.hint_mode = MhNone
   else:
-    result.mode = MhSimpleData
+    self.hint_mode = MhSimpleData
     for item in self.children:
       if item.kind != MatchData or not item.required:
-        result.mode = MhDefault
+        self.hint_mode = MhDefault
         return
+
+# proc hint*(self: RootMatcher): MatchingHint {.inline.} =
+#   if self.children.len == 0:
+#     result.mode = MhNone
+#   else:
+#     result.mode = MhSimpleData
+#     for item in self.children:
+#       if item.kind != MatchData or not item.required:
+#         result.mode = MhDefault
+#         return
 
 # proc new_matched_field*(name: string, value: Value): MatchedField =
 #   result = MatchedField(
@@ -1418,7 +1429,7 @@ proc calc_min_left*(self: Matcher) =
   var i = self.children.len
   while i > 0:
     i -= 1
-    var m = self.children[i]
+    let m = self.children[i]
     m.calc_min_left()
     m.min_left = min_left
     if m.required:
@@ -1431,7 +1442,7 @@ proc calc_min_left*(self: RootMatcher) =
   var i = self.children.len
   while i > 0:
     i -= 1
-    var m = self.children[i]
+    let m = self.children[i]
     m.calc_min_left()
     m.min_left = min_left
     if m.required:
@@ -1443,7 +1454,7 @@ proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
   case v.kind:
     of VkSymbol:
       if v.str[0] == '^':
-        var m = new_matcher(self, MatchProp)
+        let m = new_matcher(self, MatchProp)
         if v.str.ends_with("..."):
           m.is_splat = true
           if v.str[1] == '^':
@@ -1459,7 +1470,7 @@ proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
             m.name_key = v.str[1..^1].to_key()
         group.add(m)
       else:
-        var m = new_matcher(self, MatchData)
+        let m = new_matcher(self, MatchData)
         group.add(m)
         if v.str != "_":
           if v.str.ends_with("..."):
@@ -1483,7 +1494,7 @@ proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
       #   var m = new_matcher(self, MatchData)
       #   group.add(m)
       #   m.is_prop = true
-      #   var name = v.csymbol[1]
+      #   let name = v.csymbol[1]
       #   if name.ends_with("..."):
       #     m.is_splat = true
       #     m.name = name[0..^4]
@@ -1492,18 +1503,18 @@ proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
     of VkArray:
       var i = 0
       while i < v.ref.arr.len:
-        var item = v.ref.arr[i]
+        let item = v.ref.arr[i]
         i += 1
         if item.kind == VkArray:
-          var m = new_matcher(self, MatchData)
+          let m = new_matcher(self, MatchData)
           group.add(m)
           self.parse(m.children, item)
         else:
           self.parse(group, item)
           if i < v.ref.arr.len and v.ref.arr[i] == "=".to_symbol_value():
             i += 1
-            var last_matcher = group[^1]
-            var value = v.ref.arr[i]
+            let last_matcher = group[^1]
+            let value = v.ref.arr[i]
             i += 1
             last_matcher.default_value = value
     of VkQuote:
@@ -1526,6 +1537,7 @@ proc parse*(self: RootMatcher, v: Value) =
 proc new_arg_matcher*(value: Value): RootMatcher =
   result = new_arg_matcher()
   result.parse(value)
+  result.check_hint()
 
 #################### Function ####################
 
@@ -1533,13 +1545,13 @@ proc new_fn*(name: string, matcher: RootMatcher, body: seq[Value]): Function =
   return Function(
     name: name,
     matcher: matcher,
-    matching_hint: matcher.hint,
+    # matching_hint: matcher.hint,
     body: body,
   )
 
 proc to_function*(node: Value): Function {.gcsafe.} =
   var name: string
-  var matcher = new_arg_matcher()
+  let matcher = new_arg_matcher()
   var body_start: int
   if node.gene.type == "fnx".to_symbol_value():
     matcher.parse(node.gene.children[0])
@@ -1549,7 +1561,7 @@ proc to_function*(node: Value): Function {.gcsafe.} =
     name = "<unnamed>"
     body_start = 0
   else:
-    var first = node.gene.children[0]
+    let first = node.gene.children[0]
     case first.kind:
       of VkSymbol, VkString:
         name = first.str
@@ -1561,6 +1573,7 @@ proc to_function*(node: Value): Function {.gcsafe.} =
     matcher.parse(node.gene.children[1])
     body_start = 2
 
+  matcher.check_hint()
   var body: seq[Value] = @[]
   for i in body_start..<node.gene.children.len:
     body.add node.gene.children[i]
@@ -1575,20 +1588,21 @@ proc new_macro*(name: string, matcher: RootMatcher, body: seq[Value]): Macro =
   return Macro(
     name: name,
     matcher: matcher,
-    matching_hint: matcher.hint,
+    # matching_hint: matcher.hint,
     body: body,
   )
 
 proc to_macro*(node: Value): Macro =
-  var first = node.gene.children[0]
+  let first = node.gene.children[0]
   var name: string
   if first.kind == VkSymbol:
     name = first.str
   elif first.kind == VkComplexSymbol:
     name = first.ref.csymbol[^1]
 
-  var matcher = new_arg_matcher()
+  let matcher = new_arg_matcher()
   matcher.parse(node.gene.children[1])
+  matcher.check_hint()
 
   var body: seq[Value] = @[]
   for i in 2..<node.gene.children.len:
@@ -1602,7 +1616,7 @@ proc to_macro*(node: Value): Macro =
 proc new_block*(matcher: RootMatcher,  body: seq[Value]): Block =
   return Block(
     matcher: matcher,
-    matching_hint: matcher.hint,
+    # matching_hint: matcher.hint,
     body: body,
   )
 
@@ -1639,7 +1653,7 @@ proc has_method*(self: Class, name: string): bool {.inline.} =
   self.has_method(name.to_key)
 
 proc get_method*(self: Class, name: int64): Method =
-  var found = self.methods.get_or_default(name, nil)
+  let found = self.methods.get_or_default(name, nil)
   if not found.is_nil:
     return found
   elif self.parent != nil:
@@ -1681,9 +1695,9 @@ proc get_class*(val: Value): Class =
     # of VkNativeFile:
     #   return App.ref.app.file_class.ref.class
     # of VkException:
-    #   var ex = val.exception
+    #   let ex = val.exception
     #   if ex is ref Exception:
-    #     var ex = cast[ref Exception](ex)
+    #     let ex = cast[ref Exception](ex)
     #     if ex.instance != nil:
     #       return ex.instance.instance_class
     #     else:
