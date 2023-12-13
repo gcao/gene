@@ -153,8 +153,7 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkJumpIfMatchSuccess:
-        let mr = self.frame.match_result
-        if mr.fields[inst.arg0.int64] == MfSuccess:
+        if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
           self.pc = inst.arg1.int
           continue
 
