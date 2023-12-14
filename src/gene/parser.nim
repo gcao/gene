@@ -57,9 +57,9 @@ type
 
   # ParseScope* = ref object
   #   parent*: ParseScope
-  #   mappings*: Table[int64, Value]
+  #   mappings*: Table[Key, Value]
 
-  # ParseFunction* = proc(self: var Parser, scope: ParseScope, props: Table[int64, Value], children: seq[Value]): Value
+  # ParseFunction* = proc(self: var Parser, scope: ParseScope, props: Table[Key, Value], children: seq[Value]): Value
 
   # ParseHandlerType* = enum
   #   PhDefault
@@ -89,7 +89,7 @@ type
 
   DelimitedListResult = object
     list: seq[Value]
-    map: Table[int64, Value]
+    map: Table[Key, Value]
 
   Handler = proc(self: var Parser, input: Value): Value {.gcsafe.}
 
@@ -106,7 +106,7 @@ var DATETIME_FORMAT {.threadvar.}: TimeFormat
 var macros {.threadvar.}: MacroArray
 var dispatch_macros {.threadvar.}: MacroArray
 
-var handlers {.threadvar.}: Table[int64, Handler]
+var handlers {.threadvar.}: Table[Key, Handler]
 
 #################### Interfaces ##################
 
@@ -119,7 +119,7 @@ proc read*(self: var Parser): Value {.gcsafe.}
 proc skip_comment(self: var Parser)
 proc skip_block_comment(self: var Parser) {.gcsafe.}
 proc skip_ws(self: var Parser) {.gcsafe.}
-proc read_map(self: var Parser, mode: MapKind): Table[int64, Value] {.gcsafe.}
+proc read_map(self: var Parser, mode: MapKind): Table[Key, Value] {.gcsafe.}
 
 #################### Implementations #############
 
@@ -142,8 +142,8 @@ proc new_options*(prototype: ParseOptions): ParseOptions =
 proc extend*(self: ParseOptions): ParseOptions =
   ParseOptions(
     parent: self,
-    data: init_Table[string, Value](),
-    units: init_Table[string, Value](),
+    data: init_table[string, Value](),
+    units: init_table[string, Value](),
   )
 
 proc keys*(self: ParseOptions): HashSet[string] =
@@ -626,12 +626,12 @@ proc to_keys(self: string): seq[string] =
 
   result.add(key)
 
-proc read_map(self: var Parser, mode: MapKind): Table[int64, Value] {.gcsafe.} =
+proc read_map(self: var Parser, mode: MapKind): Table[Key, Value] {.gcsafe.} =
   var ch: char
   var key: string
   var state = PropState.PropKey
 
-  result = init_Table[int64, Value]()
+  result = init_table[Key, Value]()
   var map = result.addr
 
   while true:
@@ -777,7 +777,7 @@ proc read_gene(self: var Parser): Value {.gcsafe.} =
   gene.props = result_list.map
   gene.children = result_list.list
   if not gene.type.is_nil() and gene.type.kind == VkSymbol:
-    let key = gene.type.int64
+    let key = gene.type.str.to_key()
     if handlers.has_key(key):
       let handler = handlers[key]
       result = gene.to_gene_value()

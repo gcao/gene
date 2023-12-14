@@ -67,11 +67,11 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkVar:
-        self.frame.scope.def_member(inst.arg0.int64, self.frame.current())
+        self.frame.scope.def_member(inst.arg0.Key, self.frame.current())
 
       of IkAssign:
         let value = self.frame.current()
-        self.frame.scope[inst.arg0.int64] = value
+        self.frame.scope[inst.arg0.Key] = value
 
       of IkResolveSymbol:
         case inst.arg0.int64:
@@ -83,19 +83,19 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(App.app.gene_ns)
           else:
             let scope = self.frame.scope
-            let name = inst.arg0.int64
+            let name = inst.arg0.Key
             if scope.has_key(name):
               self.frame.push(scope[name])
             elif self.frame.ns.has_key(name):
               self.frame.push(self.frame.ns[name])
             else:
-              not_allowed("Unknown symbol " & name.get_symbol())
+              not_allowed("Unknown symbol " & name.int.get_symbol())
 
       of IkSelf:
         self.frame.push(self.frame.self)
 
       of IkSetMember:
-        let name = inst.arg0.int64
+        let name = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
         var target: Value
@@ -116,7 +116,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(value)
 
       of IkGetMember:
-        let name = inst.arg0.int64
+        let name = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
         case value.kind:
@@ -190,7 +190,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkMapStart:
         self.frame.push(new_map_value())
       of IkMapSetProp:
-        let key = inst.arg0.int64
+        let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
         self.frame.current().ref.map[key] = value
@@ -258,7 +258,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.pop2(value)
         self.frame.current().gene.type = value
       of IkGeneSetProp:
-        let key = inst.arg0.int64
+        let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
         self.frame.current().gene.props[key] = value
@@ -478,7 +478,7 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkNamespace)
         r.ns = ns
         let v = r.to_ref_value()
-        self.frame.ns[name.int64] = v
+        self.frame.ns[name.Key] = v
         self.frame.push(v)
 
       of IkClass:
@@ -487,7 +487,7 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkClass)
         r.class = class
         let v = r.to_ref_value()
-        self.frame.ns[name.int64] = v
+        self.frame.ns[name.Key] = v
         self.frame.push(v)
 
       of IkNew:
@@ -525,7 +525,7 @@ proc exec*(self: VirtualMachine): Value =
         class.parent = self.frame.pop().ref.class
         let r = new_ref(VkClass)
         r.class = class
-        self.frame.ns[name.int64] = r.to_ref_value()
+        self.frame.ns[name.Key] = r.to_ref_value()
         self.frame.push(r.to_ref_value())
 
       of IkResolveMethod:

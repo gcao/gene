@@ -1,4 +1,4 @@
-import unittest, strutils, tables, osproc
+import unittest, strutils, tables
 
 import gene/types
 import gene/parser
@@ -21,7 +21,7 @@ converter seq_to_gene*(self: seq[string]): Value =
   result = r.to_ref_value()
 
 converter to_value*(self: openArray[(string, Value)]): Value =
-  var map = Table[int64, Value]()
+  var map = Table[Key, Value]()
   for (k, v) in self:
     map[k.to_key()] = v
   new_map_value(map)
