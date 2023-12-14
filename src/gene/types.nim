@@ -1256,7 +1256,7 @@ proc free(self: Scope) {.inline.} =
     return
   self.ref_count.dec()
   if self.ref_count == 0:
-    self.parent.update(nil)
+    self.parent.free()
     self.parent_index_max = 0.NameIndexScope
     self.members.set_len(0)
     self.mappings.clear()
