@@ -613,10 +613,10 @@ proc `[]=`*(self: Namespace, key: Key, val: Value) {.inline.}
 
 #################### Common ######################
 
-proc `==`*(a, b: Key): bool =
+proc `==`*(a, b: Key): bool {.inline.} =
   cast[int64](a) == cast[int64](b)
 
-proc hash*(v: Key): Hash =
+proc hash*(v: Key): Hash {.inline.} =
   cast[Hash](v)
 
 proc todo*() =
@@ -679,7 +679,7 @@ proc `=copy`*(a: var Value, b: Value) =
     else:
       a = cast[Value](cast[uint64](b))
 
-converter to_value*(k: Key): Value =
+converter to_value*(k: Key): Value {.inline.} =
   cast[Value](k)
 
 #################### Reference ###################
