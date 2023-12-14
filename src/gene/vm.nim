@@ -49,9 +49,8 @@ proc exec*(self: VirtualMachine): Value =
         discard
 
       of IkStart:
-        let matcher = self.cur_block.matcher
-        if matcher != nil:
-          self.handle_args(matcher, self.frame.args)
+        if self.cur_block.matcher != nil:
+          self.handle_args(self.cur_block.matcher, self.frame.args)
 
       of IkEnd:
         indent.delete(indent.len-2..indent.len-1)
