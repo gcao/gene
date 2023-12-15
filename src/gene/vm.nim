@@ -88,9 +88,9 @@ proc exec*(self: VirtualMachine): Value =
             let scope = self.frame.scope
             let name = inst.arg0.Key
             var value = scope[name]
-            if value == NOT_FOUND:
+            if value.int64 == NOT_FOUND.int64:
               value = self.frame.ns[name]
-              if value == NOT_FOUND:
+              if value.int64 == NOT_FOUND.int64:
                 not_allowed("Unknown symbol " & name.int.get_symbol())
             self.frame.push(value)
 
