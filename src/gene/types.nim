@@ -613,10 +613,10 @@ proc `[]=`*(self: Namespace, key: Key, val: Value) {.inline.}
 
 #################### Common ######################
 
-proc `==`*(a, b: Key): bool {.inline.} =
+template `==`*(a, b: Key): bool =
   cast[int64](a) == cast[int64](b)
 
-proc hash*(v: Key): Hash {.inline.} =
+template hash*(v: Key): Hash =
   cast[Hash](v)
 
 proc todo*() =
