@@ -1880,6 +1880,12 @@ proc update*(self: var Frame, f: Frame) {.inline.} =
   self.free()
   self = f
 
+proc update*(f1, f2: var Frame, f: Frame) {.inline.} =
+  f.ref_count += 1
+  f1.free()
+  f1 = f
+  f2 = f
+
 proc current*(self: var Frame): Value {.inline.} =
   self.stack[self.stack_index - 1]
 

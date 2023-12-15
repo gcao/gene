@@ -35,6 +35,7 @@ proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
   var indent = ""
 
+  var frame = self.frame
   while true:
     {.push checks: off}
     let inst = self.cur_block.instructions[self.pc].addr
@@ -52,56 +53,56 @@ proc exec*(self: VirtualMachine): Value =
         if not self.trace: # This is part of INDENT_LOGIC
           indent &= "  "
         if self.cur_block.matcher != nil:
-          self.handle_args(self.cur_block.matcher, self.frame.args)
+          self.handle_args(self.cur_block.matcher, frame.args)
 
       of IkEnd:
         indent.delete(indent.len-2..indent.len-1)
-        let v = self.frame.default
-        let caller = self.frame.caller
+        let v = frame.default
+        let caller = frame.caller
         if caller == nil:
           return v
         else:
-          self.frame.update(caller.frame)
+          update(self.frame, frame, caller.frame)
           if not self.cur_block.skip_return:
-            self.frame.push(v)
+            frame.push(v)
           self.cur_block = self.code_mgr.data[caller.address.id]
           self.pc = caller.address.pc
           continue
 
       of IkVar:
-        self.frame.scope.def_member(inst.arg0.Key, self.frame.current())
+        frame.scope.def_member(inst.arg0.Key, frame.current())
 
       of IkAssign:
-        let value = self.frame.current()
-        self.frame.scope[inst.arg0.Key] = value
+        let value = frame.current()
+        frame.scope[inst.arg0.Key] = value
 
       of IkResolveSymbol:
         case inst.arg0.int64:
           of SYM_UNDERSCORE:
-            self.frame.push(PLACEHOLDER)
+            frame.push(PLACEHOLDER)
           of SYM_SELF:
-            self.frame.push(self.frame.self)
+            frame.push(frame.self)
           of SYM_GENE:
-            self.frame.push(App.app.gene_ns)
+            frame.push(App.app.gene_ns)
           else:
-            let scope = self.frame.scope
+            let scope = frame.scope
             let name = inst.arg0.Key
             if scope.has_key(name):
-              self.frame.push(scope[name])
-            elif self.frame.ns.has_key(name):
-              self.frame.push(self.frame.ns[name])
+              frame.push(scope[name])
+            elif frame.ns.has_key(name):
+              frame.push(frame.ns[name])
             else:
               not_allowed("Unknown symbol " & name.int.get_symbol())
 
       of IkSelf:
-        self.frame.push(self.frame.self)
+        frame.push(frame.self)
 
       of IkSetMember:
         let name = inst.arg0.Key
         var value: Value
-        self.frame.pop2(value)
+        frame.pop2(value)
         var target: Value
-        self.frame.pop2(target)
+        frame.pop2(target)
         case target.kind:
           of VkMap:
             target.ref.map[name] = value
@@ -115,35 +116,35 @@ proc exec*(self: VirtualMachine): Value =
             target.ref.instance_props[name] = value
           else:
             todo($target.kind)
-        self.frame.push(value)
+        frame.push(value)
 
       of IkGetMember:
         let name = inst.arg0.Key
         var value: Value
-        self.frame.pop2(value)
+        frame.pop2(value)
         case value.kind:
           of VkMap:
-            self.frame.push(value.ref.map[name])
+            frame.push(value.ref.map[name])
           of VkGene:
-            self.frame.push(value.gene.props[name])
+            frame.push(value.gene.props[name])
           of VkNamespace:
-            self.frame.push(value.ref.ns[name])
+            frame.push(value.ref.ns[name])
           of VkClass:
-            self.frame.push(value.ref.class.ns[name])
+            frame.push(value.ref.class.ns[name])
           of VkInstance:
-            self.frame.push(value.ref.instance_props[name])
+            frame.push(value.ref.instance_props[name])
           else:
             todo($value.kind)
 
       of IkGetChild:
         let i = inst.arg0.int
         var value: Value
-        self.frame.pop2(value)
+        frame.pop2(value)
         case value.kind:
           of VkArray:
-            self.frame.push(value.ref.arr[i])
+            frame.push(value.ref.arr[i])
           of VkGene:
-            self.frame.push(value.gene.children[i])
+            frame.push(value.gene.children[i])
           else:
             todo($value.kind)
 
@@ -152,13 +153,13 @@ proc exec*(self: VirtualMachine): Value =
         continue
       of IkJumpIfFalse:
         var value: Value
-        self.frame.pop2(value)
+        frame.pop2(value)
         if not value.to_bool():
           self.pc = inst.arg0.int
           continue
 
       of IkJumpIfMatchSuccess:
-        if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
+        if frame.match_result.fields[inst.arg0.int64] == MfSuccess:
           self.pc = inst.arg1.int
           continue
 
@@ -174,38 +175,38 @@ proc exec*(self: VirtualMachine): Value =
         continue
 
       of IkPushValue:
-        self.frame.push(inst.arg0)
+        frame.push(inst.arg0)
       of IkPushNil:
-        self.frame.push(NIL)
+        frame.push(NIL)
       of IkPop:
-        discard self.frame.pop()
+        discard frame.pop()
 
       of IkArrayStart:
-        self.frame.push(new_array_value())
+        frame.push(new_array_value())
       of IkArrayAddChild:
         var child: Value
-        self.frame.pop2(child)
-        self.frame.current().ref.arr.add(child)
+        frame.pop2(child)
+        frame.current().ref.arr.add(child)
       of IkArrayEnd:
         discard
 
       of IkMapStart:
-        self.frame.push(new_map_value())
+        frame.push(new_map_value())
       of IkMapSetProp:
         let key = inst.arg0.Key
         var value: Value
-        self.frame.pop2(value)
-        self.frame.current().ref.map[key] = value
+        frame.pop2(value)
+        frame.current().ref.map[key] = value
       of IkMapEnd:
         discard
 
       of IkGeneStart:
-        self.frame.push(new_gene_value())
+        frame.push(new_gene_value())
 
       of IkGeneStartDefault:
         var v: Value
-        self.frame.pop2(v)
-        self.frame.push(new_gene_value(v))
+        frame.pop2(v)
+        frame.push(new_gene_value(v))
         case inst.arg1.int:
           of 1:   # Fn
             case v.kind:
@@ -257,26 +258,26 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGeneSetType:
         var value: Value
-        self.frame.pop2(value)
-        self.frame.current().gene.type = value
+        frame.pop2(value)
+        frame.current().gene.type = value
       of IkGeneSetProp:
         let key = inst.arg0.Key
         var value: Value
-        self.frame.pop2(value)
-        self.frame.current().gene.props[key] = value
+        frame.pop2(value)
+        frame.current().gene.props[key] = value
       of IkGeneAddChild:
         var child: Value
-        self.frame.pop2(child)
-        self.frame.current().gene.children.add(child)
+        frame.pop2(child)
+        frame.current().gene.children.add(child)
 
       of IkGeneEnd:
-        let v = self.frame.current()
+        let v = frame.current()
         let gene_type = v.gene.type
         if gene_type != nil:
           case gene_type.kind:
             of VkFunction:
               self.pc.inc()
-              discard self.frame.pop()
+              discard frame.pop()
 
               gene_type.ref.fn.compile()
               self.code_mgr.data[gene_type.ref.fn.body_compiled.id] = gene_type.ref.fn.body_compiled
@@ -284,18 +285,18 @@ proc exec*(self: VirtualMachine): Value =
               let caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
               )
-              caller.frame.update(self.frame)
-              self.frame.update(new_frame(caller))
-              self.frame.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
-              self.frame.ns = gene_type.ref.fn.ns
-              self.frame.args = v
+              caller.frame.update(frame)
+              update(self.frame, frame, new_frame(caller))
+              frame.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
+              frame.ns = gene_type.ref.fn.ns
+              frame.args = v
               self.cur_block = gene_type.ref.fn.body_compiled
               self.pc = 0
               continue
 
             of VkMacro:
               self.pc.inc()
-              discard self.frame.pop()
+              discard frame.pop()
 
               gene_type.ref.macro.compile()
               self.code_mgr.data[gene_type.ref.macro.body_compiled.id] = gene_type.ref.macro.body_compiled
@@ -303,11 +304,11 @@ proc exec*(self: VirtualMachine): Value =
               let caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
               )
-              caller.frame.update(self.frame)
-              self.frame.update(new_frame(caller))
-              self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
-              self.frame.ns = gene_type.ref.macro.ns
-              self.frame.args = v
+              caller.frame.update(frame)
+              update(self.frame, frame, new_frame(caller))
+              frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
+              frame.ns = gene_type.ref.macro.ns
+              frame.args = v
               self.cur_block = gene_type.ref.macro.body_compiled
               self.pc = 0
               continue
@@ -316,12 +317,12 @@ proc exec*(self: VirtualMachine): Value =
               todo($v)
 
             of VkBoundMethod:
-              discard self.frame.pop()
+              discard frame.pop()
 
               let meth = gene_type.ref.bound_method.method
               case meth.callable.kind:
                 of VkNativeFn:
-                  self.frame.push(meth.callable.ref.native_fn(self, v))
+                  frame.push(meth.callable.ref.native_fn(self, v))
                 of VkFunction:
                   self.pc.inc()
 
@@ -332,12 +333,12 @@ proc exec*(self: VirtualMachine): Value =
                   let caller = Caller(
                     address: Address(id: self.cur_block.id, pc: self.pc),
                   )
-                  caller.frame.update(self.frame)
-                  self.frame.update(new_frame(caller))
-                  self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-                  self.frame.ns = fn.ns
-                  self.frame.self = gene_type.ref.bound_method.self
-                  self.frame.args = v
+                  caller.frame.update(frame)
+                  update(self.frame, frame, new_frame(caller))
+                  frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+                  frame.ns = fn.ns
+                  frame.self = gene_type.ref.bound_method.self
+                  frame.args = v
                   self.cur_block = fn.body_compiled
                   self.pc = 0
                   continue
@@ -349,78 +350,78 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkAdd:
         var second: Value
-        self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int + second.int)
+        frame.pop2(second)
+        frame.replace(frame.current().int + second.int)
 
       of IkSub:
         var second: Value
-        self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int - second.int)
+        frame.pop2(second)
+        frame.replace(frame.current().int - second.int)
       of IkSubValue:
-        self.frame.replace(self.frame.current().int - inst.arg0.int)
+        frame.replace(frame.current().int - inst.arg0.int)
 
       of IkMul:
-        self.frame.push(self.frame.pop().int * self.frame.pop().int)
+        frame.push(frame.pop().int * frame.pop().int)
 
       of IkDiv:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first / second)
+        let second = frame.pop().int
+        let first = frame.pop().int
+        frame.push(first / second)
 
       of IkLt:
         var second: Value
-        self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int < second.int)
+        frame.pop2(second)
+        frame.replace(frame.current().int < second.int)
       of IkLtValue:
         var first: Value
-        self.frame.pop2(first)
-        self.frame.push(first.int < inst.arg0.int)
+        frame.pop2(first)
+        frame.push(first.int < inst.arg0.int)
 
       of IkLe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first <= second)
+        let second = frame.pop().int
+        let first = frame.pop().int
+        frame.push(first <= second)
 
       of IkGt:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first > second)
+        let second = frame.pop().int
+        let first = frame.pop().int
+        frame.push(first > second)
 
       of IkGe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first >= second)
+        let second = frame.pop().int
+        let first = frame.pop().int
+        frame.push(first >= second)
 
       of IkEq:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first == second)
+        let second = frame.pop().int
+        let first = frame.pop().int
+        frame.push(first == second)
 
       of IkNe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first != second)
+        let second = frame.pop().int
+        let first = frame.pop().int
+        frame.push(first != second)
 
       of IkAnd:
-        let second = self.frame.pop()
-        let first = self.frame.pop()
-        self.frame.push(first.to_bool and second.to_bool)
+        let second = frame.pop()
+        let first = frame.pop()
+        frame.push(first.to_bool and second.to_bool)
 
       of IkOr:
-        let second = self.frame.pop()
-        let first = self.frame.pop()
-        self.frame.push(first.to_bool or second.to_bool)
+        let second = frame.pop()
+        let first = frame.pop()
+        frame.push(first.to_bool or second.to_bool)
 
       of IkCompileInit:
-        let input = self.frame.pop()
+        let input = frame.pop()
         let compiled = compile_init(input)
         self.code_mgr.data[compiled.id] = compiled
-        self.frame.push(compiled.id.Value)
+        frame.push(compiled.id.Value)
 
       of IkCallInit:
-        let id = self.frame.pop().Id
+        let id = frame.pop().Id
         let compiled = self.code_mgr.data[id]
-        let obj = self.frame.current()
+        let obj = frame.current()
         var ns: Namespace
         case obj.kind:
           of VkNamespace:
@@ -434,44 +435,44 @@ proc exec*(self: VirtualMachine): Value =
         let caller = Caller(
           address: Address(id: self.cur_block.id, pc: self.pc),
         )
-        caller.frame.update(self.frame)
-        self.frame.update(new_frame(caller))
-        self.frame.self = obj
-        self.frame.ns = ns
+        caller.frame.update(frame)
+        update(self.frame, frame, new_frame(caller))
+        frame.self = obj
+        frame.ns = ns
         self.cur_block = compiled
         self.pc = 0
         continue
 
       of IkFunction:
         let f = to_function(inst.arg0)
-        f.ns = self.frame.ns
+        f.ns = frame.ns
         let r = new_ref(VkFunction)
         r.fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
-        f.parent_scope.update(self.frame.scope)
-        f.parent_scope_max = self.frame.scope.max
-        self.frame.push(v)
+        f.parent_scope.update(frame.scope)
+        f.parent_scope_max = frame.scope.max
+        frame.push(v)
 
       of IkMacro:
         let m = to_macro(inst.arg0)
-        m.ns = self.frame.ns
+        m.ns = frame.ns
         let r = new_ref(VkMacro)
         r.macro = m
         let v = r.to_ref_value()
         m.ns[m.name.to_key()] = v
-        self.frame.push(v)
+        frame.push(v)
 
       of IkReturn:
-        let caller = self.frame.caller
+        let caller = frame.caller
         if caller == nil:
           not_allowed("Return from top level")
         else:
-          let v = self.frame.pop()
-          self.frame.update(caller.frame)
+          let v = frame.pop()
+          update(self.frame, frame, caller.frame)
           self.cur_block = self.code_mgr.data[caller.address.id]
           self.pc = caller.address.pc
-          self.frame.push(v)
+          frame.push(v)
           continue
 
       of IkNamespace:
@@ -480,8 +481,8 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkNamespace)
         r.ns = ns
         let v = r.to_ref_value()
-        self.frame.ns[name.Key] = v
-        self.frame.push(v)
+        frame.ns[name.Key] = v
+        frame.push(v)
 
       of IkClass:
         let name = inst.arg0
@@ -489,14 +490,14 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkClass)
         r.class = class
         let v = r.to_ref_value()
-        self.frame.ns[name.Key] = v
-        self.frame.push(v)
+        frame.ns[name.Key] = v
+        frame.push(v)
 
       of IkNew:
-        let v = self.frame.pop()
+        let v = frame.pop()
         let instance = new_ref(VkInstance)
         instance.instance_class = v.gene.type.ref.class
-        self.frame.push(instance.to_ref_value())
+        frame.push(instance.to_ref_value())
 
         let class = instance.instance_class
         case class.constructor.kind:
@@ -509,10 +510,10 @@ proc exec*(self: VirtualMachine): Value =
             let caller = Caller(
               address: Address(id: self.cur_block.id, pc: self.pc),
             )
-            caller.frame.update(self.frame)
-            self.frame.update(new_frame(caller))
-            self.frame.self = instance.to_ref_value()
-            self.frame.ns = class.constructor.ref.fn.ns
+            caller.frame.update(frame)
+            update(self.frame, frame, new_frame(caller))
+            frame.self = instance.to_ref_value()
+            frame.ns = class.constructor.ref.fn.ns
             self.cur_block = compiled
             self.pc = 0
             continue
@@ -524,14 +525,14 @@ proc exec*(self: VirtualMachine): Value =
       of IkSubClass:
         let name = inst.arg0
         let class = new_class(name.str)
-        class.parent = self.frame.pop().ref.class
+        class.parent = frame.pop().ref.class
         let r = new_ref(VkClass)
         r.class = class
-        self.frame.ns[name.Key] = r.to_ref_value()
-        self.frame.push(r.to_ref_value())
+        frame.ns[name.Key] = r.to_ref_value()
+        frame.push(r.to_ref_value())
 
       of IkResolveMethod:
-        let v = self.frame.pop()
+        let v = frame.pop()
         let class = v.get_class()
         let meth = class.get_method(inst.arg0.str)
         let r = new_ref(VkBoundMethod)
@@ -540,16 +541,16 @@ proc exec*(self: VirtualMachine): Value =
           # class: class,
           `method`: meth,
         )
-        self.frame.push(r.to_ref_value())
+        frame.push(r.to_ref_value())
 
       of IkCallMethodNoArgs:
-        let v = self.frame.pop()
+        let v = frame.pop()
 
         let class = v.get_class()
         let meth = class.get_method(inst.arg0.str)
         case meth.callable.kind:
           of VkNativeFn:
-            self.frame.push(meth.callable.ref.native_fn(self, v))
+            frame.push(meth.callable.ref.native_fn(self, v))
           of VkFunction:
             self.pc.inc()
 
@@ -560,11 +561,11 @@ proc exec*(self: VirtualMachine): Value =
             let caller = Caller(
               address: Address(id: self.cur_block.id, pc: self.pc),
             )
-            caller.frame.update(self.frame)
-            self.frame.update(new_frame(caller))
-            self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-            self.frame.ns = fn.ns
-            self.frame.self = v
+            caller.frame.update(frame)
+            update(self.frame, frame, new_frame(caller))
+            frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+            frame.ns = fn.ns
+            frame.self = v
             self.cur_block = fn.body_compiled
             self.pc = 0
             continue
@@ -575,23 +576,23 @@ proc exec*(self: VirtualMachine): Value =
       #   case inst.arg0.str:
       #     of "$_trace_start":
       #       self.trace = true
-      #       self.frame.push(NIL)
+      #       frame.push(NIL)
       #     of "$_trace_end":
       #       self.trace = false
-      #       self.frame.push(NIL)
+      #       frame.push(NIL)
       #     of "$_debug":
       #       if inst.arg1:
-      #         echo "$_debug ", self.frame.current()
+      #         echo "$_debug ", frame.current()
       #       else:
-      #         self.frame.push(NIL)
+      #         frame.push(NIL)
       #     of "$_print_instructions":
       #       echo self.cur_block
       #       if inst.arg1:
-      #         discard self.frame.pop()
-      #       self.frame.push(NIL)
+      #         discard frame.pop()
+      #       frame.push(NIL)
       #     of "$_print_stack":
       #       self.print_stack()
-      #       self.frame.push(NIL)
+      #       frame.push(NIL)
       #     else:
       #       todo(inst.arg0.str)
 
