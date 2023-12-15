@@ -34,10 +34,11 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
 proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
   var indent = ""
+  var inst: ptr Instruction
 
   while true:
     {.push checks: off}
-    let inst = self.cur_block.instructions[self.pc].addr
+    inst = self.cur_block.instructions[self.pc].addr
     {.pop.}
     if self.trace:
       if inst.kind == IkStart: # This is part of INDENT_LOGIC
@@ -86,12 +87,12 @@ proc exec*(self: VirtualMachine): Value =
           else:
             let scope = self.frame.scope
             let name = inst.arg0.Key
-            if scope.has_key(name):
-              self.frame.push(scope[name])
-            elif self.frame.ns.has_key(name):
-              self.frame.push(self.frame.ns[name])
-            else:
-              not_allowed("Unknown symbol " & name.int.get_symbol())
+            var value = scope[name]
+            if value == NOT_FOUND:
+              value = self.frame.ns[name]
+              if value == NOT_FOUND:
+                not_allowed("Unknown symbol " & name.int.get_symbol())
+            self.frame.push(value)
 
       of IkSelf:
         self.frame.push(self.frame.self)

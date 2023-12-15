@@ -1214,7 +1214,8 @@ proc `[]`*(self: Namespace, key: Key): Value {.inline.} =
   elif not self.stop_inheritance and self.parent != nil:
     return self.parent[key]
   else:
-    raise new_exception(NotDefinedException, get_symbol(key.int64) & " is not defined")
+    return NOT_FOUND
+    # raise new_exception(NotDefinedException, get_symbol(key.int64) & " is not defined")
 
 proc locate*(self: Namespace, key: Key): (Value, Namespace) {.inline.} =
   let found = self.members.get_or_default(key, NOT_FOUND)
@@ -1321,6 +1322,8 @@ proc `[]`(self: Scope, key: Key, max: int): Value {.inline.} =
     return self.members[found]
   elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
+  else:
+    return NOT_FOUND
   {.pop.}
 
 proc `[]`*(self: Scope, key: Key): Value {.inline.} =
@@ -1330,6 +1333,8 @@ proc `[]`*(self: Scope, key: Key): Value {.inline.} =
     return self.members[found]
   elif self.parent != nil:
     return self.parent[key, self.parent_index_max.int]
+  else:
+    return NOT_FOUND
   {.pop.}
 
 proc `[]=`(self: Scope, key: Key, val: Value, max: int) {.inline.} =
