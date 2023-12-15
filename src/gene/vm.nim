@@ -39,9 +39,9 @@ proc exec*(self: VirtualMachine): Value =
     {.push checks: off}
     let inst = self.cur_block.instructions[self.pc].addr
     {.pop.}
-    if inst.kind == IkStart:
-      indent &= "  "
     if self.trace:
+      if inst.kind == IkStart: # This is part of INDENT_LOGIC
+        indent &= "  "
       # self.print_stack()
       echo fmt"{indent}{self.pc:03} {inst[]}"
     case inst.kind:
@@ -49,6 +49,8 @@ proc exec*(self: VirtualMachine): Value =
         discard
 
       of IkStart:
+        if not self.trace: # This is part of INDENT_LOGIC
+          indent &= "  "
         if self.cur_block.matcher != nil:
           self.handle_args(self.cur_block.matcher, self.frame.args)
 
