@@ -1,5 +1,31 @@
+# Show the code
+# JIT the code (create a temporary block, reuse the frame)
+# Execute the code
+# Show the result
+proc debug(self: VirtualMachine, args: Value): Value =
+  todo()
+
 proc trace_start(self: VirtualMachine, args: Value): Value =
   self.trace = true
+  self.frame.push(NIL)
+
+proc trace_end(self: VirtualMachine, args: Value): Value =
+  self.trace = false
+  self.frame.push(NIL)
+
+proc print_stack(self: VirtualMachine, args: Value): Value =
+  var s = "Stack: "
+  for i, reg in self.frame.stack:
+    if i > 0:
+      s &= ", "
+    if i == self.frame.stack_index.int:
+      s &= "=> "
+    s &= $self.frame.stack[i]
+  echo s
+  self.frame.push(NIL)
+
+proc print_instructions(self: VirtualMachine, args: Value): Value =
+  echo self.cur_block
   self.frame.push(NIL)
 
 proc to_ctor(node: Value): Function =
@@ -47,7 +73,11 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
     not_allowed()
 
 VMCreatedCallbacks.add proc() =
-  App.app.gene_ns.ns["_trace_start".to_key()] = trace_start
+  App.app.gene_ns.ns["debug".to_key()] = debug
+  App.app.gene_ns.ns["trace_start".to_key()] = trace_start
+  App.app.gene_ns.ns["trace_end".to_key()] = trace_end
+  App.app.gene_ns.ns["print_stack".to_key()] = print_stack
+  App.app.gene_ns.ns["print_instructions".to_key()] = print_instructions
 
   let class = new_class("Class")
   class.def_native_macro_method "ctor", class_ctor

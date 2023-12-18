@@ -4,33 +4,6 @@ import ./types
 import ./parser
 import ./compiler
 
-proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
-  case matcher.hint_mode:
-    of MhNone:
-      discard
-    of MhSimpleData:
-      for i, value in args.gene.children:
-        {.push checks: off}
-        let field = matcher.children[i]
-        {.pop.}
-        self.frame.match_result.fields.add(MfSuccess)
-        self.frame.scope.def_member(field.name_key, value)
-      if args.gene.children.len < matcher.children.len:
-        for i in args.gene.children.len..matcher.children.len-1:
-          self.frame.match_result.fields.add(MfMissing)
-    else:
-      todo($matcher.hint_mode)
-
-# proc print_stack(self: VirtualMachine) =
-#   var s = "Stack: "
-#   for i, reg in self.frame.stack:
-#     if i > 0:
-#       s &= ", "
-#     if i == self.frame.stack_index.int:
-#       s &= "=> "
-#     s &= $self.frame.stack[i]
-#   echo s
-
 proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
   var indent = ""
@@ -571,30 +544,6 @@ proc exec*(self: VirtualMachine): Value =
             continue
           else:
             todo("CallMethodNoArgs: " & $meth.callable.kind)
-
-      # of IkInternal:
-      #   case inst.arg0.str:
-      #     of "$_trace_start":
-      #       self.trace = true
-      #       self.frame.push(NIL)
-      #     of "$_trace_end":
-      #       self.trace = false
-      #       self.frame.push(NIL)
-      #     of "$_debug":
-      #       if inst.arg1:
-      #         echo "$_debug ", self.frame.current()
-      #       else:
-      #         self.frame.push(NIL)
-      #     of "$_print_instructions":
-      #       echo self.cur_block
-      #       if inst.arg1:
-      #         discard self.frame.pop()
-      #       self.frame.push(NIL)
-      #     of "$_print_stack":
-      #       self.print_stack()
-      #       self.frame.push(NIL)
-      #     else:
-      #       todo(inst.arg0.str)
 
       else:
         todo($inst.kind)

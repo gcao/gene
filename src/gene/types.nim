@@ -1925,6 +1925,23 @@ proc init_app_and_vm*() =
   for callback in VmCreatedCallbacks:
     callback()
 
+proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
+  case matcher.hint_mode:
+    of MhNone:
+      discard
+    of MhSimpleData:
+      for i, value in args.gene.children:
+        {.push checks: off}
+        let field = matcher.children[i]
+        {.pop.}
+        self.frame.match_result.fields.add(MfSuccess)
+        self.frame.scope.def_member(field.name_key, value)
+      if args.gene.children.len < matcher.children.len:
+        for i in args.gene.children.len..matcher.children.len-1:
+          self.frame.match_result.fields.add(MfMissing)
+    else:
+      todo($matcher.hint_mode)
+
 #################### Helpers #####################
 
 const SYM_UNDERSCORE* = 0x7FF9_0000_0000_0000
