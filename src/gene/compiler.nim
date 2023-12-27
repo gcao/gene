@@ -1,87 +1,10 @@
-import tables, strutils, strformat
-import random
+import tables, strutils
 
 import ./types
 import "./compiler/if"
 
 #################### Definitions #################
 proc compile(self: Compiler, input: Value)
-
-proc new_label(): Label =
-  result = rand(int32.high).Label
-
-proc `$`*(self: Instruction): string =
-  case self.kind
-    of IkPushValue,
-      IkVar,
-      IkAddValue, IkLtValue,
-      IkMapSetProp, IkMapSetPropValue,
-      IkArrayAddChildValue,
-      IkResolveSymbol, IkResolveMethod,
-      IkSetMember, IkGetMember,
-      IkSetChild, IkGetChild:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
-    of IkJump, IkJumpIfFalse:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0.int32.to_hex()}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()}"
-    of IkJumpIfMatchSuccess:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0} ${$self.arg1.int32.to_hex()}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} ${$self.arg1.int32.to_hex()}"
-    else:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]}"
-
-proc `$`*(self: seq[Instruction]): string =
-  for i, instr in self:
-    result &= fmt"{i:03} {instr}" & "\n"
-
-proc `$`*(self: CompilationUnit): string =
-  "CompilationUnit " & $self.id & "\n" & $self.instructions
-
-proc `len`*(self: CompilationUnit): int =
-  self.instructions.len
-
-proc `[]`*(self: CompilationUnit, i: int): Instruction =
-  self.instructions[i]
-
-proc find_label*(self: CompilationUnit, label: Label): int =
-  for i, inst in self.instructions:
-    if inst.label == label:
-      return i
-
-proc find_loop_start*(self: CompilationUnit, pos: int): int =
-  var pos = pos
-  while pos > 0:
-    pos.dec()
-    if self.instructions[pos].kind == IkLoopStart:
-      return pos
-  not_allowed("Loop start not found")
-
-proc find_loop_end*(self: CompilationUnit, pos: int): int =
-  var pos = pos
-  while pos < self.instructions.len - 1:
-    pos.inc()
-    if self.instructions[pos].kind == IkLoopEnd:
-      return pos
-  not_allowed("Loop end not found")
-
-# proc args_are_literal(self: ptr Gene): bool =
-#   for k, v in self.props:
-#     if not v.is_literal():
-#       return false
-#   for v in self.children:
-#     if not v.is_literal():
-#       return false
-#   true
 
 proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:
@@ -544,7 +467,7 @@ proc compile*(f: Function) =
 
   # generate code for arguments
   for i, m in f.matcher.children:
-    let label = cast[Label](rand(int32.high))
+    let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
       arg0: i.Value,

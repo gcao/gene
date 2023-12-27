@@ -122,10 +122,10 @@ type
     # references*: References # Uncomment this when it's needed.
 
   # index of a name in a scope
-  NameIndexScope* = distinct int32
+  NameIndexScope* = distinct int16
 
   ScopeObj* = object
-    ref_count*: int32
+    ref_count*: int16
     parent*: Scope
     parent_index_max*: NameIndexScope
     members*:  seq[Value]
@@ -133,6 +133,9 @@ type
     #   first is the optional index in self.mapping_history + 1
     #   second is the index in self.members
     mappings*: Table[Key, int]
+    vars*: ptr UncheckedArray[Value]
+    vars_in_use*: int16
+    vars_max*: int16
 
   Scope* = ptr ScopeObj
 
@@ -337,7 +340,7 @@ type
     fields*: seq[MatchedFieldKind]
 
   Id* = uint64
-  Label* = int32
+  Label* = int16
 
   Compiler* = ref object
     output*: CompilationUnit
@@ -468,6 +471,20 @@ type
     instructions*: seq[Instruction]
     labels*: Table[Label, int]
     skip_return*: bool
+    scope_tracker*: ScopeTracker
+
+  # Used by the compiler to keep track of scopes and variables
+  #
+  # Scopes should be created on demand (when the first variable is defined)
+  # Scopes should be destroyed when they are no longer needed
+  # Scopes should stay alive when they are referenced by child scopes
+  # Function/macro/block/if/loop/switch/do/eval inherit parent scope
+  # Class/namespace do not inherit parent scope
+  ScopeTracker* = ref object
+    parent*: ScopeTracker   # If parent is nil, the scope is the top level scope.
+    parent_index*: int16
+    next_index*: int16      # If next_index is 0, the scope is empty
+    members*: Table[Key, int16]
 
   Address* = object
     id*: Id
@@ -1139,6 +1156,15 @@ proc new_gene_value*(): Value {.inline.} =
 
 proc new_gene_value*(`type`: Value): Value {.inline.} =
   new_gene(`type`).to_gene_value()
+
+# proc args_are_literal(self: ptr Gene): bool =
+#   for k, v in self.props:
+#     if not v.is_literal():
+#       return false
+#   for v in self.children:
+#     if not v.is_literal():
+#       return false
+#   true
 
 #################### Application #################
 
@@ -1907,6 +1933,75 @@ template pop2*(self: var Frame, to: var Value) =
 
 proc default*(self: Frame): Value {.inline.} =
   self.stack[REG_DEFAULT]
+
+#################### COMPILER ####################
+
+proc `$`*(self: Instruction): string =
+  case self.kind
+    of IkPushValue,
+      IkVar,
+      IkAddValue, IkLtValue,
+      IkMapSetProp, IkMapSetPropValue,
+      IkArrayAddChildValue,
+      IkResolveSymbol, IkResolveMethod,
+      IkSetMember, IkGetMember,
+      IkSetChild, IkGetChild:
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
+    of IkJump, IkJumpIfFalse:
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0.int32.to_hex()}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()}"
+    of IkJumpIfMatchSuccess:
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0} ${$self.arg1.int32.to_hex()}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} ${$self.arg1.int32.to_hex()}"
+    else:
+      if self.label.int > 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]}"
+
+proc `$`*(self: seq[Instruction]): string =
+  for i, instr in self:
+    result &= fmt"{i:03} {instr}" & "\n"
+
+proc `$`*(self: CompilationUnit): string =
+  "CompilationUnit " & $self.id & "\n" & $self.instructions
+
+proc `len`*(self: CompilationUnit): int =
+  self.instructions.len
+
+proc `[]`*(self: CompilationUnit, i: int): Instruction =
+  self.instructions[i]
+
+proc new_label*(): Label =
+  result = rand(int16.high).Label
+
+proc find_label*(self: CompilationUnit, label: Label): int =
+  for i, inst in self.instructions:
+    if inst.label == label:
+      return i
+
+proc find_loop_start*(self: CompilationUnit, pos: int): int =
+  var pos = pos
+  while pos > 0:
+    pos.dec()
+    if self.instructions[pos].kind == IkLoopStart:
+      return pos
+  not_allowed("Loop start not found")
+
+proc find_loop_end*(self: CompilationUnit, pos: int): int =
+  var pos = pos
+  while pos < self.instructions.len - 1:
+    pos.inc()
+    if self.instructions[pos].kind == IkLoopEnd:
+      return pos
+  not_allowed("Loop end not found")
 
 #################### VM ##########################
 
