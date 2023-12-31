@@ -45,6 +45,7 @@ type
     VkNativeFn2
 
     # VkInstruction
+    VkScopeTracker
 
   Key* = distinct int64
   Value* = distinct int64
@@ -102,6 +103,8 @@ type
         native_fn2*: NativeFn2
       # of VkInstruction:
       #   instruction*: Instruction
+      of VkScopeTracker:
+        scope_tracker*: ScopeTracker
       else:
         discard
 
@@ -121,14 +124,11 @@ type
     children*: seq[Value]
     # references*: References # Uncomment this when it's needed.
 
-  # index of a name in a scope
-  NameIndexScope* = distinct int16
-
   ScopeObj* = object
     ref_count*: int16
     # tracker*: ScopeTracker
     parent*: Scope
-    parent_index_max*: NameIndexScope   # To remove
+    parent_index_max*: int16   # To remove
     members*:  seq[Value]
     # Value of mappings is composed of two bytes:
     #   first is the optional index in self.mappings_history + 1
@@ -264,9 +264,9 @@ type
     async*: bool
     name*: string
     ns*: Namespace
-    scope_tracker*: ScopeTracker
+    parent_scope_tracker*: ScopeTracker
     parent_scope*: Scope
-    parent_scope_max*: NameIndexScope
+    parent_scope_max*: int16
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -277,7 +277,7 @@ type
     ns*: Namespace
     name*: string
     parent_scope*: Scope
-    parent_scope_max*: NameIndexScope
+    parent_scope_max*: int16
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -287,7 +287,7 @@ type
     # frame*: Frame
     ns*: Namespace
     parent_scope*: Scope
-    parent_scope_max*: NameIndexScope
+    parent_scope_max*: int16
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -367,6 +367,7 @@ type
     IkVar
     IkVarValue
     IkVarResolve
+    IkVarResolveInherited
     IkVarAssign
 
     IkAssign      # TODO: rename to IkSetMemberOnCurrentNS
@@ -462,6 +463,10 @@ type
     label*: Label
     arg0*: Value
     arg1*: Value
+
+  VarIndex* = object
+    local_index*: int32
+    parent_index*: int32
 
   CompilationUnitKind* = enum
     CkDefault
@@ -1299,7 +1304,7 @@ proc free(self: Scope) {.inline.} =
   self.ref_count.dec()
   if self.ref_count == 0:
     self.parent.free()
-    self.parent_index_max = 0.NameIndexScope
+    self.parent_index_max = 0
     self.members.set_len(0)
     self.mappings.clear()
     SCOPES.add(self)
@@ -1317,10 +1322,10 @@ proc new_scope*(): Scope =
     result = cast[Scope](alloc0(sizeof(ScopeObj)))
     result.mappings = init_table[Key, int](8)
 
-proc max*(self: Scope): NameIndexScope {.inline.} =
-  return self.members.len.NameIndexScope
+proc max*(self: Scope): int16 {.inline.} =
+  return self.members.len.int16
 
-proc set_parent*(self: Scope, parent: Scope, max: NameIndexScope) {.inline.} =
+proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
   self.parent.update(parent)
   self.parent_index_max = max
 
@@ -1340,6 +1345,25 @@ proc has_key*(self: Scope, key: Key): bool {.inline.} =
     return true
   elif self.parent != nil:
     return self.parent.has_key(key, self.parent_index_max.int)
+
+proc locate(self: ScopeTracker, key: Key, max: int): VarIndex {.inline.} =
+  let found = self.mappings.get_or_default(key, -1)
+  if found >= 0 and found < max:
+    return VarIndex(parent_index: 0, local_index: found)
+  elif self.parent != nil:
+    result = self.parent.locate(key, self.parent_index_max.int)
+    result.parent_index.inc()
+  else:
+    return VarIndex(parent_index: 0, local_index: -1)
+
+proc locate*(self: ScopeTracker, key: Key): VarIndex =
+  let found = self.mappings.get_or_default(key, -1)
+  if found >= 0:
+    return VarIndex(parent_index: 0, local_index: found)
+  elif self.parent.is_nil():
+    return VarIndex(parent_index: 0, local_index: -1)
+  else:
+    result = self.locate(key, self.parent_index_max.int)
 
 proc def_member*(self: Scope, key: Key, val: Value) {.inline.} =
   if self.mappings.has_key(key):
@@ -1961,19 +1985,19 @@ proc `$`*(self: Instruction): string =
       IkSetMember, IkGetMember,
       IkSetChild, IkGetChild:
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0}"
       else:
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
     of IkJump, IkJumpIfFalse:
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0.int32.to_hex()}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {self.arg0.int:03}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0.int32.to_hex()}"
+        result = fmt"         {($self.kind)[2..^1]} {self.arg0.int:03}"
     of IkJumpIfMatchSuccess:
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} ${$self.arg0} ${$self.arg1.int32.to_hex()}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} ${$self.arg1.int32.to_hex()}"
+        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
     else:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
@@ -2043,11 +2067,12 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
       discard
     of MhSimpleData:
       for i, value in args.gene.children:
-        {.push checks: off}
-        let field = matcher.children[i]
-        {.pop.}
+        # {.push checks: off}
+        # let field = matcher.children[i]
+        # {.pop.}
         self.frame.match_result.fields.add(MfSuccess)
-        self.frame.scope.def_member(field.name_key, value)
+        # self.frame.scope.def_member(field.name_key, value)
+        self.frame.scope.members.add(value)
       if args.gene.children.len < matcher.children.len:
         for i in args.gene.children.len..matcher.children.len-1:
           self.frame.match_result.fields.add(MfMissing)

@@ -61,9 +61,14 @@ proc compile_symbol(self: Compiler, input: Value) =
     let input = translate_symbol(input)
     if input.kind == VkSymbol:
       let key = cast[Key](input)
-      if self.scope.mappings.has_key(key):
-        let index = self.scope.mappings[key]
-        self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index.Value))
+      let found = self.scope.locate(key)
+      # echo "compile_symbol ", input
+      # echo found
+      if found.local_index >= 0:
+        if found.parent_index == 0:
+          self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
+        else:
+          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index.Value))
       else:
         self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
     elif input.kind == VkComplexSymbol:
@@ -155,7 +160,9 @@ proc compile_break(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkBreak))
 
 proc compile_fn(self: Compiler, input: Value) =
-  self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
+  var r = new_ref(VkScopeTracker)
+  r.scope_tracker = self.scope
+  self.output.instructions.add(Instruction(kind: IkFunction, arg0: input, arg1: r.to_ref_value()))
 
 proc compile_return(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
@@ -486,6 +493,8 @@ proc compile*(f: Function) =
 
   let self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
+  self.output.scope_tracker.parent = f.parent_scope_tracker
+  self.output.scope_tracker.parent_index_max = f.parent_scope_max
   self.scopes.add(self.output.scope_tracker)
 
   # generate code for arguments

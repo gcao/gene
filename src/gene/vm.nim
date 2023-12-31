@@ -47,7 +47,19 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.scope.members.add(self.frame.current())
 
       of IkVarResolve:
+        {.push checks: off}
         self.frame.push(self.frame.scope.members[inst.arg0.int])
+        {.pop.}
+
+      of IkVarResolveInherited:
+        var parent_index = inst.arg1.int32
+        var scope: Scope = self.frame.scope
+        while parent_index > 0:
+          parent_index.dec()
+          scope = scope.parent
+        {.push checks: off}
+        self.frame.push(scope.members[inst.arg0.int])
+        {.pop.}
 
       of IkVarAssign:
         let value = self.frame.current()
@@ -431,6 +443,7 @@ proc exec*(self: VirtualMachine): Value =
         r.fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
+        f.parent_scope_tracker = inst.arg1.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         self.frame.push(v)
