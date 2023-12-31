@@ -126,16 +126,19 @@ type
 
   ScopeObj* = object
     ref_count*: int16
+    # tracker*: ScopeTracker
     parent*: Scope
-    parent_index_max*: NameIndexScope
+    parent_index_max*: NameIndexScope   # To remove
     members*:  seq[Value]
     # Value of mappings is composed of two bytes:
-    #   first is the optional index in self.mapping_history + 1
+    #   first is the optional index in self.mappings_history + 1
     #   second is the index in self.members
-    mappings*: Table[Key, int]
-    vars*: ptr UncheckedArray[Value]
-    vars_in_use*: int16
-    vars_max*: int16
+    mappings*: Table[Key, int]          # To remove
+    # Below fields are replacement of seq[Value] to achieve better performance
+    #   Have to benchmark to see if it's worth it.
+    # vars*: ptr UncheckedArray[Value]
+    # vars_in_use*: int16
+    # vars_max*: int16
 
   Scope* = ptr ScopeObj
 
@@ -261,6 +264,7 @@ type
     async*: bool
     name*: string
     ns*: Namespace
+    scope_tracker*: ScopeTracker
     parent_scope*: Scope
     parent_scope_max*: NameIndexScope
     matcher*: RootMatcher
@@ -345,6 +349,7 @@ type
   Compiler* = ref object
     output*: CompilationUnit
     quote_level*: int
+    scopes*: seq[ScopeTracker]
 
   InstructionKind* {.size: sizeof(int16).} = enum
     IkNoop
@@ -361,7 +366,10 @@ type
 
     IkVar
     IkVarValue
-    IkAssign
+    IkVarResolve
+    IkVarAssign
+
+    IkAssign      # TODO: rename to IkSetMemberOnCurrentNS
 
     IkJump        # unconditional jump
     IkJumpIfFalse
@@ -482,9 +490,9 @@ type
   # Class/namespace do not inherit parent scope
   ScopeTracker* = ref object
     parent*: ScopeTracker   # If parent is nil, the scope is the top level scope.
-    parent_index*: int16
+    parent_index_max*: int16
     next_index*: int16      # If next_index is 0, the scope is empty
-    members*: Table[Key, int16]
+    mappings*: Table[Key, int16]
 
   Address* = object
     id*: Id
@@ -1936,6 +1944,12 @@ proc default*(self: Frame): Value {.inline.} =
 
 #################### COMPILER ####################
 
+proc new_compilation_unit*(): CompilationUnit =
+  CompilationUnit(
+    id: new_id(),
+    scope_tracker: ScopeTracker(),
+  )
+
 proc `$`*(self: Instruction): string =
   case self.kind
     of IkPushValue,
@@ -2002,6 +2016,9 @@ proc find_loop_end*(self: CompilationUnit, pos: int): int =
     if self.instructions[pos].kind == IkLoopEnd:
       return pos
   not_allowed("Loop end not found")
+
+template scope*(self: Compiler): ScopeTracker =
+  self.scopes[^1]
 
 #################### VM ##########################
 

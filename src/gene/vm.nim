@@ -43,7 +43,15 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkVar:
-        self.frame.scope.def_member(inst.arg0.Key, self.frame.current())
+        # self.frame.scope.def_member(inst.arg0.Key, self.frame.current())
+        self.frame.scope.members.add(self.frame.current())
+
+      of IkVarResolve:
+        self.frame.push(self.frame.scope.members[inst.arg0.int])
+
+      of IkVarAssign:
+        let value = self.frame.current()
+        self.frame.scope.members[inst.arg0.int] = value
 
       of IkAssign:
         let value = self.frame.current()

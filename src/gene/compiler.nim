@@ -40,7 +40,11 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
     self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
   else:
     let r = translate_symbol(input).ref
-    self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+    let key = r.csymbol[0].to_key()
+    if self.scope.mappings.has_key(key):
+      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope.mappings[key].Value))
+    else:
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
     for s in r.csymbol[1..^1]:
       let (is_int, i) = to_int(s)
       if is_int:
@@ -56,7 +60,12 @@ proc compile_symbol(self: Compiler, input: Value) =
   else:
     let input = translate_symbol(input)
     if input.kind == VkSymbol:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
+      let key = cast[Key](input)
+      if self.scope.mappings.has_key(key):
+        let index = self.scope.mappings[key]
+        self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index.Value))
+      else:
+        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
     elif input.kind == VkComplexSymbol:
       self.compile_complex_symbol(input)
 
@@ -91,20 +100,32 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
+  let index = self.scope.next_index
+  self.scope.mappings[name.str.to_key()] = index
+  self.scope.next_index.inc()
   if gene.children.len > 1:
     self.compile(gene.children[1])
-    self.output.instructions.add(Instruction(kind: IkVar, arg0: name))
+    self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
   else:
-    self.output.instructions.add(Instruction(kind: IkVarValue, arg0: name, arg1: NIL))
+    self.output.instructions.add(Instruction(kind: IkVarValue, arg0: index.Value, arg1: NIL))
 
 proc compile_assignment(self: Compiler, gene: ptr Gene) =
   let `type` = gene.type
   if `type`.kind == VkSymbol:
     self.compile(gene.children[1])
-    self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
+    let key = `type`.str.to_key()
+    if self.scope.mappings.has_key(key):
+      let index = self.scope.mappings[key]
+      self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: index.Value))
+    else:
+      self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
   elif `type`.kind == VkComplexSymbol:
     let r = translate_symbol(`type`).ref
-    self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+    let key = r.csymbol[0].to_key()
+    if self.scope.mappings.has_key(key):
+      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope.mappings[key].Value))
+    else:
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
     if r.csymbol.len > 2:
       for s in r.csymbol[1..^2]:
         let (is_int, i) = to_int(s)
@@ -446,7 +467,8 @@ proc update_jumps(self: CompilationUnit) =
         discard
 
 proc compile*(input: seq[Value]): CompilationUnit =
-  let self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: new_compilation_unit())
+  self.scopes.add(self.output.scope_tracker)
   self.output.instructions.add(Instruction(kind: IkStart))
 
   for i, v in input:
@@ -462,11 +484,13 @@ proc compile*(f: Function) =
   if f.body_compiled != nil:
     return
 
-  let self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
+  self.scopes.add(self.output.scope_tracker)
 
   # generate code for arguments
   for i, m in f.matcher.children:
+    self.output.scope_tracker.mappings[m.name_key] = i.int16
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
@@ -483,6 +507,7 @@ proc compile*(f: Function) =
 
   self.compile(f.body)
   self.output.instructions.add(Instruction(kind: IkEnd))
+  discard self.scopes.pop()
   self.output.update_jumps()
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
