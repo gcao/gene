@@ -41,8 +41,8 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
   else:
     let r = translate_symbol(input).ref
     let key = r.csymbol[0].to_key()
-    if self.scope.mappings.has_key(key):
-      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope.mappings[key].Value))
+    if self.scope_tracker.mappings.has_key(key):
+      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
     for s in r.csymbol[1..^1]:
@@ -61,9 +61,7 @@ proc compile_symbol(self: Compiler, input: Value) =
     let input = translate_symbol(input)
     if input.kind == VkSymbol:
       let key = cast[Key](input)
-      let found = self.scope.locate(key)
-      # echo "compile_symbol ", input
-      # echo found
+      let found = self.scope_tracker.locate(key)
       if found.local_index >= 0:
         if found.parent_index == 0:
           self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
@@ -105,9 +103,9 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
-  let index = self.scope.next_index
-  self.scope.mappings[name.str.to_key()] = index
-  self.scope.next_index.inc()
+  let index = self.scope_tracker.next_index
+  self.scope_tracker.mappings[name.str.to_key()] = index
+  self.scope_tracker.next_index.inc()
   if gene.children.len > 1:
     self.compile(gene.children[1])
     self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
@@ -119,16 +117,19 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
   if `type`.kind == VkSymbol:
     self.compile(gene.children[1])
     let key = `type`.str.to_key()
-    if self.scope.mappings.has_key(key):
-      let index = self.scope.mappings[key]
-      self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: index.Value))
+    let found = self.scope_tracker.locate(key)
+    if found.local_index >= 0:
+      if found.parent_index == 0:
+        self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: found.local_index.Value))
+      else:
+        self.output.instructions.add(Instruction(kind: IkVarAssignInherited, arg0: found.local_index.Value, arg1: found.parent_index.Value))
     else:
       self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
   elif `type`.kind == VkComplexSymbol:
     let r = translate_symbol(`type`).ref
     let key = r.csymbol[0].to_key()
-    if self.scope.mappings.has_key(key):
-      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope.mappings[key].Value))
+    if self.scope_tracker.mappings.has_key(key):
+      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
     if r.csymbol.len > 2:
@@ -161,7 +162,7 @@ proc compile_break(self: Compiler, gene: ptr Gene) =
 
 proc compile_fn(self: Compiler, input: Value) =
   var r = new_ref(VkScopeTracker)
-  r.scope_tracker = self.scope
+  r.scope_tracker = self.scope_tracker
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input, arg1: r.to_ref_value()))
 
 proc compile_return(self: Compiler, gene: ptr Gene) =
@@ -475,7 +476,7 @@ proc update_jumps(self: CompilationUnit) =
 
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())
-  self.scopes.add(self.output.scope_tracker)
+  self.scope_trackers.add(self.output.scope_tracker)
   self.output.instructions.add(Instruction(kind: IkStart))
 
   for i, v in input:
@@ -495,7 +496,7 @@ proc compile*(f: Function) =
   self.output.instructions.add(Instruction(kind: IkStart))
   self.output.scope_tracker.parent = f.parent_scope_tracker
   self.output.scope_tracker.parent_index_max = f.parent_scope_max
-  self.scopes.add(self.output.scope_tracker)
+  self.scope_trackers.add(self.output.scope_tracker)
 
   # generate code for arguments
   for i, m in f.matcher.children:
@@ -516,7 +517,7 @@ proc compile*(f: Function) =
 
   self.compile(f.body)
   self.output.instructions.add(Instruction(kind: IkEnd))
-  discard self.scopes.pop()
+  discard self.scope_trackers.pop()
   self.output.update_jumps()
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher

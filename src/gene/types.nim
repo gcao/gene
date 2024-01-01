@@ -130,10 +130,6 @@ type
     parent*: Scope
     parent_index_max*: int16   # To remove
     members*:  seq[Value]
-    # Value of mappings is composed of two bytes:
-    #   first is the optional index in self.mappings_history + 1
-    #   second is the index in self.members
-    mappings*: Table[Key, int]          # To remove
     # Below fields are replacement of seq[Value] to achieve better performance
     #   Have to benchmark to see if it's worth it.
     # vars*: ptr UncheckedArray[Value]
@@ -349,7 +345,7 @@ type
   Compiler* = ref object
     output*: CompilationUnit
     quote_level*: int
-    scopes*: seq[ScopeTracker]
+    scope_trackers*: seq[ScopeTracker]
 
   InstructionKind* {.size: sizeof(int16).} = enum
     IkNoop
@@ -369,6 +365,7 @@ type
     IkVarResolve
     IkVarResolveInherited
     IkVarAssign
+    IkVarAssignInherited
 
     IkAssign      # TODO: rename to IkSetMemberOnCurrentNS
 
@@ -1307,7 +1304,6 @@ proc free(self: Scope) {.inline.} =
     self.parent = nil
     self.parent_index_max = 0
     self.members.set_len(0)
-    self.mappings.clear()
     SCOPES.add(self)
 
 proc update*(self: var Scope, scope: Scope) {.inline.} =
@@ -1321,7 +1317,6 @@ proc new_scope*(): Scope =
     result = SCOPES.pop()
   else:
     result = cast[Scope](alloc0(sizeof(ScopeObj)))
-    result.mappings = init_table[Key, int](8)
 
 proc max*(self: Scope): int16 {.inline.} =
   return self.members.len.int16
@@ -1329,23 +1324,6 @@ proc max*(self: Scope): int16 {.inline.} =
 proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
   self.parent.update(parent)
   self.parent_index_max = max
-
-# proc reset*(self: Scope) {.inline.} =
-#   self.parent = nil
-#   self.members.setLen(0)
-
-proc has_key(self: Scope, key: Key, max: int): bool {.inline.} =
-  let found = self.mappings.get_or_default(key, max)
-  if found < max:
-    return true
-  elif self.parent != nil:
-    return self.parent.has_key(key, self.parent_index_max.int)
-
-proc has_key*(self: Scope, key: Key): bool {.inline.} =
-  if self.mappings.has_key(key):
-    return true
-  elif self.parent != nil:
-    return self.parent.has_key(key, self.parent_index_max.int)
 
 proc locate(self: ScopeTracker, key: Key, max: int): VarIndex {.inline.} =
   let found = self.mappings.get_or_default(key, -1)
@@ -1365,58 +1343,6 @@ proc locate*(self: ScopeTracker, key: Key): VarIndex =
     return VarIndex(parent_index: 0, local_index: -1)
   else:
     result = self.locate(key, self.parent_index_max.int)
-
-proc def_member*(self: Scope, key: Key, val: Value) {.inline.} =
-  if self.mappings.has_key(key):
-    not_allowed("Duplicate key: " & get_symbol(key.int64))
-  else:
-    let index = self.members.len
-    self.members.add(val)
-    self.mappings[key] = index
-
-proc `[]`(self: Scope, key: Key, max: int): Value {.inline.} =
-  {.push checks: off}
-  let found = self.mappings.get_or_default(key, max)
-  if found < max:
-    return self.members[found]
-  elif self.parent != nil:
-    return self.parent[key, self.parent_index_max.int]
-  else:
-    return NOT_FOUND
-  {.pop.}
-
-proc `[]`*(self: Scope, key: Key): Value {.inline.} =
-  {.push checks: off}
-  let found = self.mappings.get_or_default(key, -1)
-  if found != -1:
-    return self.members[found]
-  elif self.parent != nil:
-    return self.parent[key, self.parent_index_max.int]
-  else:
-    return NOT_FOUND
-  {.pop.}
-
-proc `[]=`(self: Scope, key: Key, val: Value, max: int) {.inline.} =
-  {.push checks: off}
-  let found = self.mappings.get_or_default(key, max)
-  if found < max:
-    self.members[found] = val
-  elif self.parent != nil:
-    self.parent.`[]=`(key, val, self.parent_index_max.int)
-  else:
-    not_allowed()
-  {.pop.}
-
-proc `[]=`*(self: Scope, key: Key, val: Value) {.inline.} =
-  {.push checks: off}
-  let found = self.mappings.get_or_default(key, -1)
-  if found != -1:
-    self.members[found] = val
-  elif self.parent != nil:
-    self.parent.`[]=`(key, val, self.parent_index_max.int)
-  else:
-    not_allowed()
-  {.pop.}
 
 #################### Pattern Matching ############
 
@@ -2042,8 +1968,8 @@ proc find_loop_end*(self: CompilationUnit, pos: int): int =
       return pos
   not_allowed("Loop end not found")
 
-template scope*(self: Compiler): ScopeTracker =
-  self.scopes[^1]
+template scope_tracker*(self: Compiler): ScopeTracker =
+  self.scope_trackers[^1]
 
 #################### VM ##########################
 

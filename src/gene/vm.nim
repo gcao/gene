@@ -53,7 +53,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVarResolveInherited:
         var parent_index = inst.arg1.int32
-        var scope: Scope = self.frame.scope
+        var scope = self.frame.scope
         while parent_index > 0:
           parent_index.dec()
           scope = scope.parent
@@ -63,11 +63,25 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVarAssign:
         let value = self.frame.current()
+        {.push checks: off}
         self.frame.scope.members[inst.arg0.int] = value
+        {.pop.}
+
+      of IkVarAssignInherited:
+        let value = self.frame.current()
+        var scope = self.frame.scope
+        var parent_index = inst.arg1.int32
+        while parent_index > 0:
+          parent_index.dec()
+          scope = scope.parent
+        {.push checks: off}
+        scope.members[inst.arg0.int] = value
+        {.pop.}
 
       of IkAssign:
-        let value = self.frame.current()
-        self.frame.scope[inst.arg0.Key] = value
+        todo($IkAssign)
+        # let value = self.frame.current()
+        # Find the namespace where the member is defined and assign it there
 
       of IkResolveSymbol:
         case inst.arg0.int64:
@@ -78,13 +92,16 @@ proc exec*(self: VirtualMachine): Value =
           of SYM_GENE:
             self.frame.push(App.app.gene_ns)
           else:
-            let scope = self.frame.scope
             let name = inst.arg0.Key
-            var value = scope[name]
+            # let scope = self.frame.scope
+            # var value = scope[name]
+            # if value.int64 == NOT_FOUND.int64:
+            #   value = self.frame.ns[name]
+            #   if value.int64 == NOT_FOUND.int64:
+            #     not_allowed("Unknown symbol " & name.int.get_symbol())
+            let value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
-              value = self.frame.ns[name]
-              if value.int64 == NOT_FOUND.int64:
-                not_allowed("Unknown symbol " & name.int.get_symbol())
+              not_allowed("Unknown symbol " & name.int.get_symbol())
             self.frame.push(value)
 
       of IkSelf:

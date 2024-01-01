@@ -67,6 +67,15 @@ test_vm """
   (f 2)
 """, 3
 
+test_vm """
+  (var a 1)
+  (fn f b
+    (a = 2)
+    (a + b)
+  )
+  (f 2)
+""", 4
+
 # test_vm """
 #   (var a 1)
 #   (fn f b
