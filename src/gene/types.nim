@@ -1861,12 +1861,14 @@ proc new_frame*(): Frame {.inline.} =
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
   result.ns = ns
-  result.scope.update(new_scope())
+  result.scope = new_scope()
+  result.scope.ref_count.inc()
 
 proc new_frame*(caller: Caller, scope: Scope): Frame {.inline.} =
   result = new_frame()
   result.caller = caller
-  result.scope.update(scope)
+  result.scope = scope
+  result.scope.ref_count.inc()
 
 proc new_frame*(caller: Caller): Frame {.inline.} =
   result = new_frame(caller, new_scope())
