@@ -43,8 +43,9 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkVar:
-        # self.frame.scope.def_member(inst.arg0.Key, self.frame.current())
+        {.push checks: off.}
         self.frame.scope.members.add(self.frame.current())
+        {.pop.}
 
       of IkVarResolve:
         {.push checks: off}
@@ -62,13 +63,15 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkVarAssign:
-        let value = self.frame.current()
         {.push checks: off}
+        let value = self.frame.current()
         self.frame.scope.members[inst.arg0.int] = value
         {.pop.}
 
       of IkVarAssignInherited:
+        {.push checks: off}
         let value = self.frame.current()
+        {.pop.}
         var scope = self.frame.scope
         var parent_index = inst.arg1.int32
         while parent_index > 0:
@@ -209,7 +212,9 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(new_gene_value())
 
       of IkGeneStartDefault:
+        {.push checks: off}
         let gene_type = self.frame.current()
+        {.pop.}
         case gene_type.kind:
           of VkFunction:
             var r = new_ref(VkScope)
@@ -274,15 +279,20 @@ proc exec*(self: VirtualMachine): Value =
                 todo($v.kind)
 
       of IkGeneSetType:
+        {.push checks: off}
         var value: Value
         self.frame.pop2(value)
         self.frame.current().gene.type = value
+        {.pop.}
       of IkGeneSetProp:
+        {.push checks: off}
         let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
         self.frame.current().gene.props[key] = value
+        {.pop.}
       of IkGeneAddChild:
+        {.push checks: off}
         var child: Value
         self.frame.pop2(child)
         let v = self.frame.current()
@@ -290,8 +300,10 @@ proc exec*(self: VirtualMachine): Value =
           v.ref.scope.members.add(child)
         else:
           v.gene.children.add(child)
+        {.pop.}
 
       of IkGeneEnd:
+        {.push checks: off}
         if self.frame.current().kind == VkScope:
           let scope = self.frame.pop().ref.scope
           scope.ref_count.dec()
@@ -320,6 +332,7 @@ proc exec*(self: VirtualMachine): Value =
               todo($v.kind)
 
         let v = self.frame.current()
+        {.pop.}
         let gene_type = v.gene.type
         if gene_type != nil:
           case gene_type.kind:
@@ -397,16 +410,22 @@ proc exec*(self: VirtualMachine): Value =
               discard
 
       of IkAdd:
+        {.push checks: off}
         var second: Value
         self.frame.pop2(second)
         self.frame.replace(self.frame.current().int + second.int)
+        {.pop.}
 
       of IkSub:
+        {.push checks: off}
         var second: Value
         self.frame.pop2(second)
         self.frame.replace(self.frame.current().int - second.int)
+        {.pop.}
       of IkSubValue:
+        {.push checks: off}
         self.frame.replace(self.frame.current().int - inst.arg0.int)
+        {.pop.}
 
       of IkMul:
         self.frame.push(self.frame.pop().int * self.frame.pop().int)
@@ -417,9 +436,11 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(first / second)
 
       of IkLt:
+        {.push checks: off}
         var second: Value
         self.frame.pop2(second)
         self.frame.replace(self.frame.current().int < second.int)
+        {.pop.}
       of IkLtValue:
         var first: Value
         self.frame.pop2(first)

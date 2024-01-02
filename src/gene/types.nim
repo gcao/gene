@@ -1878,10 +1878,8 @@ proc update*(self: var Frame, f: Frame) {.inline.} =
   self.free()
   self = f
 
-proc current*(self: var Frame): Value {.inline.} =
-  {.push checks: off.}
-  result = self.stack[self.stack_index - 1]
-  {.pop.}
+template current*(self: Frame): Value =
+  self.stack[self.stack_index - 1]
 
 proc replace*(self: var Frame, v: Value) {.inline.} =
   self.stack[self.stack_index - 1] = v
