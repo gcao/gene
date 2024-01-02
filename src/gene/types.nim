@@ -1299,11 +1299,10 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 var SCOPES: seq[Scope] = @[]
 
 proc free(self: Scope) {.inline.} =
-  if self.is_nil:
-    return
   self.ref_count.dec()
   if self.ref_count == 0:
-    self.parent.free()
+    if not self.parent.is_nil:
+      self.parent.free()
     self.parent = nil
     self.parent_index_max = 0
     self.members.set_len(0)
@@ -1312,7 +1311,8 @@ proc free(self: Scope) {.inline.} =
 proc update*(self: var Scope, scope: Scope) {.inline.} =
   if not scope.is_nil:
     scope.ref_count.inc()
-  self.free()
+  if not self.is_nil:
+    self.free()
   self = scope
 
 proc new_scope*(): Scope =
@@ -1839,8 +1839,6 @@ const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
 proc free*(self: var Frame) {.inline.} =
-  if self.is_nil:
-    return
   self.ref_count.dec()
   if self.ref_count == 0:
     if self.caller != nil:
@@ -1875,7 +1873,8 @@ proc new_frame*(caller: Caller): Frame {.inline.} =
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   f.ref_count.inc()
-  self.free()
+  if not self.is_nil:
+    self.free()
   self = f
 
 template current*(self: Frame): Value =
