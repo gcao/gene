@@ -93,12 +93,6 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(App.app.gene_ns)
           else:
             let name = inst.arg0.Key
-            # let scope = self.frame.scope
-            # var value = scope[name]
-            # if value.int64 == NOT_FOUND.int64:
-            #   value = self.frame.ns[name]
-            #   if value.int64 == NOT_FOUND.int64:
-            #     not_allowed("Unknown symbol " & name.int.get_symbol())
             let value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
               not_allowed("Unknown symbol " & name.int.get_symbol())
@@ -222,7 +216,7 @@ proc exec*(self: VirtualMachine): Value =
             r.scope = new_scope()
             r.scope.ref_count.inc()
             self.frame.push(r.to_ref_value())
-            self.pc.inc()
+            self.pc = inst.arg0.int
             continue
           else:
             discard
