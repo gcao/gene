@@ -342,7 +342,7 @@ type
   MatchResult* = object
     fields*: seq[MatchedFieldKind]
 
-  Id* = uint64
+  Id* = distinct int64
   Label* = int16
 
   Compiler* = ref object
@@ -647,6 +647,12 @@ template `==`*(a, b: Key): bool =
   cast[int64](a) == cast[int64](b)
 
 template hash*(v: Key): Hash =
+  cast[Hash](v)
+
+template `==`*(a, b: Id): bool =
+  cast[int64](a) == cast[int64](b)
+
+template hash*(v: Id): Hash =
   cast[Hash](v)
 
 proc todo*() =
@@ -1943,7 +1949,7 @@ proc `$`*(self: seq[Instruction]): string =
     result &= fmt"{i:03} {instr}" & "\n"
 
 proc `$`*(self: CompilationUnit): string =
-  "CompilationUnit " & $self.id & "\n" & $self.instructions
+  "CompilationUnit " & $(cast[uint64](self.id)) & "\n" & $self.instructions
 
 proc new_label*(): Label =
   result = rand(int16.high).Label
