@@ -46,6 +46,7 @@ type
 
     # VkInstruction
     VkScopeTracker
+    VkScope
 
   Key* = distinct int64
   Value* = distinct int64
@@ -105,6 +106,8 @@ type
       #   instruction*: Instruction
       of VkScopeTracker:
         scope_tracker*: ScopeTracker
+      of VkScope:
+        scope*: Scope
       else:
         discard
 
@@ -1860,10 +1863,13 @@ proc new_frame*(ns: Namespace): Frame {.inline.} =
   result.ns = ns
   result.scope.update(new_scope())
 
-proc new_frame*(caller: Caller): Frame {.inline.} =
+proc new_frame*(caller: Caller, scope: Scope): Frame {.inline.} =
   result = new_frame()
   result.caller = caller
-  result.scope.update(new_scope())
+  result.scope.update(scope)
+
+proc new_frame*(caller: Caller): Frame {.inline.} =
+  result = new_frame(caller, new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   f.ref_count.inc()
@@ -1871,7 +1877,9 @@ proc update*(self: var Frame, f: Frame) {.inline.} =
   self = f
 
 proc current*(self: var Frame): Value {.inline.} =
-  self.stack[self.stack_index - 1]
+  {.push checks: off.}
+  result = self.stack[self.stack_index - 1]
+  {.pop.}
 
 proc replace*(self: var Frame, v: Value) {.inline.} =
   self.stack[self.stack_index - 1] = v
@@ -1988,23 +1996,19 @@ proc init_app_and_vm*() =
   for callback in VmCreatedCallbacks:
     callback()
 
-proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
-  case matcher.hint_mode:
-    of MhNone:
-      discard
-    of MhSimpleData:
-      for i, value in args.gene.children:
-        # {.push checks: off}
-        # let field = matcher.children[i]
-        # {.pop.}
-        self.frame.match_result.fields.add(MfSuccess)
-        # self.frame.scope.def_member(field.name_key, value)
-        self.frame.scope.members.add(value)
-      if args.gene.children.len < matcher.children.len:
-        for i in args.gene.children.len..matcher.children.len-1:
-          self.frame.match_result.fields.add(MfMissing)
-    else:
-      todo($matcher.hint_mode)
+# proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
+#   case matcher.hint_mode:
+#     of MhNone:
+#       discard
+#     of MhSimpleData:
+#       for i, value in args.gene.children:
+#         self.frame.match_result.fields.add(MfSuccess)
+#         self.frame.scope.members.add(value)
+#       if args.gene.children.len < matcher.children.len:
+#         for i in args.gene.children.len..matcher.children.len-1:
+#           self.frame.match_result.fields.add(MfMissing)
+#     else:
+#       todo($matcher.hint_mode)
 
 #################### Helpers #####################
 

@@ -25,8 +25,8 @@ proc exec*(self: VirtualMachine): Value =
       of IkStart:
         if not self.trace: # This is part of INDENT_LOGIC
           indent &= "  "
-        if self.cur_block.matcher != nil:
-          self.handle_args(self.cur_block.matcher, self.frame.args)
+        # if self.cur_block.matcher != nil:
+        #   self.handle_args(self.cur_block.matcher, self.frame.args)
 
       of IkEnd:
         indent.delete(indent.len-2..indent.len-1)
@@ -169,7 +169,8 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkJumpIfMatchSuccess:
-        if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
+        # if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
+        if self.frame.scope.members.len > inst.arg0.int:
           self.pc = inst.arg1.int
           continue
 
@@ -214,6 +215,18 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(new_gene_value())
 
       of IkGeneStartDefault:
+        let gene_type = self.frame.current()
+        case gene_type.kind:
+          of VkFunction:
+            var r = new_ref(VkScope)
+            r.scope = new_scope()
+            r.scope.ref_count.inc()
+            self.frame.push(r.to_ref_value())
+            self.pc.inc()
+            continue
+          else:
+            discard
+
         var v: Value
         self.frame.pop2(v)
         self.frame.push(new_gene_value(v))
@@ -278,9 +291,40 @@ proc exec*(self: VirtualMachine): Value =
       of IkGeneAddChild:
         var child: Value
         self.frame.pop2(child)
-        self.frame.current().gene.children.add(child)
+        let v = self.frame.current()
+        if v.kind == VkScope:
+          v.ref.scope.members.add(child)
+        else:
+          v.gene.children.add(child)
 
       of IkGeneEnd:
+        if self.frame.current().kind == VkScope:
+          let scope = self.frame.pop().ref.scope
+          scope.ref_count.dec()
+          let v = self.frame.current()
+          case v.kind:
+            of VkFunction:
+              self.pc.inc()
+              discard self.frame.pop()
+
+              let f = v.ref.fn
+              f.compile()
+              self.code_mgr.data[f.body_compiled.id] = f.body_compiled
+
+              let caller = Caller(
+                address: Address(id: self.cur_block.id, pc: self.pc),
+              )
+              caller.frame.update(self.frame)
+              self.frame.update(new_frame(caller, scope))
+              self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+              self.frame.ns = f.ns
+              self.frame.args = v
+              self.cur_block = f.body_compiled
+              self.pc = 0
+              continue
+            else:
+              todo($v.kind)
+
         let v = self.frame.current()
         let gene_type = v.gene.type
         if gene_type != nil:
@@ -586,7 +630,7 @@ proc exec*(self: VirtualMachine): Value =
       else:
         todo($inst.kind)
 
-    self.pc.inc
+    self.pc.inc()
     if self.pc >= self.cur_block.len:
       break
 
