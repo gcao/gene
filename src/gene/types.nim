@@ -1871,7 +1871,9 @@ proc update*(self: var Frame, f: Frame) {.inline.} =
   self = f
 
 proc current*(self: var Frame): Value {.inline.} =
-  self.stack[self.stack_index - 1]
+  {.push checks: off.}
+  result = self.stack[self.stack_index - 1]
+  {.pop.}
 
 proc replace*(self: var Frame, v: Value) {.inline.} =
   self.stack[self.stack_index - 1] = v
@@ -1994,11 +1996,7 @@ proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inl
       discard
     of MhSimpleData:
       for i, value in args.gene.children:
-        # {.push checks: off}
-        # let field = matcher.children[i]
-        # {.pop.}
         self.frame.match_result.fields.add(MfSuccess)
-        # self.frame.scope.def_member(field.name_key, value)
         self.frame.scope.members.add(value)
       if args.gene.children.len < matcher.children.len:
         for i in args.gene.children.len..matcher.children.len-1:

@@ -4,6 +4,14 @@ import ./types
 import ./parser
 import ./compiler
 
+# Important: not all push operation needs to be checked because many of
+# them are often used in an expression. In those cases, add this check
+# will only slow down the VM.
+proc is_next_inst_pop(self: VirtualMachine): bool {.inline.} =
+  {.push checks: off}
+  result = self.cur_block.instructions[self.pc + 1].kind == IkPop
+  {.pop.}
+
 proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
   var indent = ""
@@ -43,7 +51,6 @@ proc exec*(self: VirtualMachine): Value =
           continue
 
       of IkVar:
-        # self.frame.scope.def_member(inst.arg0.Key, self.frame.current())
         self.frame.scope.members.add(self.frame.current())
 
       of IkVarResolve:
@@ -93,12 +100,6 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(App.app.gene_ns)
           else:
             let name = inst.arg0.Key
-            # let scope = self.frame.scope
-            # var value = scope[name]
-            # if value.int64 == NOT_FOUND.int64:
-            #   value = self.frame.ns[name]
-            #   if value.int64 == NOT_FOUND.int64:
-            #     not_allowed("Unknown symbol " & name.int.get_symbol())
             let value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
               not_allowed("Unknown symbol " & name.int.get_symbol())
@@ -126,7 +127,11 @@ proc exec*(self: VirtualMachine): Value =
             target.ref.instance_props[name] = value
           else:
             todo($target.kind)
-        self.frame.push(value)
+
+        if self.is_next_inst_pop():
+          self.pc.inc()
+        else:
+          self.frame.push(value)
 
       of IkGetMember:
         let name = inst.arg0.Key
@@ -187,7 +192,10 @@ proc exec*(self: VirtualMachine): Value =
       of IkPushValue:
         self.frame.push(inst.arg0)
       of IkPushNil:
-        self.frame.push(NIL)
+        if self.is_next_inst_pop():
+          self.pc.inc()
+        else:
+          self.frame.push(NIL)
       of IkPop:
         discard self.frame.pop()
 
@@ -463,7 +471,11 @@ proc exec*(self: VirtualMachine): Value =
         f.parent_scope_tracker = inst.arg1.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
-        self.frame.push(v)
+        if self.is_next_inst_pop():
+          r.ref_count.inc() # Prevent GC
+          self.pc.inc()
+        else:
+          self.frame.push(v)
 
       of IkMacro:
         let m = to_macro(inst.arg0)
@@ -472,7 +484,11 @@ proc exec*(self: VirtualMachine): Value =
         r.macro = m
         let v = r.to_ref_value()
         m.ns[m.name.to_key()] = v
-        self.frame.push(v)
+        if self.is_next_inst_pop():
+          r.ref_count.inc() # Prevent GC
+          self.pc.inc()
+        else:
+          self.frame.push(v)
 
       of IkReturn:
         let caller = self.frame.caller
@@ -493,7 +509,11 @@ proc exec*(self: VirtualMachine): Value =
         r.ns = ns
         let v = r.to_ref_value()
         self.frame.ns[name.Key] = v
-        self.frame.push(v)
+        if self.is_next_inst_pop():
+          r.ref_count.inc() # Prevent GC
+          self.pc.inc()
+        else:
+          self.frame.push(v)
 
       of IkClass:
         let name = inst.arg0
@@ -502,7 +522,11 @@ proc exec*(self: VirtualMachine): Value =
         r.class = class
         let v = r.to_ref_value()
         self.frame.ns[name.Key] = v
-        self.frame.push(v)
+        if self.is_next_inst_pop():
+          r.ref_count.inc() # Prevent GC
+          self.pc.inc()
+        else:
+          self.frame.push(v)
 
       of IkNew:
         let v = self.frame.pop()
@@ -586,7 +610,7 @@ proc exec*(self: VirtualMachine): Value =
       else:
         todo($inst.kind)
 
-    self.pc.inc
+    self.pc.inc()
     if self.pc >= self.cur_block.len:
       break
 
