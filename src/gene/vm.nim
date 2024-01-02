@@ -646,7 +646,7 @@ proc exec*(self: VirtualMachine): Value =
         todo($inst.kind)
 
     self.pc.inc()
-    if self.pc >= self.cur_block.len:
+    if self.pc >= self.cur_block.instructions.len:
       break
 
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =

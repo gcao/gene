@@ -1946,12 +1946,6 @@ proc `$`*(self: seq[Instruction]): string =
 proc `$`*(self: CompilationUnit): string =
   "CompilationUnit " & $self.id & "\n" & $self.instructions
 
-proc `len`*(self: CompilationUnit): int =
-  self.instructions.len
-
-proc `[]`*(self: CompilationUnit, i: int): Instruction =
-  self.instructions[i]
-
 proc new_label*(): Label =
   result = rand(int16.high).Label
 
