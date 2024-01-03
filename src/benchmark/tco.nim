@@ -6,12 +6,11 @@ when isMainModule:
   import ../gene/compiler
   import ../gene/vm
 
+  var n = "1000"
   var args = command_line_params()
-  if args.len == 0:
-    echo "Usage: tco <number>"
-    quit(1)
+  if args.len > 0:
+    n = args[0]
 
-  let n = args[0]
   init_app_and_vm()
 
   let code = fmt"""
@@ -26,11 +25,11 @@ when isMainModule:
 
   let compiled = compile(read_all(code))
 
-  let ns = new_namespace("fibonacci")
+  let ns = new_namespace("tco")
   VM.frame.update(new_frame(ns))
   VM.code_mgr.data[compiled.id] = compiled
   VM.cur_block = compiled
-  # VM.trace = true
+  VM.trace = get_env("TRACE") == "1"
 
   let start = cpuTime()
   let result = VM.exec()
