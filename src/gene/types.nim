@@ -1955,9 +1955,14 @@ proc new_label*(): Label =
   result = rand(int16.high).Label
 
 proc find_label*(self: CompilationUnit, label: Label): int =
-  for i, inst in self.instructions:
+  var i = 0
+  while i < self.instructions.len:
+    let inst = self.instructions[i]
     if inst.label == label:
+      while self.instructions[i].kind == IkNoop:
+        i.inc()
       return i
+    i.inc()
 
 proc find_loop_start*(self: CompilationUnit, pos: int): int =
   var pos = pos
