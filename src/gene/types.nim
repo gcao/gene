@@ -128,7 +128,7 @@ type
     # references*: References # Uncomment this when it's needed.
 
   ScopeObj* = object
-    ref_count*: int16
+    ref_count*: int32
     # tracker*: ScopeTracker
     parent*: Scope
     parent_index_max*: int16   # To remove
@@ -334,13 +334,13 @@ type
     children*: seq[Matcher]
     # required*: bool # computed property: true if splat is false and default value is not given
 
-  MatchedFieldKind* = enum
-    MfMissing
-    MfSuccess
-    MfTypeMismatch # E.g. map is passed but array or gene is expected
+  # MatchedFieldKind* = enum
+  #   MfMissing
+  #   MfSuccess
+  #   MfTypeMismatch # E.g. map is passed but array or gene is expected
 
-  MatchResult* = object
-    fields*: seq[MatchedFieldKind]
+  # MatchResult* = object
+  #   fields*: seq[MatchedFieldKind]
 
   Id* = distinct int64
   Label* = int16
@@ -523,20 +523,17 @@ type
 
   FrameObj = object
     ref_count*: int32
-    caller*: Caller
+    caller_frame*: Frame
+    caller_address*: Address
     ns*: Namespace
     scope*: Scope
     self*: Value
     args*: Value
-    match_result*: MatchResult
+    # match_result*: MatchResult
     stack*: array[24, Value]
     stack_index*: uint8
 
   Frame* = ptr FrameObj
-
-  Caller* = ref object
-    address*: Address
-    frame*: Frame
 
   CodeManager* = ref object
     data*: Table[Id, CompilationUnit]
@@ -1304,10 +1301,10 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 var SCOPES: seq[Scope] = @[]
 
-proc free(self: Scope) {.inline.} =
+proc free*(self: Scope) {.inline.} =
   self.ref_count.dec()
   if self.ref_count == 0:
-    if not self.parent.is_nil:
+    if self.parent != nil:
       self.parent.free()
     self.parent = nil
     self.parent_index_max = 0
@@ -1315,9 +1312,9 @@ proc free(self: Scope) {.inline.} =
     SCOPES.add(self)
 
 proc update*(self: var Scope, scope: Scope) {.inline.} =
-  if not scope.is_nil:
+  if scope != nil:
     scope.ref_count.inc()
-  if not self.is_nil:
+  if self != nil:
     self.free()
   self = scope
 
@@ -1326,13 +1323,14 @@ proc new_scope*(): Scope =
     result = SCOPES.pop()
   else:
     result = cast[Scope](alloc0(sizeof(ScopeObj)))
+  result.ref_count = 1
 
 proc max*(self: Scope): int16 {.inline.} =
   return self.members.len.int16
 
 proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
+  parent.ref_count.inc()
   self.parent = parent
-  self.parent.ref_count.inc()
   self.parent_index_max = max
 
 proc locate(self: ScopeTracker, key: Key, max: int): VarIndex {.inline.} =
@@ -1847,40 +1845,39 @@ var FRAMES: seq[Frame] = @[]
 
 proc free*(self: var Frame) {.inline.} =
   self.ref_count.dec()
-  if self.ref_count == 0:
-    if self.caller != nil:
-      self.caller.frame.free()
+  if self.ref_count <= 0:
+    if self.caller_frame != nil:
+      self.caller_frame.free()
     self.scope.free()
     self[].reset()
     FRAMES.add(self)
 
-proc new_frame*(): Frame {.inline.} =
+proc new_frame(): Frame {.inline.} =
   if FRAMES.len > 0:
     result = FRAMES.pop()
   else:
     result = cast[Frame](alloc0(sizeof(FrameObj)))
-  # Let the caller increment the ref_count
-  result.ref_count = 0
+  result.ref_count = 1
   result.stack_index = REG_DEFAULT
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
   result.ns = ns
   result.scope = new_scope()
-  result.scope.ref_count.inc()
 
-proc new_frame*(caller: Caller, scope: Scope): Frame {.inline.} =
+proc new_frame*(caller_frame: Frame, caller_address: Address, scope: Scope): Frame {.inline.} =
   result = new_frame()
-  result.caller = caller
+  caller_frame.ref_count.inc()
+  result.caller_frame = caller_frame
+  result.caller_address = caller_address
   result.scope = scope
-  result.scope.ref_count.inc()
 
-proc new_frame*(caller: Caller): Frame {.inline.} =
-  result = new_frame(caller, new_scope())
+proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} =
+  result = new_frame(caller_frame, caller_address, new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   f.ref_count.inc()
-  if not self.is_nil:
+  if self != nil:
     self.free()
   self = f
 
