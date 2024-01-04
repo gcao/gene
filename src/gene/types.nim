@@ -51,6 +51,7 @@ type
   Key* = distinct int64
   Value* = distinct int64
 
+  # Keep the size of Value to 4*8 = 32 bytes
   Reference* = object
     ref_count*: int32
     case kind*: ValueKind
@@ -67,7 +68,7 @@ type
       of VkStream:
         stream*: seq[Value]
         stream_index*: int64
-        stream_ended*: bool
+        # stream_ended*: bool
       of VkComplexSymbol:
         csymbol*: seq[string]
       of VkQuote:
@@ -97,7 +98,7 @@ type
         bound_method*: BoundMethod
       of VkInstance:
         instance_class*: Class
-        instance_props*: Table[Key, Value]
+        # instance_props*: Table[Key, Value]
       of VkNativeFn:
         native_fn*: NativeFn
       of VkNativeFn2:

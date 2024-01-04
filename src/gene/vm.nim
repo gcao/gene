@@ -127,7 +127,8 @@ proc exec*(self: VirtualMachine): Value =
           of VkClass:
             target.ref.class.ns[name] = value
           of VkInstance:
-            target.ref.instance_props[name] = value
+            todo()
+            # target.ref.instance_props[name] = value
           else:
             todo($target.kind)
         self.frame.push(value)
@@ -146,7 +147,8 @@ proc exec*(self: VirtualMachine): Value =
           of VkClass:
             self.frame.push(value.ref.class.ns[name])
           of VkInstance:
-            self.frame.push(value.ref.instance_props[name])
+            todo()
+            # self.frame.push(value.ref.instance_props[name])
           else:
             todo($value.kind)
 
