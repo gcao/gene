@@ -314,17 +314,18 @@ proc exec*(self: VirtualMachine): Value =
               discard self.frame.pop()
 
               let f = v.ref.fn
-              f.compile()
-              self.code_mgr.data[f.body_compiled.id] = f.body_compiled
+              if f.body_compiled == nil:
+                f.compile()
+                self.code_mgr.data[f.body_compiled.id] = f.body_compiled
 
               let caller = Caller(
                 address: Address(id: self.cur_block.id, pc: self.pc),
+                frame: self.frame,
               )
-              caller.frame.update(self.frame)
-              self.frame.update(new_frame(caller, scope))
+              self.frame = new_frame(caller, scope)
+              self.frame.ref_count.inc()
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
               self.frame.ns = f.ns
-              self.frame.args = v
               self.cur_block = f.body_compiled
               self.pc = 0
               continue
@@ -336,25 +337,6 @@ proc exec*(self: VirtualMachine): Value =
         let gene_type = v.gene.type
         if gene_type != nil:
           case gene_type.kind:
-            of VkFunction:
-              self.pc.inc()
-              discard self.frame.pop()
-
-              gene_type.ref.fn.compile()
-              self.code_mgr.data[gene_type.ref.fn.body_compiled.id] = gene_type.ref.fn.body_compiled
-
-              let caller = Caller(
-                address: Address(id: self.cur_block.id, pc: self.pc),
-              )
-              caller.frame.update(self.frame)
-              self.frame.update(new_frame(caller))
-              self.frame.scope.set_parent(gene_type.ref.fn.parent_scope, gene_type.ref.fn.parent_scope_max)
-              self.frame.ns = gene_type.ref.fn.ns
-              self.frame.args = v
-              self.cur_block = gene_type.ref.fn.body_compiled
-              self.pc = 0
-              continue
-
             of VkMacro:
               self.pc.inc()
               discard self.frame.pop()

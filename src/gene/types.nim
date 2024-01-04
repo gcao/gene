@@ -1331,7 +1331,8 @@ proc max*(self: Scope): int16 {.inline.} =
   return self.members.len.int16
 
 proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
-  self.parent.update(parent)
+  self.parent = parent
+  self.parent.ref_count.inc()
   self.parent_index_max = max
 
 proc locate(self: ScopeTracker, key: Key, max: int): VarIndex {.inline.} =
