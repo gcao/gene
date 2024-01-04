@@ -462,8 +462,8 @@ type
   Instruction* = object
     kind*: InstructionKind
     label*: Label
+    arg1*: int32
     arg0*: Value
-    arg1*: Value
 
   VarIndex* = object
     local_index*: int32
@@ -1944,8 +1944,15 @@ proc `$`*(self: Instruction): string =
         result = fmt"         {($self.kind)[2..^1]}"
 
 proc `$`*(self: seq[Instruction]): string =
-  for i, instr in self:
+  var i = 0
+  while i < self.len:
+    let instr = self[i]
     result &= fmt"{i:03} {instr}" & "\n"
+    case instr.kind:
+      of IkFunction:
+        i.inc(2)
+      else:
+        i.inc()
 
 proc `$`*(self: CompilationUnit): string =
   "CompilationUnit " & $(cast[uint64](self.id)) & "\n" & $self.instructions

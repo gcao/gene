@@ -271,16 +271,16 @@ proc exec*(self: VirtualMachine): Value =
           else:   # Not sure
             case v.kind:
               of VkFunction, VkNativeFn, VkNativeFn2:
-                inst.arg1 = 1.Value
+                inst.arg1 = 1
                 self.pc = inst.arg0.int
                 continue
               of VkMacro:
-                inst.arg1 = 2.Value
+                inst.arg1 = 2
               of VkBoundMethod:
                 if v.ref.bound_method.method.is_macro:
-                  inst.arg1 = 2.Value
+                  inst.arg1 = 2
                 else:
-                  inst.arg1 = 1.Value
+                  inst.arg1 = 1
                   self.pc = inst.arg0.int
                   continue
               else:
@@ -491,7 +491,9 @@ proc exec*(self: VirtualMachine): Value =
         r.fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
-        f.parent_scope_tracker = inst.arg1.ref.scope_tracker
+        # More data are stored in the next instruction slot
+        self.pc.inc()
+        f.parent_scope_tracker = self.cur_block.instructions[self.pc].arg0.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         self.frame.push(v)

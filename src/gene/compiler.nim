@@ -66,7 +66,7 @@ proc compile_symbol(self: Compiler, input: Value) =
         if found.parent_index == 0:
           self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
         else:
-          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index.Value))
+          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index))
       else:
         self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
     elif input.kind == VkComplexSymbol:
@@ -110,7 +110,7 @@ proc compile_var(self: Compiler, gene: ptr Gene) =
     self.compile(gene.children[1])
     self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
   else:
-    self.output.instructions.add(Instruction(kind: IkVarValue, arg0: index.Value, arg1: NIL))
+    self.output.instructions.add(Instruction(kind: IkVarValue, arg0: NIL, arg1: index))
 
 proc compile_assignment(self: Compiler, gene: ptr Gene) =
   let `type` = gene.type
@@ -122,7 +122,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
       if found.parent_index == 0:
         self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: found.local_index.Value))
       else:
-        self.output.instructions.add(Instruction(kind: IkVarAssignInherited, arg0: found.local_index.Value, arg1: found.parent_index.Value))
+        self.output.instructions.add(Instruction(kind: IkVarAssignInherited, arg0: found.local_index.Value, arg1: found.parent_index))
     else:
       self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
   elif `type`.kind == VkComplexSymbol:
@@ -161,9 +161,10 @@ proc compile_break(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkBreak))
 
 proc compile_fn(self: Compiler, input: Value) =
+  self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
   var r = new_ref(VkScopeTracker)
   r.scope_tracker = self.scope_tracker
-  self.output.instructions.add(Instruction(kind: IkFunction, arg0: input, arg1: r.to_ref_value()))
+  self.output.instructions.add(Instruction(kind: IkNoop, arg0: r.to_ref_value()))
 
 proc compile_return(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
@@ -470,7 +471,7 @@ proc update_jumps(self: CompilationUnit) =
       of IkJump, IkJumpIfFalse, IkContinue, IkGeneStartDefault:
         self.instructions[i].arg0 = self.find_label(inst.arg0.Label).Value
       of IkJumpIfMatchSuccess:
-        self.instructions[i].arg1 = self.find_label(inst.arg1.Label).Value
+        self.instructions[i].arg1 = self.find_label(inst.arg1.Label).int32
       else:
         discard
 
@@ -505,7 +506,7 @@ proc compile*(f: Function) =
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
       arg0: i.Value,
-      arg1: label.Value,
+      arg1: label,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
