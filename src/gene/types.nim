@@ -1901,7 +1901,7 @@ template pop2*(self: var Frame, to: var Value) =
   copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
   self.stack[self.stack_index] = NIL
 
-proc default*(self: Frame): Value {.inline.} =
+template default*(self: Frame): Value =
   self.stack[REG_DEFAULT]
 
 #################### COMPILER ####################

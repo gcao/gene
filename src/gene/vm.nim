@@ -29,6 +29,7 @@ proc exec*(self: VirtualMachine): Value =
         #   self.handle_args(self.cur_block.matcher, self.frame.args)
 
       of IkEnd:
+        {.push checks: off}
         indent.delete(indent.len-2..indent.len-1)
         let v = self.frame.default
         if self.frame.caller_frame == nil:
@@ -42,6 +43,7 @@ proc exec*(self: VirtualMachine): Value =
           if not skip_return:
             self.frame.push(v)
           continue
+        {.pop.}
 
       of IkVar:
         {.push checks: off.}
