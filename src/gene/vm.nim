@@ -6,31 +6,35 @@ import ./compiler
 
 proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
-  var indent = ""
+  when not defined(release):
+    var indent = ""
   var inst: ptr Instruction
 
   while true:
     {.push checks: off}
     inst = self.cur_block.instructions[self.pc].addr
     {.pop.}
-    if self.trace:
-      if inst.kind == IkStart: # This is part of INDENT_LOGIC
-        indent &= "  "
-      # self.print_stack()
-      echo fmt"{indent}{self.pc:03} {inst[]}"
+    when not defined(release):
+      if self.trace:
+        if inst.kind == IkStart: # This is part of INDENT_LOGIC
+          indent &= "  "
+        # self.print_stack()
+        echo fmt"{indent}{self.pc:03} {inst[]}"
     case inst.kind:
       of IkNoop:
         discard
 
       of IkStart:
-        if not self.trace: # This is part of INDENT_LOGIC
-          indent &= "  "
+        when not defined(release):
+          if not self.trace: # This is part of INDENT_LOGIC
+            indent &= "  "
         # if self.cur_block.matcher != nil:
         #   self.handle_args(self.cur_block.matcher, self.frame.args)
 
       of IkEnd:
         {.push checks: off}
-        indent.delete(indent.len-2..indent.len-1)
+        when not defined(release):
+          indent.delete(indent.len-2..indent.len-1)
         let v = self.frame.default
         if self.frame.caller_frame == nil:
           return v
