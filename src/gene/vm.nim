@@ -38,6 +38,7 @@ proc exec*(self: VirtualMachine): Value =
           self.cur_block = self.code_mgr.data[self.frame.caller_address.id]
           self.pc = self.frame.caller_address.pc
           self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           if not skip_return:
             self.frame.push(v)
           continue
@@ -504,6 +505,7 @@ proc exec*(self: VirtualMachine): Value =
           self.cur_block = self.code_mgr.data[self.frame.caller_address.id]
           self.pc = self.frame.caller_address.pc
           self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           self.frame.push(v)
           continue
 
@@ -608,6 +610,7 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
 
   let ns = new_namespace(module_name)
   self.frame.update(new_frame(ns))
+  self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
   self.code_mgr.data[compiled.id] = compiled
   self.cur_block = compiled
 
