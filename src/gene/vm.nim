@@ -515,15 +515,15 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         let f = to_function(inst.arg0)
         f.ns = self.frame.ns
-        let r = new_ref(VkFunction)
-        r.fn = f
-        let v = r.to_ref_value()
-        f.ns[f.name.to_key()] = v
         # More data are stored in the next instruction slot
         pc.inc()
         f.parent_scope_tracker = self.cur_block.instructions[pc].arg0.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
+        let r = new_ref(VkFunction)
+        r.fn = f
+        let v = r.to_ref_value()
+        f.ns[f.name.to_key()] = v
         self.frame.push(v)
         {.pop.}
 
