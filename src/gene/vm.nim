@@ -517,7 +517,8 @@ proc exec*(self: VirtualMachine): Value =
         f.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
-        f.parent_scope_tracker = self.cur_block.instructions[pc].arg0.ref.scope_tracker
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        f.parent_scope_tracker = inst.arg0.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         let r = new_ref(VkFunction)
