@@ -6,20 +6,21 @@ import ./compiler
 
 proc exec*(self: VirtualMachine): Value =
   self.state = VmRunning
+
+  var pc = 0
+  var inst = self.cur_block.instructions[pc].addr
+
   when not defined(release):
     var indent = ""
-  var inst: ptr Instruction
 
   while true:
-    {.push checks: off}
-    inst = self.cur_block.instructions[self.pc].addr
-    {.pop.}
     when not defined(release):
       if self.trace:
         if inst.kind == IkStart: # This is part of INDENT_LOGIC
           indent &= "  "
         # self.print_stack()
-        echo fmt"{indent}{self.pc:03} {inst[]}"
+        echo fmt"{indent}{pc:03} {inst[]}"
+
     case inst.kind:
       of IkNoop:
         discard
@@ -41,7 +42,8 @@ proc exec*(self: VirtualMachine): Value =
         else:
           let skip_return = self.cur_block.skip_return
           self.cur_block = self.code_mgr.data[self.frame.caller_address.id]
-          self.pc = self.frame.caller_address.pc
+          pc = self.frame.caller_address.pc
+          inst = self.cur_block.instructions[pc].addr
           self.frame.update(self.frame.caller_frame)
           self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           if not skip_return:
@@ -165,31 +167,46 @@ proc exec*(self: VirtualMachine): Value =
             todo($value.kind)
 
       of IkJump:
-        self.pc = inst.arg0.int
+        {.push checks: off}
+        pc = inst.arg0.int
+        inst = self.cur_block.instructions[pc].addr
         continue
+        {.pop.}
       of IkJumpIfFalse:
+        {.push checks: off}
         var value: Value
         self.frame.pop2(value)
         if not value.to_bool():
-          self.pc = inst.arg0.int
+          pc = inst.arg0.int
+          inst = self.cur_block.instructions[pc].addr
           continue
+        {.pop.}
 
       of IkJumpIfMatchSuccess:
+        {.push checks: off}
         # if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
         if self.frame.scope.members.len > inst.arg0.int:
-          self.pc = inst.arg1.int
+          pc = inst.arg1.int
+          inst = self.cur_block.instructions[pc].addr
           continue
+        {.pop.}
 
       of IkLoopStart, IkLoopEnd:
         discard
 
       of IkContinue:
-        self.pc = self.cur_block.find_loop_start(self.pc)
+        {.push checks: off}
+        pc = self.cur_block.find_loop_start(pc)
+        inst = self.cur_block.instructions[pc].addr
         continue
+        {.pop.}
 
       of IkBreak:
-        self.pc = self.cur_block.find_loop_end(self.pc)
+        {.push checks: off}
+        pc = self.cur_block.find_loop_end(pc)
+        inst = self.cur_block.instructions[pc].addr
         continue
+        {.pop.}
 
       of IkPushValue:
         self.frame.push(inst.arg0)
@@ -223,13 +240,13 @@ proc exec*(self: VirtualMachine): Value =
       of IkGeneStartDefault:
         {.push checks: off}
         let gene_type = self.frame.current()
-        {.pop.}
         case gene_type.kind:
           of VkFunction:
             var r = new_ref(VkScope)
             r.scope = new_scope()
             self.frame.push(r.to_ref_value())
-            self.pc = inst.arg0.int
+            pc = inst.arg0.int
+            inst = self.cur_block.instructions[pc].addr
             continue
           else:
             discard
@@ -241,7 +258,8 @@ proc exec*(self: VirtualMachine): Value =
           of 1:   # Fn
             case v.kind:
               of VkFunction, VkNativeFn, VkNativeFn2:
-                self.pc = inst.arg0.int
+                pc = inst.arg0.int
+                inst = self.cur_block.instructions[pc].addr
                 continue
               of VkMacro:
                 not_allowed("Macro not allowed here")
@@ -249,7 +267,8 @@ proc exec*(self: VirtualMachine): Value =
                 if v.ref.bound_method.method.is_macro:
                   not_allowed("Macro not allowed here")
                 else:
-                  self.pc = inst.arg0.int
+                  pc = inst.arg0.int
+                  inst = self.cur_block.instructions[pc].addr
                   continue
               else:
                 todo($v.kind)
@@ -272,7 +291,8 @@ proc exec*(self: VirtualMachine): Value =
             case v.kind:
               of VkFunction, VkNativeFn, VkNativeFn2:
                 inst.arg1 = 1
-                self.pc = inst.arg0.int
+                pc = inst.arg0.int
+                inst = self.cur_block.instructions[pc].addr
                 continue
               of VkMacro:
                 inst.arg1 = 2
@@ -281,10 +301,12 @@ proc exec*(self: VirtualMachine): Value =
                   inst.arg1 = 2
                 else:
                   inst.arg1 = 1
-                  self.pc = inst.arg0.int
+                  pc = inst.arg0.int
+                  inst = self.cur_block.instructions[pc].addr
                   continue
               else:
                 todo($v.kind)
+        {.pop.}
 
       of IkGeneSetType:
         {.push checks: off}
@@ -317,7 +339,6 @@ proc exec*(self: VirtualMachine): Value =
           let v = self.frame.current()
           case v.kind:
             of VkFunction:
-              self.pc.inc()
               discard self.frame.pop()
 
               let f = v.ref.fn
@@ -325,33 +346,35 @@ proc exec*(self: VirtualMachine): Value =
                 f.compile()
                 self.code_mgr.data[f.body_compiled.id] = f.body_compiled
 
-              self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: self.pc), scope)
+              pc.inc()
+              self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
               self.frame.ns = f.ns
               self.cur_block = f.body_compiled
-              self.pc = 0
+              pc = 0
+              inst = self.cur_block.instructions[pc].addr
               continue
             else:
               todo($v.kind)
 
         let v = self.frame.current()
-        {.pop.}
         let gene_type = v.gene.type
         if gene_type != nil:
           case gene_type.kind:
             of VkMacro:
-              self.pc.inc()
               discard self.frame.pop()
 
               gene_type.ref.macro.compile()
               self.code_mgr.data[gene_type.ref.macro.body_compiled.id] = gene_type.ref.macro.body_compiled
 
-              self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: self.pc))
+              pc.inc()
+              self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
               self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
               self.frame.ns = gene_type.ref.macro.ns
               self.frame.args = v
               self.cur_block = gene_type.ref.macro.body_compiled
-              self.pc = 0
+              pc = 0
+              inst = self.cur_block.instructions[pc].addr
               continue
 
             of VkClass:
@@ -365,25 +388,26 @@ proc exec*(self: VirtualMachine): Value =
                 of VkNativeFn:
                   self.frame.push(meth.callable.ref.native_fn(self, v))
                 of VkFunction:
-                  self.pc.inc()
-
                   let fn = meth.callable.ref.fn
                   fn.compile()
                   self.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
-                  self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: self.pc))
+                  pc.inc()
+                  self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
                   self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
                   self.frame.ns = fn.ns
                   self.frame.self = gene_type.ref.bound_method.self
                   self.frame.args = v
                   self.cur_block = fn.body_compiled
-                  self.pc = 0
+                  pc = 0
+                  inst = self.cur_block.instructions[pc].addr
                   continue
                 else:
                   todo("Bound method: " & $meth.callable.kind)
 
             else:
               discard
+        {.pop.}
 
       of IkAdd:
         {.push checks: off}
@@ -464,6 +488,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(compiled.id.Value)
 
       of IkCallInit:
+        {.push checks: off}
         let id = self.frame.pop().Id
         let compiled = self.code_mgr.data[id]
         let obj = self.frame.current()
@@ -476,15 +501,18 @@ proc exec*(self: VirtualMachine): Value =
           else:
             todo($obj.kind)
 
-        self.pc.inc()
-        self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: self.pc))
+        pc.inc()
+        self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
         self.frame.self = obj
         self.frame.ns = ns
         self.cur_block = compiled
-        self.pc = 0
+        pc = 0
+        inst = self.cur_block.instructions[pc].addr
         continue
+        {.pop.}
 
       of IkFunction:
+        {.push checks: off}
         let f = to_function(inst.arg0)
         f.ns = self.frame.ns
         let r = new_ref(VkFunction)
@@ -492,11 +520,12 @@ proc exec*(self: VirtualMachine): Value =
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
         # More data are stored in the next instruction slot
-        self.pc.inc()
-        f.parent_scope_tracker = self.cur_block.instructions[self.pc].arg0.ref.scope_tracker
+        pc.inc()
+        f.parent_scope_tracker = self.cur_block.instructions[pc].arg0.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         self.frame.push(v)
+        {.pop.}
 
       of IkMacro:
         let m = to_macro(inst.arg0)
@@ -508,16 +537,19 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(v)
 
       of IkReturn:
+        {.push checks: off}
         if self.frame.caller_frame == nil:
           not_allowed("Return from top level")
         else:
           let v = self.frame.pop()
           self.cur_block = self.code_mgr.data[self.frame.caller_address.id]
-          self.pc = self.frame.caller_address.pc
+          pc = self.frame.caller_address.pc
+          inst = self.cur_block.instructions[pc].addr
           self.frame.update(self.frame.caller_frame)
           self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           self.frame.push(v)
           continue
+        {.pop.}
 
       of IkNamespace:
         let name = inst.arg0
@@ -550,12 +582,13 @@ proc exec*(self: VirtualMachine): Value =
             let compiled = class.constructor.ref.fn.body_compiled
             compiled.skip_return = true
 
-            self.pc.inc()
-            self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: self.pc))
+            pc.inc()
+            self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
             self.frame.self = instance.to_ref_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cur_block = compiled
-            self.pc = 0
+            pc = 0
+            inst = self.cur_block.instructions[pc].addr
             continue
           of VkNil:
             discard
@@ -592,18 +625,20 @@ proc exec*(self: VirtualMachine): Value =
           of VkNativeFn:
             self.frame.push(meth.callable.ref.native_fn(self, v))
           of VkFunction:
-            self.pc.inc()
+            pc.inc()
+            inst = self.cur_block.instructions[pc].addr
 
             let fn = meth.callable.ref.fn
             fn.compile()
             self.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
-            self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: self.pc))
+            self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
             self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
             self.frame.ns = fn.ns
             self.frame.self = v
             self.cur_block = fn.body_compiled
-            self.pc = 0
+            pc = 0
+            inst = self.cur_block.instructions[pc].addr
             continue
           else:
             todo("CallMethodNoArgs: " & $meth.callable.kind)
@@ -611,9 +646,8 @@ proc exec*(self: VirtualMachine): Value =
       else:
         todo($inst.kind)
 
-    self.pc.inc()
-    if self.pc >= self.cur_block.instructions.len:
-      break
+    pc.inc()
+    inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
 
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))

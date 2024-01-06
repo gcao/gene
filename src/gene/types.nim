@@ -555,6 +555,8 @@ type
   NativeFn* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe, nimcall.}
   NativeFn2* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe.}
 
+const INST_SIZE* = sizeof(Instruction)
+
 const I64_MASK = 0xC000_0000_0000_0000u64
 const F64_ZERO = 0x2000_0000_0000_0000u64
 
@@ -1035,7 +1037,7 @@ proc str*(v: Value): string {.inline.} =
         result = get_symbol(x)
 
       else:
-        not_allowed(fmt"${v} is not a string.")
+        not_allowed(fmt"{v} is not a string.")
 
 converter to_value*(v: string): Value {.inline.} =
   {.push checks: off}
