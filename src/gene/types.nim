@@ -51,7 +51,7 @@ type
   Key* = distinct int64
   Value* = distinct int64
 
-  # Keep the size of Value to 4*8 = 32 bytes
+  # Keep the size of Reference to 4*8 = 32 bytes
   Reference* = object
     ref_count*: int32
     case kind*: ValueKind
@@ -459,6 +459,7 @@ type
     IkYield
     IkResume
 
+  # Keep the size of Instruction to 2*8 = 16 bytes
   Instruction* = object
     kind*: InstructionKind
     label*: Label
@@ -613,7 +614,7 @@ randomize()
 
 #################### Definitions #################
 
-proc kind*(v: Value): ValueKind {.inline.}
+proc kind*(v: Value): ValueKind
 proc `==`*(a, b: Value): bool {.no_side_effect.}
 converter to_bool*(v: Value): bool {.inline.}
 
@@ -621,8 +622,8 @@ proc `$`*(self: Value): string
 proc `$`*(self: ptr Reference): string
 proc `$`*(self: ptr Gene): string
 
-proc `ref`*(v: Value): ptr Reference {.inline.}
-proc gene*(v: Value): ptr Gene {.inline.}
+template gene*(v: Value): ptr Gene =
+  cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
 
 proc new_str*(s: string): ptr String
 proc new_str_value*(s: string): Value
@@ -750,7 +751,7 @@ proc new_ref*(kind: ValueKind): ptr Reference =
   {.cast(uncheckedAssign).}:
     result.kind = kind
 
-proc `ref`*(v: Value): ptr Reference {.inline.} =
+template `ref`*(v: Value): ptr Reference =
   cast[ptr Reference](bitand(AND_MASK, v.uint64))
 
 proc to_ref_value*(v: ptr Reference): Value {.inline.} =
@@ -774,7 +775,7 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
 
   # Default to false
 
-proc kind*(v: Value): ValueKind {.inline.} =
+proc kind*(v: Value): ValueKind =
   {.cast(gcsafe).}:
     let v1 = cast[uint64](v)
     case cast[int64](v1.shr(48)):
@@ -788,8 +789,6 @@ proc kind*(v: Value): ValueKind {.inline.} =
         return v.ref.kind
       of GENE_PREFIX:
         return VkGene
-      # of CHAR_PREFIX:
-      #   return VkChar
       of SHORT_STR_PREFIX, LONG_STR_PREFIX:
         return VkString
       of SYMBOL_PREFIX:
@@ -804,14 +803,6 @@ proc kind*(v: Value): ValueKind {.inline.} =
             return VkChar
           else:
             todo()
-        # let other_info = cast[Value](bitand(v1, OTHER_MASK))
-        # case other_info:
-        #   of VOID:
-        #     return VkVoid
-        #   of PLACEHOLDER:
-        #     return VkPlaceholder
-        #   else:
-        #     todo()
       else:
         if bitand(v1, I64_MASK) == 0:
           return VkInt
@@ -906,7 +897,7 @@ converter to_value*(v: pointer): Value {.inline.} =
     cast[Value](bitor(cast[int64](v), 0x7FFB000000000000))
 
 # Applicable to array, string, symbol, gene etc
-proc `[]`*(self: Value, i: int): Value {.inline.} =
+proc `[]`*(self: Value, i: int): Value =
   let v = cast[uint64](self)
   case cast[int64](v.shr(48)):
     of NIL_PREFIX:
@@ -942,7 +933,7 @@ proc `[]`*(self: Value, i: int): Value {.inline.} =
       todo()
 
 # Applicable to array, string, symbol, gene etc
-proc size*(self: Value): int {.inline.} =
+proc size*(self: Value): int =
   let v = cast[uint64](self)
   case cast[int64](v.shr(48)):
     of NIL_PREFIX:
@@ -992,7 +983,7 @@ converter to_value*(v: char): Value {.inline.} =
   {.cast(gcsafe).}:
     cast[Value](bitor(CHAR_MASK, v.ord.uint64))
 
-proc str*(v: Value): string {.inline.} =
+proc str*(v: Value): string =
   {.cast(gcsafe).}:
     let v1 = cast[uint64](v)
     # echo v1.shr(48).int64.to_binstr
@@ -1039,7 +1030,7 @@ proc str*(v: Value): string {.inline.} =
       else:
         not_allowed(fmt"{v} is not a string.")
 
-converter to_value*(v: string): Value {.inline.} =
+converter to_value*(v: string): Value =
   {.push checks: off}
   case v.len:
     of 0:
@@ -1069,7 +1060,7 @@ converter to_value*(v: string): Value {.inline.} =
       result = cast[Value](bitor(LONG_STR_MASK, cast[uint64](s)))
   {.pop.}
 
-converter to_value*(v: Rune): Value {.inline.} =
+converter to_value*(v: Rune): Value =
   let rune_value = v.ord.uint64
   if rune_value > 0xFF_FFFF:
     return cast[Value](bitor(CHAR4_MASK, rune_value))
@@ -1087,7 +1078,7 @@ var SYMBOLS*: ManagedSymbols
 proc get_symbol*(i: int): string {.inline.} =
   SYMBOLS.store[i]
 
-proc to_symbol_value*(s: string): Value {.inline.} =
+proc to_symbol_value*(s: string): Value =
   {.cast(gcsafe).}:
     let found = SYMBOLS.map.get_or_default(s, -1)
     if found != -1:
@@ -1144,9 +1135,6 @@ proc new_map_value*(map: Table[Key, Value]): Value =
 proc to_gene_value*(v: ptr Gene): Value {.inline.} =
   v.ref_count.inc()
   cast[Value](bitor(cast[uint64](v), GENE_MASK))
-
-proc gene*(v: Value): ptr Gene {.inline.} =
-  cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
 
 proc `$`*(self: ptr Gene): string =
   result = "(" & $self.type
@@ -1252,7 +1240,7 @@ proc package*(self: Namespace): Package =
 proc has_key*(self: Namespace, key: Key): bool {.inline.} =
   return self.members.has_key(key) or (self.parent != nil and self.parent.has_key(key))
 
-proc `[]`*(self: Namespace, key: Key): Value {.inline.} =
+proc `[]`*(self: Namespace, key: Key): Value =
   let found = self.members.get_or_default(key, NOT_FOUND)
   if found != NOT_FOUND:
     return found
@@ -1262,7 +1250,7 @@ proc `[]`*(self: Namespace, key: Key): Value {.inline.} =
     return NOT_FOUND
     # raise new_exception(NotDefinedException, get_symbol(key.int64) & " is not defined")
 
-proc locate*(self: Namespace, key: Key): (Value, Namespace) {.inline.} =
+proc locate*(self: Namespace, key: Key): (Value, Namespace) =
   let found = self.members.get_or_default(key, NOT_FOUND)
   if found != NOT_FOUND:
     result = (found, self)
@@ -1304,7 +1292,7 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 var SCOPES: seq[Scope] = @[]
 
-proc free*(self: Scope) {.inline.} =
+proc free*(self: Scope) =
   self.ref_count.dec()
   if self.ref_count == 0:
     if self.parent != nil:
@@ -1336,7 +1324,7 @@ proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
   self.parent = parent
   self.parent_index_max = max
 
-proc locate(self: ScopeTracker, key: Key, max: int): VarIndex {.inline.} =
+proc locate(self: ScopeTracker, key: Key, max: int): VarIndex =
   let found = self.mappings.get_or_default(key, -1)
   if found >= 0 and found < max:
     return VarIndex(parent_index: 0, local_index: found)
@@ -1377,7 +1365,7 @@ proc required*(self: Matcher): bool =
   # return self.default_value_expr == nil and not self.is_splat
   return not self.is_splat
 
-proc check_hint*(self: RootMatcher) {.inline.} =
+proc check_hint*(self: RootMatcher) =
   if self.children.len == 0:
     self.hint_mode = MhNone
   else:
@@ -1387,7 +1375,7 @@ proc check_hint*(self: RootMatcher) {.inline.} =
         self.hint_mode = MhDefault
         return
 
-# proc hint*(self: RootMatcher): MatchingHint {.inline.} =
+# proc hint*(self: RootMatcher): MatchingHint =
 #   if self.children.len == 0:
 #     result.mode = MhNone
 #   else:
@@ -1846,7 +1834,7 @@ converter to_value*(f: NativeFn2): Value {.inline.} =
 const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
-proc free*(self: var Frame) {.inline.} =
+proc free*(self: var Frame) =
   self.ref_count.dec()
   if self.ref_count <= 0:
     if self.caller_frame != nil:
@@ -1855,7 +1843,7 @@ proc free*(self: var Frame) {.inline.} =
     self[].reset()
     FRAMES.add(self)
 
-proc new_frame(): Frame {.inline.} =
+proc new_frame(): Frame =
   if FRAMES.len > 0:
     result = FRAMES.pop()
   else:
@@ -2008,7 +1996,7 @@ proc init_app_and_vm*() =
   for callback in VmCreatedCallbacks:
     callback()
 
-# proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) {.inline.} =
+# proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) =
 #   case matcher.hint_mode:
 #     of MhNone:
 #       discard
