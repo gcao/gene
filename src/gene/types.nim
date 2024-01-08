@@ -674,7 +674,7 @@ proc to_binstr*(v: int64): string =
 proc new_id*(): Id =
   cast[Id](rand(BIGGEST_INT))
 
-proc `=destroy`*(self: Value) =
+template destroy(self: Value) =
   let v1 = cast[uint64](self)
   case cast[int64](v1.shr(48)):
     of GENE_PREFIX:
@@ -698,23 +698,26 @@ proc `=destroy`*(self: Value) =
     else:
       discard
 
+proc `=destroy`*(self: Value) =
+  destroy(self)
+
 proc `=copy`*(a: var Value, b: Value) =
-  `=destroy`(a)
+  destroy(a)
   let v1 = cast[uint64](b)
   case cast[int64](v1.shr(48)):
     of GENE_PREFIX:
       let x = cast[ptr Gene](bitand(v1, AND_MASK))
       x.ref_count.inc()
-      a = cast[Value](cast[uint64](b))
+      `=sink`(a, b)
     of REF_PREFIX:
       let x = cast[ptr Reference](bitand(v1, AND_MASK))
       x.ref_count.inc()
-      a = cast[Value](cast[uint64](b))
+      `=sink`(a, b)
     of LONG_STR_PREFIX:
       let x = cast[ptr String](bitand(v1, AND_MASK))
       a = new_str_value(x.str)
     else:
-      a = cast[Value](cast[uint64](b))
+      `=sink`(a, b)
 
 converter to_value*(k: Key): Value {.inline.} =
   cast[Value](k)
