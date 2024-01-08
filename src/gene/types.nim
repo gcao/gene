@@ -676,7 +676,7 @@ proc new_id*(): Id =
 
 template destroy(self: Value) =
   let v1 = cast[uint64](self)
-  case cast[int64](v1.shr(48)):
+  case v1.shr(48):
     of GENE_PREFIX:
       let x = cast[ptr Gene](bitand(v1, AND_MASK))
       if x.ref_count == 1:
@@ -702,9 +702,10 @@ proc `=destroy`*(self: Value) =
   destroy(self)
 
 proc `=copy`*(a: var Value, b: Value) =
-  destroy(a)
+  if cast[int64](a) != 0:
+    destroy(a)
   let v1 = cast[uint64](b)
-  case cast[int64](v1.shr(48)):
+  case v1.shr(48):
     of GENE_PREFIX:
       let x = cast[ptr Gene](bitand(v1, AND_MASK))
       x.ref_count.inc()
@@ -769,7 +770,7 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
 
   let v1 = cast[uint64](a)
   let v2 = cast[uint64](b)
-  case cast[int64](v1.shr(48)):
+  case v1.shr(48):
     of REF_PREFIX:
       if cast[int64](v2.shr(48)) == REF_PREFIX:
         return a.ref == b.ref
@@ -781,7 +782,7 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
 proc kind*(v: Value): ValueKind =
   {.cast(gcsafe).}:
     let v1 = cast[uint64](v)
-    case cast[int64](v1.shr(48)):
+    case v1.shr(48):
       of NIL_PREFIX:
         return VkNil
       of BOOL_PREFIX:
@@ -797,7 +798,7 @@ proc kind*(v: Value): ValueKind =
       of SYMBOL_PREFIX:
         return VkSymbol
       of OTHER_PREFIX:
-        case cast[int64](v1.shl(16).shr(56)):
+        case v1.shl(16).shr(56):
           of 0x00:
             return VkVoid
           of 0x01:
@@ -815,7 +816,7 @@ proc kind*(v: Value): ValueKind =
 proc is_literal*(self: Value): bool =
   {.cast(gcsafe).}:
     let v1 = cast[uint64](self)
-    case cast[int64](v1.shr(48)):
+    case v1.shr(48):
       of NIL_PREFIX, BOOL_PREFIX, SHORT_STR_PREFIX, LONG_STR_PREFIX:
         result = true
       of OTHER_PREFIX:
@@ -902,7 +903,7 @@ converter to_value*(v: pointer): Value {.inline.} =
 # Applicable to array, string, symbol, gene etc
 proc `[]`*(self: Value, i: int): Value =
   let v = cast[uint64](self)
-  case cast[int64](v.shr(48)):
+  case v.shr(48):
     of NIL_PREFIX:
       return NIL
     of REF_PREFIX:
@@ -938,7 +939,7 @@ proc `[]`*(self: Value, i: int): Value =
 # Applicable to array, string, symbol, gene etc
 proc size*(self: Value): int =
   let v = cast[uint64](self)
-  case cast[int64](v.shr(48)):
+  case v.shr(48):
     of NIL_PREFIX:
       return 0
     of REF_PREFIX:
@@ -990,7 +991,7 @@ proc str*(v: Value): string =
   {.cast(gcsafe).}:
     let v1 = cast[uint64](v)
     # echo v1.shr(48).int64.to_binstr
-    case cast[int64](v1.shr(48)):
+    case v1.shr(48):
       of SHORT_STR_PREFIX:
         let x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
         # echo x.to_binstr
