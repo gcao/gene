@@ -21,6 +21,7 @@ proc exec*(self: VirtualMachine): Value =
         # self.print_stack()
         echo fmt"{indent}{pc:03} {inst[]}"
 
+    {.computedGoto.}
     case inst.kind:
       of IkNoop:
         discard

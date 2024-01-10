@@ -53,7 +53,6 @@ type
 
   # Keep the size of Reference to 4*8 = 32 bytes
   Reference* = object
-    ref_count*: int32
     case kind*: ValueKind
       of VkDocument:
         doc*: Document
@@ -111,6 +110,7 @@ type
         scope*: Scope
       else:
         discard
+    ref_count*: int32
 
   Gene* = object
     ref_count*: int32
@@ -675,6 +675,7 @@ proc new_id*(): Id =
   cast[Id](rand(BIGGEST_INT))
 
 template destroy(self: Value) =
+  {.push checks: off, optimization: speed.}
   let v1 = cast[uint64](self)
   case v1.shr(48):
     of GENE_PREFIX:
@@ -697,11 +698,13 @@ template destroy(self: Value) =
         x.ref_count.dec()
     else:
       discard
+  {.pop.}
 
 proc `=destroy`*(self: Value) =
   destroy(self)
 
 proc `=copy`*(a: var Value, b: Value) =
+  {.push checks: off, optimization: speed.}
   if cast[int64](a) != 0:
     destroy(a)
   let v1 = cast[uint64](b)
@@ -719,6 +722,7 @@ proc `=copy`*(a: var Value, b: Value) =
       a = new_str_value(x.str)
     else:
       `=sink`(a, b)
+  {.pop.}
 
 converter to_value*(k: Key): Value {.inline.} =
   cast[Value](k)
@@ -750,10 +754,9 @@ proc `==`*(a, b: ptr Reference): bool =
 proc `$`*(self: ptr Reference): string =
   $self.kind
 
-proc new_ref*(kind: ValueKind): ptr Reference =
+proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
   result = cast[ptr Reference](alloc0(sizeof(Reference)))
-  {.cast(uncheckedAssign).}:
-    result.kind = kind
+  copy_mem(result, kind.addr, 2)
 
 template `ref`*(v: Value): ptr Reference =
   cast[ptr Reference](bitand(AND_MASK, v.uint64))
@@ -1297,6 +1300,7 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 var SCOPES: seq[Scope] = @[]
 
 proc free*(self: Scope) =
+  {.push checks: off, optimization: speed.}
   self.ref_count.dec()
   if self.ref_count == 0:
     if self.parent != nil:
@@ -1305,13 +1309,16 @@ proc free*(self: Scope) =
     self.parent_index_max = 0
     self.members.set_len(0)
     SCOPES.add(self)
+  {.pop.}
 
 proc update*(self: var Scope, scope: Scope) {.inline.} =
+  {.push checks: off, optimization: speed.}
   if scope != nil:
     scope.ref_count.inc()
   if self != nil:
     self.free()
   self = scope
+  {.pop.}
 
 proc new_scope*(): Scope =
   if SCOPES.len > 0:
@@ -1839,6 +1846,7 @@ const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
 proc free*(self: var Frame) =
+  {.push checks: off, optimization: speed.}
   self.ref_count.dec()
   if self.ref_count <= 0:
     if self.caller_frame != nil:
@@ -1846,6 +1854,7 @@ proc free*(self: var Frame) =
     self.scope.free()
     self[].reset()
     FRAMES.add(self)
+  {.pop.}
 
 proc new_frame(): Frame =
   if FRAMES.len > 0:
@@ -1871,10 +1880,12 @@ proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} 
   result = new_frame(caller_frame, caller_address, new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
+  {.push checks: off, optimization: speed.}
   f.ref_count.inc()
   if self != nil:
     self.free()
   self = f
+  {.pop.}
 
 template current*(self: Frame): Value =
   self.stack[self.stack_index - 1]
