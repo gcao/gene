@@ -677,15 +677,17 @@ proc new_id*(): Id =
 template destroy(self: Value) =
   {.push checks: off, optimization: speed.}
   let v1 = cast[uint64](self)
-  case v1.shr(48):
-    of GENE_PREFIX:
-      let x = cast[ptr Gene](bitand(v1, AND_MASK))
+  let prefix = v1.shr(48)
+  case prefix:
+    of REF_PREFIX:
+      let x = cast[ptr Reference](bitand(v1, AND_MASK))
       if x.ref_count == 1:
         dealloc(x)
       else:
         x.ref_count.dec()
-    of REF_PREFIX:
-      let x = cast[ptr Reference](bitand(v1, AND_MASK))
+      {.linearScanEnd.}
+    of GENE_PREFIX:
+      let x = cast[ptr Gene](bitand(v1, AND_MASK))
       if x.ref_count == 1:
         dealloc(x)
       else:
@@ -708,13 +710,15 @@ proc `=copy`*(a: var Value, b: Value) =
   if cast[int64](a) != 0:
     destroy(a)
   let v1 = cast[uint64](b)
-  case v1.shr(48):
-    of GENE_PREFIX:
-      let x = cast[ptr Gene](bitand(v1, AND_MASK))
-      x.ref_count.inc()
-      `=sink`(a, b)
+  let prefix = v1.shr(48)
+  case prefix:
     of REF_PREFIX:
       let x = cast[ptr Reference](bitand(v1, AND_MASK))
+      x.ref_count.inc()
+      `=sink`(a, b)
+      {.linearScanEnd.}
+    of GENE_PREFIX:
+      let x = cast[ptr Gene](bitand(v1, AND_MASK))
       x.ref_count.inc()
       `=sink`(a, b)
     of LONG_STR_PREFIX:
@@ -785,21 +789,23 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
 proc kind*(v: Value): ValueKind =
   {.cast(gcsafe).}:
     let v1 = cast[uint64](v)
-    case v1.shr(48):
+    let prefix = v1.shr(48)
+    case prefix:
+      of REF_PREFIX:
+        return v.ref.kind
+        {.linearScanEnd.}
+      of SYMBOL_PREFIX:
+        return VkSymbol
       of NIL_PREFIX:
         return VkNil
       of BOOL_PREFIX:
         return VkBool
       of POINTER_PREFIX:
         return VkPointer
-      of REF_PREFIX:
-        return v.ref.kind
       of GENE_PREFIX:
         return VkGene
       of SHORT_STR_PREFIX, LONG_STR_PREFIX:
         return VkString
-      of SYMBOL_PREFIX:
-        return VkSymbol
       of OTHER_PREFIX:
         case v1.shl(16).shr(56):
           of 0x00:
