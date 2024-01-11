@@ -28,7 +28,6 @@ when isMainModule:
 
   let ns = new_namespace("fibonacci")
   VM.frame.update(new_frame(ns))
-  VM.code_mgr.data[compiled.id] = compiled
   VM.cur_block = compiled
   VM.trace = get_env("TRACE") == "1"
 

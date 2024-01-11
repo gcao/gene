@@ -44,7 +44,8 @@ type
     VkNativeFn
     VkNativeFn2
 
-    # VkInstruction
+    VkCompiledUnit
+    VkInstruction
     VkScopeTracker
     VkScope
 
@@ -102,8 +103,10 @@ type
         native_fn*: NativeFn
       of VkNativeFn2:
         native_fn2*: NativeFn2
-      # of VkInstruction:
-      #   instruction*: Instruction
+      of VkCompiledUnit:
+        cu*: CompilationUnit
+      of VkInstruction:
+        instr*: Instruction
       of VkScopeTracker:
         scope_tracker*: ScopeTracker
       of VkScope:
@@ -502,7 +505,7 @@ type
     mappings*: Table[Key, int16]
 
   Address* = object
-    id*: Id
+    cu*: CompilationUnit
     pc*: int
 
   VirtualMachineState* = enum
@@ -518,7 +521,6 @@ type
     cur_block*: CompilationUnit
     pc*: int
     frame*: Frame
-    code_mgr*: CodeManager
     trace*: bool
 
   VmCallback* = proc() {.gcsafe.}
@@ -536,9 +538,6 @@ type
     stack_index*: uint8
 
   Frame* = ptr FrameObj
-
-  CodeManager* = ref object
-    data*: Table[Id, CompilationUnit]
 
   # No symbols should be removed.
   ManagedSymbols = object
@@ -1999,7 +1998,6 @@ template scope_tracker*(self: Compiler): ScopeTracker =
 proc init_app_and_vm*() =
   VM = VirtualMachine(
     state: VmWaiting,
-    code_mgr: CodeManager(),
   )
   let r = new_ref(VkApplication)
   r.app = new_app()

@@ -42,7 +42,7 @@ proc exec*(self: VirtualMachine): Value =
           return v
         else:
           let skip_return = self.cur_block.skip_return
-          self.cur_block = self.code_mgr.data[self.frame.caller_address.id]
+          self.cur_block = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cur_block.instructions[pc].addr
           self.frame.update(self.frame.caller_frame)
@@ -345,10 +345,9 @@ proc exec*(self: VirtualMachine): Value =
               let f = v.ref.fn
               if f.body_compiled == nil:
                 f.compile()
-                self.code_mgr.data[f.body_compiled.id] = f.body_compiled
 
               pc.inc()
-              self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc), scope)
+              self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
               self.frame.ns = f.ns
               self.cur_block = f.body_compiled
@@ -366,10 +365,9 @@ proc exec*(self: VirtualMachine): Value =
               discard self.frame.pop()
 
               gene_type.ref.macro.compile()
-              self.code_mgr.data[gene_type.ref.macro.body_compiled.id] = gene_type.ref.macro.body_compiled
 
               pc.inc()
-              self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
+              self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
               self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
               self.frame.ns = gene_type.ref.macro.ns
               self.frame.args = v
@@ -391,10 +389,9 @@ proc exec*(self: VirtualMachine): Value =
                 of VkFunction:
                   let fn = meth.callable.ref.fn
                   fn.compile()
-                  self.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
                   pc.inc()
-                  self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
+                  self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
                   self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
                   self.frame.ns = fn.ns
                   self.frame.self = gene_type.ref.bound_method.self
@@ -485,13 +482,13 @@ proc exec*(self: VirtualMachine): Value =
       of IkCompileInit:
         let input = self.frame.pop()
         let compiled = compile_init(input)
-        self.code_mgr.data[compiled.id] = compiled
-        self.frame.push(compiled.id.Value)
+        let r = new_ref(VkCompiledUnit)
+        r.cu = compiled
+        self.frame.push(r.to_ref_value())
 
       of IkCallInit:
         {.push checks: off}
-        let id = self.frame.pop().Id
-        let compiled = self.code_mgr.data[id]
+        let compiled = self.frame.pop().ref.cu
         let obj = self.frame.current()
         var ns: Namespace
         case obj.kind:
@@ -503,7 +500,7 @@ proc exec*(self: VirtualMachine): Value =
             todo($obj.kind)
 
         pc.inc()
-        self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
+        self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
         self.frame.self = obj
         self.frame.ns = ns
         self.cur_block = compiled
@@ -544,7 +541,7 @@ proc exec*(self: VirtualMachine): Value =
           not_allowed("Return from top level")
         else:
           let v = self.frame.pop()
-          self.cur_block = self.code_mgr.data[self.frame.caller_address.id]
+          self.cur_block = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cur_block.instructions[pc].addr
           self.frame.update(self.frame.caller_frame)
@@ -585,7 +582,7 @@ proc exec*(self: VirtualMachine): Value =
             compiled.skip_return = true
 
             pc.inc()
-            self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
+            self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
             self.frame.self = instance.to_ref_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cur_block = compiled
@@ -632,9 +629,8 @@ proc exec*(self: VirtualMachine): Value =
 
             let fn = meth.callable.ref.fn
             fn.compile()
-            self.code_mgr.data[fn.body_compiled.id] = fn.body_compiled
 
-            self.frame = new_frame(self.frame, Address(id: self.cur_block.id, pc: pc))
+            self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
             self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
             self.frame.ns = fn.ns
             self.frame.self = v
@@ -657,7 +653,6 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let ns = new_namespace(module_name)
   self.frame.update(new_frame(ns))
   self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
-  self.code_mgr.data[compiled.id] = compiled
   self.cur_block = compiled
 
   self.exec()
