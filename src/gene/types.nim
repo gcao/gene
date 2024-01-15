@@ -3,7 +3,7 @@ import random
 import dynlib
 
 type
-  ValueKind* {.size: sizeof(int16) .} = enum
+  ValueKind* {.size: 2 .} = enum
     # void vs nil vs placeholder:
     #   void has special meaning in some places (e.g. templates)
     #   nil is the default/uninitialized value.
@@ -48,6 +48,7 @@ type
     VkInstruction
     VkScopeTracker
     VkScope
+    VkFrame
 
   Key* = distinct int64
   Value* = distinct int64
@@ -96,13 +97,11 @@ type
         `method`*: Method
       of VkBoundMethod:
         bound_method*: BoundMethod
-      of VkInstance:
-        instance_class*: Class
-        # instance_props*: Table[Key, Value]
       of VkNativeFn:
         native_fn*: NativeFn
       of VkNativeFn2:
         native_fn2*: NativeFn2
+
       of VkCompiledUnit:
         cu*: CompilationUnit
       of VkInstruction:
@@ -111,6 +110,8 @@ type
         scope_tracker*: ScopeTracker
       of VkScope:
         scope*: Scope
+      of VkFrame:
+        frame*: Frame
       else:
         discard
     ref_count*: int32
@@ -120,6 +121,11 @@ type
     `type`*: Value
     props*: Table[Key, Value]
     children*: seq[Value]
+
+  Instance* = object
+    ref_count*: int32
+    class*: Class
+    props*: Table[Key, Value]
 
   String* = object
     ref_count*: int32
@@ -297,7 +303,7 @@ type
     # body_compiled*: Expr
     body_compiled*: CompilationUnit
 
-  MatchingMode* {.size: sizeof(int16) .} = enum
+  MatchingMode* {.size: 1 .} = enum
     MatchArguments # (fn f [a b] ...)
     MatchExpression # (match [a b] input): a and b will be defined
     MatchAssignment # ([a b] = input): a and b must be defined first
@@ -309,7 +315,7 @@ type
     hint_mode*: MatchingHintMode
     children*: seq[Matcher]
 
-  MatchingHintMode* {.size: sizeof(int16) .} = enum
+  MatchingHintMode* {.size: 1 .} = enum
     MhDefault
     MhNone
     MhSimpleData  # E.g. [a b]
@@ -354,7 +360,7 @@ type
     quote_level*: int
     scope_trackers*: seq[ScopeTracker]
 
-  InstructionKind* {.size: sizeof(int16).} = enum
+  InstructionKind* {.size: 2 .} = enum
     IkNoop
 
     IkStart   # start a compilation unit
@@ -484,6 +490,7 @@ type
 
   CompilationUnit* = ref object
     id*: Id
+    name*: string
     kind*: CompilationUnitKind
     matcher*: RootMatcher
     instructions*: seq[Instruction]
@@ -508,16 +515,15 @@ type
     cu*: CompilationUnit
     pc*: int
 
-  VirtualMachineState* = enum
-    VmWaiting   # waiting for task
-    VmRunning
-    VmPaused
+  # VirtualMachineState* = enum
+  #   VmWaiting   # waiting for task
+  #   VmRunning
+  #   VmPaused
 
   # Virtual machine and its data can be separated however it doesn't
   # bring much benefit. So we keep them together.
   VirtualMachine* = ref object
-    state*: VirtualMachineState
-    is_main*: bool
+    # state*: VirtualMachineState
     cur_block*: CompilationUnit
     pc*: int
     frame*: Frame
@@ -525,17 +531,32 @@ type
 
   VmCallback* = proc() {.gcsafe.}
 
-  FrameObj = object
+  CallKind* {.size: 1 .} = enum
+    CkDefault
+    CkCallable
+
+  CallSite* = ref object
+    case kind*: CallKind
+      of CkDefault:
+        cu*: CompilationUnit
+        pc*: int
+      of CkCallable:
+        callable*: Value
+    frame*: Frame
+
+  FrameObj* = object
     ref_count*: int32
+    stack_index*: uint8
+    # caller*: CallSite          # TODO: replace caller_frame and caller_address with this
     caller_frame*: Frame
     caller_address*: Address
+    callee*: Value
     ns*: Namespace
     scope*: Scope
     self*: Value
     args*: Value
     # match_result*: MatchResult
-    stack*: array[24, Value]
-    stack_index*: uint8
+    stack*: array[23, Value]
 
   Frame* = ptr FrameObj
 
@@ -555,6 +576,7 @@ type
   NativeFn* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe, nimcall.}
   NativeFn2* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe.}
 
+const REF_SIZE* = sizeof(Reference)
 const INST_SIZE* = sizeof(Instruction)
 
 const I64_MASK = 0xC000_0000_0000_0000u64
@@ -576,6 +598,9 @@ const REF_MASK = 0x7FFD_0000_0000_0000u64
 
 const GENE_PREFIX = 0x7FF8
 const GENE_MASK = 0x7FF8_0000_0000_0000u64
+
+const INSTANCE_PREFIX = 0x7FFF
+const INSTANCE_MASK = 0x7FFF_0000_0000_0000u64
 
 const OTHER_PREFIX = 0x7FFE
 
@@ -623,6 +648,9 @@ proc `$`*(self: ptr Gene): string
 
 template gene*(v: Value): ptr Gene =
   cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
+
+template instance*(v: Value): ptr Instance =
+  cast[ptr Instance](bitand(AND_MASK, v.uint64))
 
 proc new_str*(s: string): ptr String
 proc new_str_value*(s: string): Value
@@ -685,6 +713,12 @@ template destroy(self: Value) =
       else:
         x.ref_count.dec()
       {.linearScanEnd.}
+    of INSTANCE_PREFIX:
+      let x = cast[ptr Instance](bitand(v1, AND_MASK))
+      if x.ref_count == 1:
+        dealloc(x)
+      else:
+        x.ref_count.dec()
     of GENE_PREFIX:
       let x = cast[ptr Gene](bitand(v1, AND_MASK))
       if x.ref_count == 1:
@@ -716,6 +750,10 @@ proc `=copy`*(a: var Value, b: Value) =
       x.ref_count.inc()
       `=sink`(a, b)
       {.linearScanEnd.}
+    of INSTANCE_PREFIX:
+      let x = cast[ptr Instance](bitand(v1, AND_MASK))
+      x.ref_count.inc()
+      `=sink`(a, b)
     of GENE_PREFIX:
       let x = cast[ptr Gene](bitand(v1, AND_MASK))
       x.ref_count.inc()
@@ -758,7 +796,7 @@ proc `$`*(self: ptr Reference): string =
   $self.kind
 
 proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
-  result = cast[ptr Reference](alloc0(sizeof(Reference)))
+  result = cast[ptr Reference](alloc0(REF_SIZE))
   copy_mem(result, kind.addr, 2)
 
 template `ref`*(v: Value): ptr Reference =
@@ -801,6 +839,8 @@ proc kind*(v: Value): ValueKind =
         return VkString
       of GENE_PREFIX:
         return VkGene
+      of INSTANCE_PREFIX:
+        return VkInstance
       of BOOL_PREFIX:
         return VkBool
       of POINTER_PREFIX:
@@ -1336,7 +1376,8 @@ proc max*(self: Scope): int16 {.inline.} =
   return self.members.len.int16
 
 proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
-  parent.ref_count.inc()
+  if parent != nil:
+    parent.ref_count.inc()
   self.parent = parent
   self.parent_index_max = max
 
@@ -1375,6 +1416,7 @@ proc new_matcher*(root: RootMatcher, kind: MatcherKind): Matcher =
   result = Matcher(
     root: root,
     kind: kind,
+    default_value: VOID,
   )
 
 proc required*(self: Matcher): bool =
@@ -1691,7 +1733,7 @@ proc get_class*(val: Value): Class =
     of VkPackage:
       return App.ref.app.package_class.ref.class
     of VkInstance:
-      return val.ref.instance_class
+      return val.instance.class
     # of VkCast:
     #   return val.cast_class
     of VkClass:
@@ -1833,6 +1875,18 @@ proc clone*(self: Method): Method =
     callable: self.callable,
   )
 
+#################### Instance ####################
+
+proc to_instance_value*(v: ptr Instance): Value {.inline.} =
+  v.ref_count.inc()
+  cast[Value](bitor(cast[uint64](v), INSTANCE_MASK))
+
+proc new_instance*(class: Class): ptr Instance =
+  result = cast[ptr Instance](alloc0(sizeof(Instance)))
+  result.ref_count = 1
+  result.class = class
+  result.props = Table[Key, Value]()
+
 #################### Native ######################
 
 converter to_value*(f: NativeFn): Value {.inline.} =
@@ -1919,7 +1973,7 @@ template default*(self: Frame): Value =
 
 proc new_compilation_unit*(): CompilationUnit =
   CompilationUnit(
-    id: new_id(),
+    # id: new_id(),
     scope_tracker: ScopeTracker(),
   )
 
@@ -1931,6 +1985,7 @@ proc `$`*(self: Instruction): string =
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
       IkResolveSymbol, IkResolveMethod,
+      IkVarResolve,
       IkSetMember, IkGetMember,
       IkSetChild, IkGetChild:
       if self.label.int > 0:
@@ -2003,7 +2058,7 @@ template scope_tracker*(self: Compiler): ScopeTracker =
 
 proc init_app_and_vm*() =
   VM = VirtualMachine(
-    state: VmWaiting,
+    # state: VmWaiting,
   )
   let r = new_ref(VkApplication)
   r.app = new_app()

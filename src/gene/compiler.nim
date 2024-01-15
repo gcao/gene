@@ -508,7 +508,7 @@ proc compile*(f: Function) =
       arg0: i.Value,
       arg1: label,
     ))
-    if m.default_value != nil:
+    if m.default_value != VOID:
       self.compile(m.default_value)
       self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
       self.output.instructions.add(Instruction(kind: IkPop))
@@ -531,7 +531,8 @@ proc compile*(m: Macro) =
   m.body_compiled.matcher = m.matcher
 
 proc compile_init*(input: Value): CompilationUnit =
-  let self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: new_compilation_unit())
+  self.scope_trackers.add(self.output.scope_tracker)
   self.output.skip_return = true
   self.output.instructions.add(Instruction(kind: IkStart))
 

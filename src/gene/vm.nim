@@ -5,8 +5,7 @@ import ./parser
 import ./compiler
 
 proc exec*(self: VirtualMachine): Value =
-  self.state = VmRunning
-
+  # self.state = VmRunning
   var pc = 0
   var inst = self.cur_block.instructions[pc].addr
 
@@ -130,8 +129,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkClass:
             target.ref.class.ns[name] = value
           of VkInstance:
-            todo()
-            # target.ref.instance_props[name] = value
+            target.instance.props[name] = value
           else:
             todo($target.kind)
         self.frame.push(value)
@@ -150,8 +148,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkClass:
             self.frame.push(value.ref.class.ns[name])
           of VkInstance:
-            todo()
-            # self.frame.push(value.ref.instance_props[name])
+            self.frame.push(value.instance.props[name])
           else:
             todo($value.kind)
 
@@ -240,37 +237,67 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGeneStartDefault:
         {.push checks: off}
-        let gene_type = self.frame.current()
-        case gene_type.kind:
-          of VkFunction:
-            var r = new_ref(VkScope)
-            r.scope = new_scope()
-            self.frame.push(r.to_ref_value())
-            pc = inst.arg0.int
-            inst = self.cur_block.instructions[pc].addr
-            continue
-          else:
-            discard
+        # let gene_type = self.frame.current()
+        # case gene_type.kind:
+        #   of VkFunction:
+        #     var r = new_ref(VkScope)
+        #     r.scope = new_scope()
+        #     self.frame.push(r.to_ref_value())
+        #     pc = inst.arg0.int
+        #     inst = self.cur_block.instructions[pc].addr
+        #     continue
+        #   else:
+        #     discard
 
-        var v: Value
-        self.frame.pop2(v)
-        self.frame.push(new_gene_value(v))
+        # var v: Value
+        # self.frame.pop2(v)
+        # self.frame.push(new_gene_value(v))
+        let v = self.frame.current()
         case inst.arg1.int:
           of 1:   # Fn
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction:
+                var r = new_ref(VkScope)
+                r.scope = new_scope()
+                self.frame.push(r.to_ref_value())
+                pc = inst.arg0.int
+                inst = self.cur_block.instructions[pc].addr
+                continue
+              of VkNativeFn, VkNativeFn2:
+                var v: Value
+                self.frame.pop2(v)
+                self.frame.push(new_gene_value(v))
                 pc = inst.arg0.int
                 inst = self.cur_block.instructions[pc].addr
                 continue
               of VkMacro:
                 not_allowed("Macro not allowed here")
               of VkBoundMethod:
-                if v.ref.bound_method.method.is_macro:
-                  not_allowed("Macro not allowed here")
-                else:
-                  pc = inst.arg0.int
-                  inst = self.cur_block.instructions[pc].addr
-                  continue
+                let bound_method = v.ref.bound_method
+                case bound_method.method.callable.kind:
+                  of VkFunction:
+                    var r = new_ref(VkScope)
+                    r.scope = new_scope()
+                    self.frame.push(r.to_ref_value())
+                    pc = inst.arg0.int
+                    inst = self.cur_block.instructions[pc].addr
+                    continue
+                  of VkNativeFn, VkNativeFn2:
+                    var v: Value
+                    self.frame.pop2(v)
+                    self.frame.push(new_gene_value(v))
+                    pc = inst.arg0.int
+                    inst = self.cur_block.instructions[pc].addr
+                    continue
+                  else:
+                    todo("Bound method: " & $bound_method.method.callable.kind)
+
+                # if v.ref.bound_method.method.is_macro:
+                #   not_allowed("Macro not allowed here")
+                # else:
+                #   pc = inst.arg0.int
+                #   inst = self.cur_block.instructions[pc].addr
+                #   continue
               else:
                 todo($v.kind)
 
@@ -398,7 +425,6 @@ proc exec*(self: VirtualMachine): Value =
                   self.frame.args = v
                   self.cur_block = fn.body_compiled
                   pc = 0
-                  inst = self.cur_block.instructions[pc].addr
                   continue
                 else:
                   todo("Bound method: " & $meth.callable.kind)
@@ -570,11 +596,10 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkNew:
         let v = self.frame.pop()
-        let instance = new_ref(VkInstance)
-        instance.instance_class = v.gene.type.ref.class
-        self.frame.push(instance.to_ref_value())
+        let instance = new_instance(v.gene.type.ref.class)
+        self.frame.push(instance.to_instance_value())
 
-        let class = instance.instance_class
+        let class = instance.class
         case class.constructor.kind:
           of VkFunction:
             class.constructor.ref.fn.compile()
@@ -583,7 +608,7 @@ proc exec*(self: VirtualMachine): Value =
 
             pc.inc()
             self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
-            self.frame.self = instance.to_ref_value()
+            self.frame.self = instance.to_instance_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cur_block = compiled
             pc = 0
