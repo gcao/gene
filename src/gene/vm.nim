@@ -5,8 +5,6 @@ import ./parser
 import ./compiler
 
 proc exec*(self: VirtualMachine): Value =
-  self.state = VmRunning
-
   var pc = 0
   var inst = self.cur_block.instructions[pc].addr
 
@@ -63,12 +61,12 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkVarResolveInherited:
+        {.push checks: off}
         var parent_index = inst.arg1.int32
         var scope = self.frame.scope
         while parent_index > 0:
           parent_index.dec()
           scope = scope.parent
-        {.push checks: off}
         self.frame.push(scope.members[inst.arg0.int])
         {.pop.}
 
@@ -81,13 +79,11 @@ proc exec*(self: VirtualMachine): Value =
       of IkVarAssignInherited:
         {.push checks: off}
         let value = self.frame.current()
-        {.pop.}
         var scope = self.frame.scope
         var parent_index = inst.arg1.int32
         while parent_index > 0:
           parent_index.dec()
           scope = scope.parent
-        {.push checks: off}
         scope.members[inst.arg0.int] = value
         {.pop.}
 
@@ -244,7 +240,7 @@ proc exec*(self: VirtualMachine): Value =
         case gene_type.kind:
           of VkFunction:
             var r = new_ref(VkScope)
-            r.scope = new_scope()
+            `=sink`(r.scope, new_scope())
             self.frame.push(r.to_ref_value())
             pc = inst.arg0.int
             inst = self.cur_block.instructions[pc].addr
@@ -349,7 +345,8 @@ proc exec*(self: VirtualMachine): Value =
               pc.inc()
               self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-              self.frame.ns = f.ns
+              `=copy`(self.frame.ns, f.ns)
+              # self.frame.ns = f.ns
               self.cur_block = f.body_compiled
               pc = 0
               inst = self.cur_block.instructions[pc].addr
@@ -644,8 +641,10 @@ proc exec*(self: VirtualMachine): Value =
       else:
         todo($inst.kind)
 
+    {.push checks: off}
     pc.inc()
     inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+    {.pop.}
 
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))

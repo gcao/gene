@@ -508,16 +508,14 @@ type
     cu*: CompilationUnit
     pc*: int
 
-  VirtualMachineState* = enum
-    VmWaiting   # waiting for task
-    VmRunning
-    VmPaused
+  CallSite* = object
+    frame*: Frame
+    cu*: CompilationUnit
+    pc*: int
 
   # Virtual machine and its data can be separated however it doesn't
   # bring much benefit. So we keep them together.
   VirtualMachine* = ref object
-    state*: VirtualMachineState
-    is_main*: bool
     cur_block*: CompilationUnit
     pc*: int
     frame*: Frame
@@ -527,15 +525,15 @@ type
 
   FrameObj = object
     ref_count*: int32
+    stack_index*: uint8
+    # caller*: ref CallSite
     caller_frame*: Frame
     caller_address*: Address
     ns*: Namespace
     scope*: Scope
     self*: Value
     args*: Value
-    # match_result*: MatchResult
     stack*: array[24, Value]
-    stack_index*: uint8
 
   Frame* = ptr FrameObj
 
@@ -1871,15 +1869,21 @@ proc new_frame(): Frame =
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
-  result.ns = ns
-  result.scope = new_scope()
+  `=copy`(result.ns, ns)
+  `=copy`(result.scope, new_scope())
+  # result.ns = ns
+  # result.scope = new_scope()
 
 proc new_frame*(caller_frame: Frame, caller_address: Address, scope: Scope): Frame {.inline.} =
+  {.push checks: off, optimization: speed.}
   result = new_frame()
   caller_frame.ref_count.inc()
-  result.caller_frame = caller_frame
+  `=copy`(result.caller_frame, caller_frame)
+  # result.caller_frame = caller_frame
   result.caller_address = caller_address
-  result.scope = scope
+  `=copy`(result.scope, scope)
+  # result.scope = scope
+  {.pop.}
 
 proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} =
   result = new_frame(caller_frame, caller_address, new_scope())
@@ -2003,7 +2007,6 @@ template scope_tracker*(self: Compiler): ScopeTracker =
 
 proc init_app_and_vm*() =
   VM = VirtualMachine(
-    state: VmWaiting,
   )
   let r = new_ref(VkApplication)
   r.app = new_app()
