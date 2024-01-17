@@ -504,11 +504,7 @@ type
     next_index*: int16      # If next_index is 0, the scope is empty
     mappings*: Table[Key, int16]
 
-  Address* = object
-    cu*: CompilationUnit
-    pc*: int
-
-  CallSite* = object
+  CallSite* = ref object
     frame*: Frame
     cu*: CompilationUnit
     pc*: int
@@ -526,9 +522,7 @@ type
   FrameObj = object
     ref_count*: int32
     stack_index*: uint8
-    # caller*: ref CallSite
-    caller_frame*: Frame
-    caller_address*: Address
+    caller*: CallSite
     ns*: Namespace
     scope*: Scope
     self*: Value
@@ -1852,8 +1846,8 @@ proc free*(self: var Frame) =
   {.push checks: off, optimization: speed.}
   self.ref_count.dec()
   if self.ref_count <= 0:
-    if self.caller_frame != nil:
-      self.caller_frame.free()
+    if self.caller != nil:
+      self.caller.frame.free()
     self.scope.free()
     self[].reset()
     FRAMES.add(self)
@@ -1871,22 +1865,17 @@ proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
   `=copy`(result.ns, ns)
   `=copy`(result.scope, new_scope())
-  # result.ns = ns
-  # result.scope = new_scope()
 
-proc new_frame*(caller_frame: Frame, caller_address: Address, scope: Scope): Frame {.inline.} =
+proc new_frame*(caller: CallSite, scope: Scope): Frame {.inline.} =
   {.push checks: off, optimization: speed.}
   result = new_frame()
-  caller_frame.ref_count.inc()
-  `=copy`(result.caller_frame, caller_frame)
-  # result.caller_frame = caller_frame
-  result.caller_address = caller_address
+  `=sink`(result.caller, caller)
+  result.caller.frame.ref_count.inc()
   `=copy`(result.scope, scope)
-  # result.scope = scope
   {.pop.}
 
-proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} =
-  result = new_frame(caller_frame, caller_address, new_scope())
+proc new_frame*(caller: CallSite): Frame {.inline.} =
+  result = new_frame(caller, new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   {.push checks: off, optimization: speed.}

@@ -36,14 +36,14 @@ proc exec*(self: VirtualMachine): Value =
         when not defined(release):
           indent.delete(indent.len-2..indent.len-1)
         let v = self.frame.default
-        if self.frame.caller_frame == nil:
+        if self.frame.caller == nil:
           return v
         else:
           let skip_return = self.cur_block.skip_return
-          self.cur_block = self.frame.caller_address.cu
-          pc = self.frame.caller_address.pc
+          self.cur_block = self.frame.caller.cu
+          pc = self.frame.caller.pc
           inst = self.cur_block.instructions[pc].addr
-          self.frame.update(self.frame.caller_frame)
+          self.frame.update(self.frame.caller.frame)
           self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           if not skip_return:
             self.frame.push(v)
@@ -343,7 +343,7 @@ proc exec*(self: VirtualMachine): Value =
                 f.compile()
 
               pc.inc()
-              self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc), scope)
+              self.frame = new_frame(CallSite(frame: self.frame, cu: self.cur_block, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
               `=copy`(self.frame.ns, f.ns)
               # self.frame.ns = f.ns
@@ -364,7 +364,7 @@ proc exec*(self: VirtualMachine): Value =
               gene_type.ref.macro.compile()
 
               pc.inc()
-              self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
+              self.frame = new_frame(CallSite(frame: self.frame, cu: self.cur_block, pc: pc))
               self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
               self.frame.ns = gene_type.ref.macro.ns
               self.frame.args = v
@@ -388,7 +388,7 @@ proc exec*(self: VirtualMachine): Value =
                   fn.compile()
 
                   pc.inc()
-                  self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
+                  self.frame = new_frame(CallSite(frame: self.frame, cu: self.cur_block, pc: pc))
                   self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
                   self.frame.ns = fn.ns
                   self.frame.self = gene_type.ref.bound_method.self
@@ -497,7 +497,7 @@ proc exec*(self: VirtualMachine): Value =
             todo($obj.kind)
 
         pc.inc()
-        self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
+        self.frame = new_frame(CallSite(frame: self.frame, cu: self.cur_block, pc: pc))
         self.frame.self = obj
         self.frame.ns = ns
         self.cur_block = compiled
@@ -534,14 +534,14 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkReturn:
         {.push checks: off}
-        if self.frame.caller_frame == nil:
+        if self.frame.caller == nil:
           not_allowed("Return from top level")
         else:
           let v = self.frame.pop()
-          self.cur_block = self.frame.caller_address.cu
-          pc = self.frame.caller_address.pc
+          self.cur_block = self.frame.caller.cu
+          pc = self.frame.caller.pc
           inst = self.cur_block.instructions[pc].addr
-          self.frame.update(self.frame.caller_frame)
+          self.frame.update(self.frame.caller.frame)
           self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           self.frame.push(v)
           continue
@@ -579,7 +579,7 @@ proc exec*(self: VirtualMachine): Value =
             compiled.skip_return = true
 
             pc.inc()
-            self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
+            self.frame = new_frame(CallSite(frame: self.frame, cu: self.cur_block, pc: pc))
             self.frame.self = instance.to_ref_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cur_block = compiled
@@ -627,7 +627,7 @@ proc exec*(self: VirtualMachine): Value =
             let fn = meth.callable.ref.fn
             fn.compile()
 
-            self.frame = new_frame(self.frame, Address(cu: self.cur_block, pc: pc))
+            self.frame = new_frame(CallSite(frame: self.frame, cu: self.cur_block, pc: pc))
             self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
             self.frame.ns = fn.ns
             self.frame.self = v
