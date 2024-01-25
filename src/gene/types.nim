@@ -526,8 +526,8 @@ type
     scope*: Scope
     self*: Value
     args*: Value
-    stack_index*: uint8
     stack*: array[24, Value]
+    stack_index*: uint8
 
   Frame* = ptr FrameObj
 
