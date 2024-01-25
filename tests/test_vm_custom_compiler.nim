@@ -10,7 +10,7 @@ import ./helpers
 # Q: How are arguments processed?
 # A:
 # Q: Should compilation output be cached?
-# A:
+# A: Yes. Each compilation call should be executed once, then cached.
 # Custom compiler vs function vs macro
 
 # Custom instruction
