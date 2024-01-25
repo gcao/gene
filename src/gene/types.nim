@@ -504,17 +504,16 @@ type
     next_index*: int16      # If next_index is 0, the scope is empty
     mappings*: Table[Key, int16]
 
-  CallSite* = ref object
-    frame*: Frame
+  Address* = object
     cu*: CompilationUnit
     pc*: int
 
   # Virtual machine and its data can be separated however it doesn't
   # bring much benefit. So we keep them together.
   VirtualMachine* = ref object
-    cur_block*: CompilationUnit
-    pc*: int
     frame*: Frame
+    cu*: CompilationUnit
+    pc*: int
     trace*: bool
 
   VmCallback* = proc() {.gcsafe.}
@@ -522,7 +521,8 @@ type
   FrameObj = object
     ref_count*: int32
     stack_index*: uint8
-    caller*: CallSite
+    caller_frame*: Frame
+    caller_address*: Address
     ns*: Namespace
     scope*: Scope
     self*: Value
@@ -1846,8 +1846,8 @@ proc free*(self: var Frame) =
   {.push checks: off, optimization: speed.}
   self.ref_count.dec()
   if self.ref_count <= 0:
-    if self.caller != nil:
-      self.caller.frame.free()
+    if self.caller_frame != nil:
+      self.caller_frame.free()
     self.scope.free()
     self[].reset()
     FRAMES.add(self)
@@ -1863,19 +1863,18 @@ proc new_frame(): Frame =
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
-  `=copy`(result.ns, ns)
-  `=copy`(result.scope, new_scope())
+  result.ns = ns
+  result.scope = new_scope()
 
-proc new_frame*(caller: CallSite, scope: Scope): Frame {.inline.} =
-  {.push checks: off, optimization: speed.}
+proc new_frame*(caller_frame: Frame, caller_address: Address, scope: Scope): Frame {.inline.} =
   result = new_frame()
-  `=sink`(result.caller, caller)
-  result.caller.frame.ref_count.inc()
-  `=copy`(result.scope, scope)
-  {.pop.}
+  caller_frame.ref_count.inc()
+  result.caller_frame = caller_frame
+  result.caller_address = caller_address
+  result.scope = scope
 
-proc new_frame*(caller: CallSite): Frame {.inline.} =
-  result = new_frame(caller, new_scope())
+proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} =
+  result = new_frame(caller_frame, caller_address, new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   {.push checks: off, optimization: speed.}

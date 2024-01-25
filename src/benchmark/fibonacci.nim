@@ -28,7 +28,7 @@ when isMainModule:
 
   let ns = new_namespace("fibonacci")
   VM.frame.update(new_frame(ns))
-  VM.cur_block = compiled
+  VM.cu = compiled
   VM.trace = get_env("TRACE") == "1"
 
   let start = cpuTime()
