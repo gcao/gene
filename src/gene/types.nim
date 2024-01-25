@@ -515,16 +515,10 @@ type
     cu*: CompilationUnit
     pc*: int
 
-  # VirtualMachineState* = enum
-  #   VmWaiting   # waiting for task
-  #   VmRunning
-  #   VmPaused
-
   # Virtual machine and its data can be separated however it doesn't
   # bring much benefit. So we keep them together.
   VirtualMachine* = ref object
-    # state*: VirtualMachineState
-    cur_block*: CompilationUnit
+    cu*: CompilationUnit
     pc*: int
     frame*: Frame
     trace*: bool
@@ -546,7 +540,6 @@ type
 
   FrameObj* = object
     ref_count*: int32
-    stack_index*: uint8
     # caller*: CallSite          # TODO: replace caller_frame and caller_address with this
     caller_frame*: Frame
     caller_address*: Address
@@ -555,8 +548,8 @@ type
     scope*: Scope
     self*: Value
     args*: Value
-    # match_result*: MatchResult
-    stack*: array[23, Value]
+    stack*: array[24, Value]
+    stack_index*: uint8
 
   Frame* = ptr FrameObj
 
@@ -2058,7 +2051,6 @@ template scope_tracker*(self: Compiler): ScopeTracker =
 
 proc init_app_and_vm*() =
   VM = VirtualMachine(
-    # state: VmWaiting,
   )
   let r = new_ref(VkApplication)
   r.app = new_app()

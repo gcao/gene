@@ -25,7 +25,7 @@ proc print_stack(self: VirtualMachine, args: Value): Value =
   self.frame.push(NIL)
 
 proc print_instructions(self: VirtualMachine, args: Value): Value =
-  echo self.cur_block
+  echo self.cu
   self.frame.push(NIL)
 
 proc to_ctor(node: Value): Function =
