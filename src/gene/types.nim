@@ -511,22 +511,22 @@ type
   # Virtual machine and its data can be separated however it doesn't
   # bring much benefit. So we keep them together.
   VirtualMachine* = ref object
-    frame*: Frame
     cu*: CompilationUnit
     pc*: int
+    frame*: Frame
     trace*: bool
 
   VmCallback* = proc() {.gcsafe.}
 
   FrameObj = object
     ref_count*: int32
-    stack_index*: uint8
     caller_frame*: Frame
     caller_address*: Address
     ns*: Namespace
     scope*: Scope
     self*: Value
     args*: Value
+    stack_index*: uint8
     stack*: array[24, Value]
 
   Frame* = ptr FrameObj
