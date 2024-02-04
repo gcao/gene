@@ -554,45 +554,48 @@ const F64_ZERO = 0x2000_0000_0000_0000u64
 
 const AND_MASK = 0x0000_FFFF_FFFF_FFFFu64
 
-const NIL_PREFIX = 0x7FFA
-const NIL* = cast[Value](0x7FFA_A000_0000_0000u64)
+const NIL_PREFIX = 0x7FF8
+const NIL* = cast[Value](0x7FF8_A000_0000_0000u64)
 
-const BOOL_PREFIX = 0x7FFC
-const TRUE*  = cast[Value](0x7FFC_A000_0000_0000u64)
-const FALSE* = cast[Value](0x7FFC_0000_0000_0000u64)
+const BOOL_PREFIX = 0x7FF9
+const TRUE*  = cast[Value](0x7FF9_A000_0000_0000u64)
+const FALSE* = cast[Value](0x7FF9_0000_0000_0000u64)
 
-const POINTER_PREFIX = 0x7FFB
+const POINTER_PREFIX = 0x7FFA
+const POINTER_MASK = 0x7FFA_0000_0000_0000u64
 
-const REF_PREFIX = 0x7FFD
-const REF_MASK = 0x7FFD_0000_0000_0000u64
+const GC_PREFIX = 0x3FFF  # 1111_1111_1111_11
 
-const GENE_PREFIX = 0x7FF8
-const GENE_MASK = 0x7FF8_0000_0000_0000u64
+const REF_PREFIX = 0xFFFC
+const REF_MASK = 0xFFFC_0000_0000_0000u64
 
-const OTHER_PREFIX = 0x7FFE
+const GENE_PREFIX = 0xFFFD
+const GENE_MASK = 0xFFFD_0000_0000_0000u64
 
-const VOID* = cast[Value](0x7FFE_0000_0000_0000u64)
-const PLACEHOLDER* = cast[Value](0x7FFE_0100_0000_0000u64)
+const OTHER_PREFIX = 0x7FFB
+
+const VOID* = cast[Value](0x7FFB_0000_0000_0000u64)
+const PLACEHOLDER* = cast[Value](0x7FFB_0100_0000_0000u64)
 # Used when a key does not exist in a map
-const NOT_FOUND* = cast[Value](0x7FFE_0200_0000_0000u64)
+const NOT_FOUND* = cast[Value](0x7FFB_0200_0000_0000u64)
 
 # Special variable used by the parser
-const PARSER_IGNORE* = cast[Value](0x7FFE_0200_0000_0000u64)
+const PARSER_IGNORE* = cast[Value](0x7FFB_0200_0000_0000u64)
 
-const CHAR_MASK = 0x7FFE_0200_0000_0000u64
-const CHAR2_MASK = 0x7FFE_0300_0000_0000u64
-const CHAR3_MASK = 0x7FFE_0400_0000_0000u64
-const CHAR4_MASK = 0x7FFE_0500_0000_0000u64
+const CHAR_MASK = 0x7FFB_0200_0000_0000u64
+const CHAR2_MASK = 0x7FFB_0300_0000_0000u64
+const CHAR3_MASK = 0x7FFB_0400_0000_0000u64
+const CHAR4_MASK = 0x7FFB_0500_0000_0000u64
 
 const SHORT_STR_PREFIX  = 0xFFF8
 const SHORT_STR_MASK = 0xFFF8_0000_0000_0000u64
-const LONG_STR_PREFIX  = 0xFFF9
-const LONG_STR_MASK = 0xFFF9_0000_0000_0000u64
+const LONG_STR_PREFIX  = 0xFFFE
+const LONG_STR_MASK = 0xFFFE_0000_0000_0000u64
 
 const EMPTY_STRING = 0xFFF8_0000_0000_0000u64
 
-const SYMBOL_PREFIX  = 0x7FF9
-const EMPTY_SYMBOL = 0x7FF9_0000_0000_0000u64
+const SYMBOL_PREFIX  = 0xFFF9
+const SYMBOL_MASK  = 0xFFF9_0000_0000_0000u64
 
 const BIGGEST_INT = 2^61 - 1
 
@@ -614,7 +617,7 @@ proc `$`*(self: ptr Reference): string
 proc `$`*(self: ptr Gene): string
 
 template gene*(v: Value): ptr Gene =
-  cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
+  cast[ptr Gene](bitand(cast[int64](v), AND_MASK.int64))
 
 proc new_str*(s: string): ptr String
 proc new_str_value*(s: string): Value
@@ -665,7 +668,7 @@ proc to_binstr*(v: int64): string =
 proc new_id*(): Id =
   cast[Id](rand(BIGGEST_INT))
 
-template destroy(self: Value) =
+proc destroy(self: Value) =
   {.push checks: off, optimization: speed.}
   let v1 = cast[uint64](self)
   let prefix = v1.shr(48)
@@ -693,30 +696,36 @@ template destroy(self: Value) =
       discard
   {.pop.}
 
-proc `=destroy`*(self: Value) =
-  destroy(self)
+template `=destroy`*(self: Value) =
+  if cast[uint64](self).shr(50) == GC_PREFIX:
+    destroy(self)
 
 proc `=copy`*(a: var Value, b: Value) =
   {.push checks: off, optimization: speed.}
-  if cast[int64](a) != 0:
+  if cast[uint64](a).shr(50) == GC_PREFIX:
     destroy(a)
-  let v1 = cast[uint64](b)
-  let prefix = v1.shr(48)
-  case prefix:
-    of REF_PREFIX:
-      let x = cast[ptr Reference](bitand(v1, AND_MASK))
-      x.ref_count.inc()
-      `=sink`(a, b)
-      {.linearScanEnd.}
-    of GENE_PREFIX:
-      let x = cast[ptr Gene](bitand(v1, AND_MASK))
-      x.ref_count.inc()
-      `=sink`(a, b)
-    of LONG_STR_PREFIX:
-      let x = cast[ptr String](bitand(v1, AND_MASK))
-      a = new_str_value(x.str)
-    else:
-      `=sink`(a, b)
+
+  if cast[uint64](b).shr(50) == GC_PREFIX:
+    let v1 = cast[uint64](b)
+    let prefix = v1.shr(48)
+    case prefix:
+      of REF_PREFIX:
+        let x = cast[ptr Reference](bitand(v1, AND_MASK))
+        x.ref_count.inc()
+        `=sink`(a, b)
+        {.linearScanEnd.}
+      of GENE_PREFIX:
+        let x = cast[ptr Gene](bitand(v1, AND_MASK))
+        x.ref_count.inc()
+        `=sink`(a, b)
+      of LONG_STR_PREFIX:
+        let x = cast[ptr String](bitand(v1, AND_MASK))
+        a = new_str_value(x.str)
+      else:
+        `=sink`(a, b)
+  else:
+    `=sink`(a, b)
+
   {.pop.}
 
 converter to_value*(k: Key): Value {.inline.} =
@@ -892,13 +901,13 @@ converter to_value*(v: bool): Value {.inline.} =
     return FALSE
 
 proc to_pointer*(v: Value): pointer {.inline.} =
-  cast[pointer](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
+  cast[pointer](bitand(cast[int64](v), AND_MASK.int64))
 
 converter to_value*(v: pointer): Value {.inline.} =
   if v.is_nil:
     return NIL
   else:
-    cast[Value](bitor(cast[int64](v), 0x7FFB000000000000))
+    cast[Value](bitor(cast[int64](v), POINTER_MASK.int64))
 
 # Applicable to array, string, symbol, gene etc
 proc `[]`*(self: Value, i: int): Value =
@@ -1087,9 +1096,9 @@ proc to_symbol_value*(s: string): Value =
     let found = SYMBOLS.map.get_or_default(s, -1)
     if found != -1:
       let i = found.uint64
-      result = cast[Value](bitor(EMPTY_SYMBOL, i))
+      result = cast[Value](bitor(SYMBOL_MASK, i))
     else:
-      result = cast[Value](bitor(EMPTY_SYMBOL, SYMBOLS.store.len.uint64))
+      result = cast[Value](bitor(SYMBOL_MASK, SYMBOLS.store.len.uint64))
       SYMBOLS.map[s] = SYMBOLS.store.len
       SYMBOLS.store.add(s)
 
@@ -2022,9 +2031,9 @@ proc init_app_and_vm*() =
 
 #################### Helpers #####################
 
-const SYM_UNDERSCORE* = 0x7FF9_0000_0000_0000
-const SYM_SELF* = 0x7FF9_0000_0000_0001
-const SYM_GENE* = 0x7FF9_0000_0000_0002
+const SYM_UNDERSCORE* = 0xFFF9_0000_0000_0000
+const SYM_SELF* = 0xFFF9_0000_0000_0001
+const SYM_GENE* = 0xFFF9_0000_0000_0002
 
 proc init_values*() =
   SYMBOLS = ManagedSymbols()
