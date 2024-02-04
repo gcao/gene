@@ -700,29 +700,34 @@ template `=destroy`*(self: Value) =
   if cast[uint64](self).shr(50) == GC_PREFIX:
     destroy(self)
 
-proc `=copy`*(a: var Value, b: Value) =
+proc copy*(a: var Value, b: Value) =
+  {.push checks: off, optimization: speed.}
+  let v1 = cast[uint64](b)
+  let prefix = v1.shr(48)
+  case prefix:
+    of REF_PREFIX:
+      let x = cast[ptr Reference](bitand(v1, AND_MASK))
+      x.ref_count.inc()
+      `=sink`(a, b)
+      {.linearScanEnd.}
+    of GENE_PREFIX:
+      let x = cast[ptr Gene](bitand(v1, AND_MASK))
+      x.ref_count.inc()
+      `=sink`(a, b)
+    of LONG_STR_PREFIX:
+      let x = cast[ptr String](bitand(v1, AND_MASK))
+      a = new_str_value(x.str)
+    else:
+      `=sink`(a, b)
+  {.pop.}
+
+template `=copy`*(a: var Value, b: Value) =
   {.push checks: off, optimization: speed.}
   if cast[uint64](a).shr(50) == GC_PREFIX:
     destroy(a)
 
   if cast[uint64](b).shr(50) == GC_PREFIX:
-    let v1 = cast[uint64](b)
-    let prefix = v1.shr(48)
-    case prefix:
-      of REF_PREFIX:
-        let x = cast[ptr Reference](bitand(v1, AND_MASK))
-        x.ref_count.inc()
-        `=sink`(a, b)
-        {.linearScanEnd.}
-      of GENE_PREFIX:
-        let x = cast[ptr Gene](bitand(v1, AND_MASK))
-        x.ref_count.inc()
-        `=sink`(a, b)
-      of LONG_STR_PREFIX:
-        let x = cast[ptr String](bitand(v1, AND_MASK))
-        a = new_str_value(x.str)
-      else:
-        `=sink`(a, b)
+    copy(a, b)
   else:
     `=sink`(a, b)
 
