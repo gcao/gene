@@ -285,6 +285,7 @@ type
   Macro* = ref object
     ns*: Namespace
     name*: string
+    parent_scope_tracker*: ScopeTracker
     parent_scope*: Scope
     parent_scope_max*: int16
     matcher*: RootMatcher

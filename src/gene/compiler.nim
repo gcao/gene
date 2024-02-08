@@ -489,7 +489,7 @@ proc compile*(input: seq[Value]): CompilationUnit =
   self.output.update_jumps()
   result = self.output
 
-proc compile*(f: Function) =
+template compile_body*(f: untyped) =
   if f.body_compiled != nil:
     return
 
@@ -523,12 +523,12 @@ proc compile*(f: Function) =
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
 
-proc compile*(m: Macro) =
-  if m.body_compiled != nil:
-    return
+# proc compile*(m: Macro) =
+#   if m.body_compiled != nil:
+#     return
 
-  m.body_compiled = compile(m.body)
-  m.body_compiled.matcher = m.matcher
+#   m.body_compiled = compile(m.body)
+#   m.body_compiled.matcher = m.matcher
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

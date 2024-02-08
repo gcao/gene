@@ -9,6 +9,11 @@ template handle_gene_fn_like(self: VirtualMachine) =
   r.scope = new_scope()
   self.frame.push(r.to_ref_value())
 
+template handle_gene_macro_like(self: VirtualMachine) =
+  var r = new_ref(VkScope)
+  r.scope = new_scope()
+  self.frame.push(r.to_ref_value())
+
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
   var inst = self.cu.instructions[pc].addr
@@ -326,6 +331,7 @@ proc exec*(self: VirtualMachine): Value =
                 inst = self.cu.instructions[pc].addr
                 continue
               of VkMacro:
+                self.handle_gene_macro_like()
                 inst.arg1 = 2
               of VkBoundMethod:
                 if v.ref.bound_method.method.is_macro:
@@ -372,13 +378,26 @@ proc exec*(self: VirtualMachine): Value =
             of VkFunction:
               let f = v.ref.fn
               if f.body_compiled == nil:
-                f.compile()
+                f.compile_body()
 
               pc.inc()
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
               self.frame.ns = f.ns
               self.cu = f.body_compiled
+              pc = 0
+              inst = self.cu.instructions[pc].addr
+              continue
+            of VkMacro:
+              let m = v.ref.macro
+              if m.body_compiled == nil:
+                m.compile_body()
+
+              pc.inc()
+              self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
+              self.frame.scope.set_parent(m.parent_scope, m.parent_scope_max)
+              self.frame.ns = m.ns
+              self.cu = m.body_compiled
               pc = 0
               inst = self.cu.instructions[pc].addr
               continue
@@ -392,7 +411,7 @@ proc exec*(self: VirtualMachine): Value =
             of VkMacro:
               discard self.frame.pop()
 
-              gene_type.ref.macro.compile()
+              gene_type.ref.macro.compile_body()
 
               pc.inc()
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
@@ -416,7 +435,7 @@ proc exec*(self: VirtualMachine): Value =
                   self.frame.push(meth.callable.ref.native_fn(self, v))
                 of VkFunction:
                   let fn = meth.callable.ref.fn
-                  fn.compile()
+                  fn.compile_body()
 
                   pc.inc()
                   self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
@@ -603,7 +622,7 @@ proc exec*(self: VirtualMachine): Value =
         let class = instance.class
         case class.constructor.kind:
           of VkFunction:
-            class.constructor.ref.fn.compile()
+            class.constructor.ref.fn.compile_body()
             let compiled = class.constructor.ref.fn.body_compiled
             compiled.skip_return = true
 
@@ -654,7 +673,7 @@ proc exec*(self: VirtualMachine): Value =
             inst = self.cu.instructions[pc].addr
 
             let fn = meth.callable.ref.fn
-            fn.compile()
+            fn.compile_body()
 
             self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
             self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
