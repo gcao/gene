@@ -4,6 +4,11 @@ import ./types
 import ./parser
 import ./compiler
 
+template handle_gene_fn_like(self: VirtualMachine) =
+  var r = new_ref(VkScope)
+  r.scope = new_scope()
+  self.frame.push(r.to_ref_value())
+
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
   var inst = self.cu.instructions[pc].addr
@@ -256,9 +261,7 @@ proc exec*(self: VirtualMachine): Value =
           of 1:   # Fn
             case v.kind:
               of VkFunction:
-                var r = new_ref(VkScope)
-                r.scope = new_scope()
-                self.frame.push(r.to_ref_value())
+                self.handle_gene_fn_like()
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -317,6 +320,7 @@ proc exec*(self: VirtualMachine): Value =
           else:   # Not sure
             case v.kind:
               of VkFunction, VkNativeFn, VkNativeFn2:
+                self.handle_gene_fn_like()
                 inst.arg1 = 1
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
@@ -363,11 +367,9 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         if self.frame.current().kind == VkScope:
           let scope = self.frame.pop().ref.scope
-          let v = self.frame.current()
+          let v = self.frame.pop()
           case v.kind:
             of VkFunction:
-              discard self.frame.pop()
-
               let f = v.ref.fn
               if f.body_compiled == nil:
                 f.compile()
