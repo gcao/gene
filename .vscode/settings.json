@@ -1,0 +1,8 @@
+{
+  "nim.project": [
+    "src/gene.nim",
+    "src/gene/compiler.nim",
+    "src/gene/vm.nim",
+    "src/gene/vm/core.nim",
+  ],
+}

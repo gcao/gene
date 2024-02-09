@@ -72,12 +72,40 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
   else:
     not_allowed()
 
+proc `if`(self: VirtualMachine, args: Value): CompilationUnit  {.gcsafe.} =
+  let c = Compiler(output: new_compilation_unit())
+  c.scope_trackers.add(c.output.scope_tracker)
+  c.output.skip_return = true
+  c.output.instructions.add(Instruction(kind: IkStart))
+
+  let children = args.gene.children
+  let else_label = new_label()
+  let end_label = new_label()
+
+  # Condition
+  c.compile(children[0])
+
+  c.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
+  # Then
+  c.compile(children[1])
+  c.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  c.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
+  # Else
+  c.compile(children[2])
+  c.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
+
+  c.output.instructions.add(Instruction(kind: IkEnd))
+  c.output.update_jumps()
+  result = c.output
+
 VMCreatedCallbacks.add proc() =
   App.app.gene_ns.ns["debug".to_key()] = debug
   App.app.gene_ns.ns["trace_start".to_key()] = trace_start
   App.app.gene_ns.ns["trace_end".to_key()] = trace_end
   App.app.gene_ns.ns["print_stack".to_key()] = print_stack
   App.app.gene_ns.ns["print_instructions".to_key()] = print_instructions
+
+  App.app.gene_ns.ns["if".to_key()] = `if`
 
   let class = new_class("Class")
   class.def_native_macro_method "ctor", class_ctor

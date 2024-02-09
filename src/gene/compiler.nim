@@ -4,7 +4,7 @@ import ./types
 import "./compiler/if"
 
 #################### Definitions #################
-proc compile(self: Compiler, input: Value)
+proc compile*(self: Compiler, input: Value) {.gcsafe.}
 
 proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:
@@ -440,7 +440,7 @@ proc compile_gene(self: Compiler, input: Value) =
 
   self.compile_gene_unknown(gene)
 
-proc compile(self: Compiler, input: Value) =
+proc compile*(self: Compiler, input: Value) {.gcsafe.} =
   case input.kind:
     of VkInt, VkBool, VkNil:
       self.compile_literal(input)
@@ -465,7 +465,7 @@ proc compile(self: Compiler, input: Value) =
     else:
       todo($input.kind)
 
-proc update_jumps(self: CompilationUnit) =
+proc update_jumps*(self: CompilationUnit) =
   for i, inst in self.instructions:
     case inst.kind
       of IkJump, IkJumpIfFalse, IkContinue, IkGeneStartDefault:

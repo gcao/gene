@@ -49,6 +49,7 @@ type
     VkScopeTracker
     VkScope
     VkFrame
+    VkNativeCompiler
 
   Key* = distinct int64
   Value* = distinct int64
@@ -112,6 +113,8 @@ type
         scope*: Scope
       of VkFrame:
         frame*: Frame
+      of VkNativeCompiler:
+        native_compiler*: NativeCompiler
       else:
         discard
     ref_count*: int32
@@ -569,6 +572,8 @@ type
 
   NativeFn* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe, nimcall.}
   NativeFn2* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe.}
+
+  NativeCompiler* = proc(vm_data: VirtualMachine, args: Value): CompilationUnit {.gcsafe, nimcall.}
 
 const REF_SIZE* = sizeof(Reference)
 const INST_SIZE* = sizeof(Instruction)
@@ -1964,6 +1969,11 @@ template default*(self: Frame): Value =
   self.stack[REG_DEFAULT]
 
 #################### COMPILER ####################
+
+converter to_value*(v: NativeCompiler): Value =
+  var r = new_ref(VkNativeCompiler)
+  r.native_compiler = v
+  result = r.to_ref_value()
 
 proc new_compilation_unit*(): CompilationUnit =
   CompilationUnit(
