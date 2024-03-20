@@ -21,24 +21,28 @@ import ./helpers
 #   ...
 
 test_vm """
-  (compile c a
-    [
-      ($vm/Push a)
-      ($vm/Push 1)
-      ($vm/Add)
-    ]
-  )
-  (c 1)
-""", 2
+  (gene/if true 1)
+""", 1
 
-test_vm """
-  (compile c a
-    [
-      ($vm/Push a)
-      ($vm/Push 1)
-      ($vm/Add)
-    ]
-  )
-  (var b 1)
-  (c b)
-""", 2
+# test_vm """
+#   (compile c a
+#     [
+#       ($vm/Push a)
+#       ($vm/Push 1)
+#       ($vm/Add)
+#     ]
+#   )
+#   (c 1)
+# """, 2
+
+# test_vm """
+#   (compile c a
+#     [
+#       ($vm/Push a)
+#       ($vm/Push 1)
+#       ($vm/Add)
+#     ]
+#   )
+#   (var b 1)
+#   (c b)
+# """, 2

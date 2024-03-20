@@ -233,6 +233,9 @@ proc compile_gene_default(self: Compiler, gene: ptr Gene) {.inline.} =
 # * GeneLabel: GeneEnd
 # Similar logic is used for regular method calls and macro-method calls
 proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
+  # TODO: Remember the location of next instruction, assign a label if it doesn't
+  # have one, then add the label to GeneEnd as arg1.
+  # This can be used for optimization later.
   self.compile(gene.type)
 
   # if gene.args_are_literal():
