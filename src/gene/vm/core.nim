@@ -72,6 +72,12 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
   else:
     not_allowed()
 
+proc vm_push(self: VirtualMachine, args: Value): Value =
+  new_instr(IkPushValue, args.gene.children[0])
+
+proc vm_add(self: VirtualMachine, args: Value): Value =
+  new_instr(IkAdd)
+
 VMCreatedCallbacks.add proc() =
   App.app.gene_ns.ns["debug".to_key()] = debug
   App.app.gene_ns.ns["trace_start".to_key()] = trace_start
@@ -85,3 +91,8 @@ VMCreatedCallbacks.add proc() =
   let r = new_ref(VkClass)
   r.class = class
   App.app.class_class = r.to_ref_value()
+
+  let vm_ns = new_namespace("vm")
+  App.app.gene_ns.ns["vm".to_key()] = vm_ns.to_value()
+  vm_ns["PUSH".to_key()] = vm_push
+  vm_ns["ADD" .to_key()] = vm_add

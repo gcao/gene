@@ -35,6 +35,7 @@ type
     VkModule
     VkNamespace
     VkFunction
+    VkCompileFn
     VkMacro
     VkBlock
     VkClass
@@ -86,6 +87,8 @@ type
         ns*: Namespace
       of VkFunction:
         fn*: Function
+      of VkCompileFn:
+        `compile_fn`*: CompileFn
       of VkMacro:
         `macro`*: Macro
       of VkBlock:
@@ -276,6 +279,17 @@ type
     body_compiled*: CompilationUnit
     # ret*: Expr
 
+  CompileFn* = ref object
+    ns*: Namespace
+    name*: string
+    parent_scope_tracker*: ScopeTracker
+    parent_scope*: Scope
+    parent_scope_max*: int16
+    matcher*: RootMatcher
+    # matching_hint*: MatchingHint
+    body*: seq[Value]
+    body_compiled*: CompilationUnit
+
   Macro* = ref object
     ns*: Namespace
     name*: string
@@ -417,12 +431,15 @@ type
 
     IkFunction
     IkReturn
-    IkCallFunction
-    IkCallFunctionNoArgs
-    IkCallSimple  # call class or namespace body
+    # IkCallFunction
+    # IkCallFunctionNoArgs
+    # IkCallSimple  # call class or namespace body
+
+    IkCompileFn
+    # IkCallCompileFn
 
     IkMacro
-    IkCallMacro
+    # IkCallMacro
 
     IkClass
     IkSubClass
@@ -473,9 +490,10 @@ type
     local_index*: int32
     parent_index*: int32
 
-  CompilationUnitKind* = enum
+  CompilationUnitKind* {.size: sizeof(int8).} = enum
     CkDefault
     CkFunction
+    CkCompileFn
     CkMacro
     CkBlock
     CkModule
@@ -485,10 +503,10 @@ type
   CompilationUnit* = ref object
     id*: Id
     kind*: CompilationUnitKind
+    skip_return*: bool
     matcher*: RootMatcher
     instructions*: seq[Instruction]
     labels*: Table[Label, int]
-    skip_return*: bool
     scope_tracker*: ScopeTracker
 
   # Used by the compiler to keep track of scopes and variables
@@ -1588,6 +1606,35 @@ proc to_function*(node: Value): Function {.gcsafe.} =
   result = new_fn(name, matcher, body)
   result.async = node.gene.props.get_or_default("async".to_key(), false)
 
+#################### CompileFn ###################
+
+proc new_compile_fn*(name: string, matcher: RootMatcher, body: seq[Value]): CompileFn =
+  return CompileFn(
+    name: name,
+    matcher: matcher,
+    # matching_hint: matcher.hint,
+    body: body,
+  )
+
+proc to_compile_fn*(node: Value): CompileFn {.gcsafe.} =
+  let first = node.gene.children[0]
+  var name: string
+  if first.kind == VkSymbol:
+    name = first.str
+  elif first.kind == VkComplexSymbol:
+    name = first.ref.csymbol[^1]
+
+  let matcher = new_arg_matcher()
+  matcher.parse(node.gene.children[1])
+  matcher.check_hint()
+
+  var body: seq[Value] = @[]
+  for i in 2..<node.gene.children.len:
+    body.add node.gene.children[i]
+
+  # body = wrap_with_try(body)
+  result = new_compile_fn(name, matcher, body)
+
 #################### Macro #######################
 
 proc new_macro*(name: string, matcher: RootMatcher, body: seq[Value]): Macro =
@@ -1990,6 +2037,24 @@ proc find_loop_end*(self: CompilationUnit, pos: int): int =
 
 template scope_tracker*(self: Compiler): ScopeTracker =
   self.scope_trackers[^1]
+
+#################### Instruction #################
+
+converter to_value*(i: Instruction): Value =
+  let r = new_ref(VkInstruction)
+  r.instr = i
+  result = r.to_ref_value()
+
+proc new_instr*(kind: InstructionKind): Instruction =
+  Instruction(
+    kind: kind,
+  )
+
+proc new_instr*(kind: InstructionKind, arg0: Value): Instruction =
+  Instruction(
+    kind: kind,
+    arg0: arg0,
+  )
 
 #################### VM ##########################
 

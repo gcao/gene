@@ -176,6 +176,12 @@ proc compile_return(self: Compiler, gene: ptr Gene) =
 proc compile_macro(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMacro, arg0: input))
 
+proc compile_compile(self: Compiler, input: Value) =
+  self.output.instructions.add(Instruction(kind: IkCompileFn, arg0: input))
+  var r = new_ref(VkScopeTracker)
+  r.scope_tracker = self.scope_tracker
+  self.output.instructions.add(Instruction(kind: IkNoop, arg0: r.to_ref_value()))
+
 proc compile_ns(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkNamespace, arg0: gene.children[0]))
   if gene.children.len > 1:
@@ -420,6 +426,9 @@ proc compile_gene(self: Compiler, input: Value) =
       of "macro":
         self.compile_macro(input)
         return
+      of "compile":
+        self.compile_compile(input)
+        return
       of "return":
         self.compile_return(gene)
         return
@@ -529,6 +538,14 @@ proc compile*(m: Macro) =
 
   m.body_compiled = compile(m.body)
   m.body_compiled.matcher = m.matcher
+
+proc compile*(f: CompileFn) =
+  if f.body_compiled != nil:
+    return
+
+  f.body_compiled = compile(f.body)
+  f.body_compiled.kind = CkCompileFn
+  f.body_compiled.matcher = f.matcher
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: CompilationUnit(id: new_id()))

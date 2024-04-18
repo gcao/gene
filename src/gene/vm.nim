@@ -39,6 +39,12 @@ proc exec*(self: VirtualMachine): Value =
         if self.frame.caller_frame == nil:
           return v
         else:
+          if self.cu.kind == CkCompileFn:
+            todo($self.cu.kind)
+            # Replace the caller's instructions with what's returned
+            # Point the caller's pc to the first of the new instructions
+            continue
+
           let skip_return = self.cu.skip_return
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
@@ -247,6 +253,13 @@ proc exec*(self: VirtualMachine): Value =
             pc = inst.arg0.int
             inst = self.cu.instructions[pc].addr
             continue
+          of VkCompileFn:
+            var r = new_ref(VkScope)
+            r.scope = new_scope()
+            self.frame.push(r.to_ref_value())
+            pc = inst.arg0.int
+            inst = self.cu.instructions[pc].addr
+            continue
           else:
             discard
 
@@ -256,7 +269,7 @@ proc exec*(self: VirtualMachine): Value =
         case inst.arg1.int:
           of 1:   # Fn
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction, VkNativeFn, VkNativeFn2, VkCompileFn:
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -274,7 +287,7 @@ proc exec*(self: VirtualMachine): Value =
 
           of 2:   # Macro
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction, VkNativeFn, VkNativeFn2, VkCompileFn:
                 not_allowed("Macro expected here")
               of VkMacro:
                 discard
@@ -288,7 +301,7 @@ proc exec*(self: VirtualMachine): Value =
 
           else:   # Not sure
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction, VkNativeFn, VkNativeFn2, VkCompileFn:
                 inst.arg1 = 1
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
@@ -338,6 +351,22 @@ proc exec*(self: VirtualMachine): Value =
           let v = self.frame.current()
           case v.kind:
             of VkFunction:
+              discard self.frame.pop()
+
+              let f = v.ref.fn
+              if f.body_compiled == nil:
+                f.compile()
+
+              pc.inc()
+              self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
+              self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+              self.frame.ns = f.ns
+              self.cu = f.body_compiled
+              pc = 0
+              inst = self.cu.instructions[pc].addr
+              continue
+            of VkCompileFn:
+              todo($v.kind)
               discard self.frame.pop()
 
               let f = v.ref.fn
@@ -519,6 +548,23 @@ proc exec*(self: VirtualMachine): Value =
         f.parent_scope_max = self.frame.scope.max
         let r = new_ref(VkFunction)
         r.fn = f
+        let v = r.to_ref_value()
+        f.ns[f.name.to_key()] = v
+        self.frame.push(v)
+        {.pop.}
+
+      of IkCompileFn:
+        {.push checks: off}
+        let f = to_compile_fn(inst.arg0)
+        f.ns = self.frame.ns
+        # More data are stored in the next instruction slot
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        f.parent_scope_tracker = inst.arg0.ref.scope_tracker
+        f.parent_scope.update(self.frame.scope)
+        f.parent_scope_max = self.frame.scope.max
+        let r = new_ref(VkCompileFn)
+        r.compile_fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
         self.frame.push(v)
