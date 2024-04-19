@@ -366,10 +366,9 @@ proc exec*(self: VirtualMachine): Value =
               inst = self.cu.instructions[pc].addr
               continue
             of VkCompileFn:
-              todo($v.kind)
               discard self.frame.pop()
 
-              let f = v.ref.fn
+              let f = v.ref.compile_fn
               if f.body_compiled == nil:
                 f.compile()
 
