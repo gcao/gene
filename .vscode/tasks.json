@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "nimbuild",
+      "type": "shell",
+      "command": "~/.nimble/bin/nim",
+      "args": [
+        "c",
+        "--debugger:native",
+        "--out:bin/gene",
+        "src/gene.nim"
+      ],
+    },
+    {
+      "label": "nimbuild - http",
+      "type": "shell",
+      "command": "~/.nimble/bin/nim",
+      "args": [
+        "c",
+        "--debugger:native",
+        "--app:lib",
+        "-d:useMalloc",
+        "--out:build",
+        "src/genex/http.nim"
+      ],
+    },
+    // nim c --debugger:native --stackTrace:on -d:useMalloc --mm:orc --out:bin tests/test_wip.nim
+    {
+      "label": "nimbuild - test_wip",
+      // "dependsOn": ["nimbuild - http"],
+      "type": "shell",
+      "command": "~/.nimble/bin/nim",
+      "args": [
+        "c",
+        "--debugger:native",
+        "--stackTrace:on",
+        "-d:useMalloc",
+        "--mm:orc",
+        "--out:bin",
+        "tests/test_wip.nim"
+      ],
+    },
+  ]
+}
