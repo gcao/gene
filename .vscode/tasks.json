@@ -25,7 +25,7 @@
         "src/genex/http.nim"
       ],
     },
-    // nim c --debugger:native --stackTrace:on -d:useMalloc --mm:orc --out:bin tests/test_wip.nim
+    // nim c --debugger:native --stackTrace:on -d:useMalloc --mm:orc --out:bin/test_wip tests/test_wip.nim
     {
       "label": "nimbuild - test_wip",
       // "dependsOn": ["nimbuild - http"],
@@ -37,7 +37,7 @@
         "--stackTrace:on",
         "-d:useMalloc",
         "--mm:orc",
-        "--out:bin",
+        "--out:bin/test_wip",
         "tests/test_wip.nim"
       ],
     },

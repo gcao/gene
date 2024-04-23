@@ -10,8 +10,8 @@
             "request": "launch",
             "program": "${workspaceRoot}/bin/test_wip",
             "args": [],
-            // nim c --debugger:native --stackTrace:on -d:useMalloc --mm:orc --out:bin tests/test_wip.nim
-            // "preLaunchTask": "nimbuild - test_wip",
+            // nim c --debugger:native --stackTrace:on -d:useMalloc --mm:orc --out:bin/test_wip tests/test_wip.nim
+            "preLaunchTask": "nimbuild - test_wip",
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
             "environment": [],

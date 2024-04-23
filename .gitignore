@@ -17,6 +17,8 @@ tmp/
 bin/
 build/
 benchmark-results/
+.lsp/
+tests/test_wip.nim
 *.dylib
 callgrind.out*
 scratch*
