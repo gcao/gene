@@ -20,7 +20,6 @@ proc exec*(self: VirtualMachine): Value =
         echo fmt"{indent}{pc:03} {inst[]}"
 
     {.computedGoto.}
-    # echo $pc & " " & $inst.kind
     case inst.kind:
       of IkNoop:
         discard
@@ -41,9 +40,21 @@ proc exec*(self: VirtualMachine): Value =
           return v
         else:
           if self.cu.kind == CkCompileFn:
-            todo($self.cu.kind)
             # Replace the caller's instructions with what's returned
             # Point the caller's pc to the first of the new instructions
+            let cu = self.frame.caller_address.cu
+            let end_pos = self.frame.caller_address.pc
+            let caller_instr = self.frame.caller_address.cu.instructions[end_pos]
+            let start_pos = caller_instr.arg0.int
+            var new_instructions: seq[Instruction] = @[]
+            for item in v.ref.arr:
+              new_instructions.add(item.ref.instr)
+            cu.replace_chunk(start_pos, end_pos, new_instructions)
+            self.cu = self.frame.caller_address.cu
+            pc = start_pos
+            inst = self.cu.instructions[pc].addr
+            self.frame.update(self.frame.caller_frame)
+            self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
             continue
 
           let skip_return = self.cu.skip_return
@@ -374,7 +385,7 @@ proc exec*(self: VirtualMachine): Value =
               if f.body_compiled == nil:
                 f.compile()
 
-              pc.inc()
+              # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
               self.frame.ns = f.ns

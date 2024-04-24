@@ -254,6 +254,7 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
 
   let fn_label = new_label()
   let end_label = new_label()
+  let start_pos = self.output.instructions.len
   self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.Value))
 
   # self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
@@ -275,7 +276,7 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
   for child in gene.children:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
+  self.output.instructions.add(Instruction(kind: IkGeneEnd, arg0: start_pos, label: end_label))
 
 # TODO: handle special cases:
 # 1. No arguments
@@ -557,3 +558,6 @@ proc compile_init*(input: Value): CompilationUnit =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   result = self.output
+
+proc replace_chunk*(self: CompilationUnit, start_pos: int, end_pos: int, replacement: seq[Instruction]) =
+  self.instructions[start_pos..end_pos] = replacement
