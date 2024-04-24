@@ -21,6 +21,14 @@ test_vm """
 """, 1
 
 test_vm """
+  (fn f []
+    [1]
+  )
+  (f)
+""", proc(r: Value) =
+  check r.ref.arr[0] == 1
+
+test_vm """
   (fn f [a]
     (a + 2)
   )

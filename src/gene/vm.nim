@@ -20,6 +20,7 @@ proc exec*(self: VirtualMachine): Value =
         echo fmt"{indent}{pc:03} {inst[]}"
 
     {.computedGoto.}
+    # echo $pc & " " & $inst.kind
     case inst.kind:
       of IkNoop:
         discard
@@ -144,6 +145,7 @@ proc exec*(self: VirtualMachine): Value =
         let name = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
+        # echo "IkGetMember " & $value & " " & $name
         case value.kind:
           of VkMap:
             self.frame.push(value.ref.map[name])

@@ -627,7 +627,7 @@ proc kind*(v: Value): ValueKind
 proc `==`*(a, b: Value): bool {.no_side_effect.}
 converter to_bool*(v: Value): bool {.inline.}
 
-proc `$`*(self: Value): string
+proc `$`*(self: Value): string {.gcsafe.}
 proc `$`*(self: ptr Reference): string
 proc `$`*(self: ptr Gene): string
 
@@ -691,6 +691,7 @@ template destroy(self: Value) =
     of REF_PREFIX:
       let x = cast[ptr Reference](bitand(v1, AND_MASK))
       if x.ref_count == 1:
+        # echo "destroy " & $x.kind
         dealloc(x)
       else:
         x.ref_count.dec()
@@ -698,12 +699,14 @@ template destroy(self: Value) =
     of GENE_PREFIX:
       let x = cast[ptr Gene](bitand(v1, AND_MASK))
       if x.ref_count == 1:
+        # echo "destroy gene"
         dealloc(x)
       else:
         x.ref_count.dec()
     of LONG_STR_PREFIX:
       let x = cast[ptr String](bitand(v1, AND_MASK))
       if x.ref_count == 1:
+        # echo "destroy long string"
         dealloc(x)
       else:
         x.ref_count.dec()
@@ -716,6 +719,8 @@ proc `=destroy`*(self: Value) =
 
 proc `=copy`*(a: var Value, b: Value) =
   {.push checks: off, optimization: speed.}
+  if cast[int64](a) == cast[int64](b):
+    return
   if cast[int64](a) != 0:
     destroy(a)
   let v1 = cast[uint64](b)
@@ -770,6 +775,7 @@ proc `$`*(self: ptr Reference): string =
 proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
   result = cast[ptr Reference](alloc0(sizeof(Reference)))
   copy_mem(result, kind.addr, 2)
+  result.ref_count = 1
 
 template `ref`*(v: Value): ptr Reference =
   cast[ptr Reference](bitand(AND_MASK, v.uint64))
@@ -801,6 +807,7 @@ proc kind*(v: Value): ValueKind =
     let prefix = v1.shr(48)
     case prefix:
       of REF_PREFIX:
+        # echo "kind: REF_PREFIX"
         return v.ref.kind
         {.linearScanEnd.}
       of NIL_PREFIX:
@@ -863,7 +870,8 @@ proc is_literal*(self: Value): bool =
       else:
         result = true
 
-proc `$`*(self: Value): string =
+proc `$`*(self: Value): string {.gcsafe.} =
+  # echo "Value.$"
   {.cast(gcsafe).}:
     case self.kind:
       of VkNil:
@@ -880,6 +888,19 @@ proc `$`*(self: Value): string =
         result = $self.str
       of VkComplexSymbol:
         result = self.ref.csymbol.join("/")
+      of VkArray:
+        result = "["
+        for i, v in self.ref.arr:
+          if i > 0:
+            result &= " "
+          result &= $v
+        result &= "]"
+      of VkMap:
+        result = ""
+        for k, v in self.ref.map:
+          result &= "^" & $k & " " & $v & " "
+        result = "{" & strutils.strip(result) & "}"
+        result = $self.ref.map
       of VkGene:
         result = $self.gene
       else:
@@ -1269,7 +1290,8 @@ proc `[]`*(self: Namespace, key: Key): Value =
   elif not self.stop_inheritance and self.parent != nil:
     return self.parent[key]
   else:
-    return NOT_FOUND
+    return NIL
+    # return NOT_FOUND
     # raise new_exception(NotDefinedException, get_symbol(key.int64) & " is not defined")
 
 proc locate*(self: Namespace, key: Key): (Value, Namespace) =
@@ -1565,7 +1587,7 @@ proc new_arg_matcher*(value: Value): RootMatcher =
 
 #################### Function ####################
 
-proc new_fn*(name: string, matcher: RootMatcher, body: seq[Value]): Function =
+proc new_fn*(name: string, matcher: RootMatcher, body: sink seq[Value]): Function =
   return Function(
     name: name,
     matcher: matcher,
@@ -1608,7 +1630,7 @@ proc to_function*(node: Value): Function {.gcsafe.} =
 
 #################### CompileFn ###################
 
-proc new_compile_fn*(name: string, matcher: RootMatcher, body: seq[Value]): CompileFn =
+proc new_compile_fn*(name: string, matcher: RootMatcher, body: sink seq[Value]): CompileFn =
   return CompileFn(
     name: name,
     matcher: matcher,
@@ -1637,7 +1659,7 @@ proc to_compile_fn*(node: Value): CompileFn {.gcsafe.} =
 
 #################### Macro #######################
 
-proc new_macro*(name: string, matcher: RootMatcher, body: seq[Value]): Macro =
+proc new_macro*(name: string, matcher: RootMatcher, body: sink seq[Value]): Macro =
   return Macro(
     name: name,
     matcher: matcher,
@@ -1666,7 +1688,7 @@ proc to_macro*(node: Value): Macro =
 
 #################### Block #######################
 
-proc new_block*(matcher: RootMatcher,  body: seq[Value]): Block =
+proc new_block*(matcher: RootMatcher,  body: sink seq[Value]): Block =
   return Block(
     matcher: matcher,
     # matching_hint: matcher.hint,

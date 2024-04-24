@@ -5,6 +5,14 @@
 proc debug(self: VirtualMachine, args: Value): Value =
   todo()
 
+proc println(self: VirtualMachine, args: Value): Value =
+  var s = ""
+  for i, k in args.gene.children:
+    s &= $k
+    if i < args.gene.children.len - 1:
+      s &= " "
+  echo s
+
 proc trace_start(self: VirtualMachine, args: Value): Value =
   self.trace = true
   self.frame.push(NIL)
@@ -80,6 +88,7 @@ proc vm_add(self: VirtualMachine, args: Value): Value =
 
 VMCreatedCallbacks.add proc() =
   App.app.gene_ns.ns["debug".to_key()] = debug
+  App.app.gene_ns.ns["println".to_key()] = println
   App.app.gene_ns.ns["trace_start".to_key()] = trace_start
   App.app.gene_ns.ns["trace_end".to_key()] = trace_end
   App.app.gene_ns.ns["print_stack".to_key()] = print_stack
