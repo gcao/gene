@@ -42,7 +42,7 @@ proc exec*(self: VirtualMachine): Value =
           if self.cu.kind == CkCompileFn:
             # Replace the caller's instructions with what's returned
             # Point the caller's pc to the first of the new instructions
-            let cu = self.frame.caller_address.cu
+            var cu = self.frame.caller_address.cu
             let end_pos = self.frame.caller_address.pc
             let caller_instr = self.frame.caller_address.cu.instructions[end_pos]
             let start_pos = caller_instr.arg0.int
@@ -415,9 +415,6 @@ proc exec*(self: VirtualMachine): Value =
               inst = self.cu.instructions[pc].addr
               continue
 
-            of VkClass:
-              todo($v)
-
             of VkBoundMethod:
               discard self.frame.pop()
 
@@ -442,8 +439,14 @@ proc exec*(self: VirtualMachine): Value =
                 else:
                   todo("Bound method: " & $meth.callable.kind)
 
+            of VkNativeFn:
+              discard self.frame.pop()
+
+              let f = gene_type.ref.native_fn
+              self.frame.push(f(self, v))
+
             else:
-              discard
+              todo($gene_type.kind)
         {.pop.}
 
       of IkAdd:

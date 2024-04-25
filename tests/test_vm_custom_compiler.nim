@@ -18,7 +18,7 @@ import ./helpers  # Ensure helpers is used
 # define_instruction "DoX", proc(self: var Frame, inst: Instruction) =
 #   ...
 
-test_vm true, """
+test_vm """
   (compile c _
     [
       ($vm/PUSH 1)

@@ -559,5 +559,5 @@ proc compile_init*(input: Value): CompilationUnit =
   self.output.update_jumps()
   result = self.output
 
-proc replace_chunk*(self: CompilationUnit, start_pos: int, end_pos: int, replacement: seq[Instruction]) =
+proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
