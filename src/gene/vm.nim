@@ -36,7 +36,7 @@ proc exec*(self: VirtualMachine): Value =
         when not defined(release):
           indent.delete(indent.len-2..indent.len-1)
         # TODO: validate that there is only one value on the stack
-        let v = self.frame.default
+        let v = self.frame.current
         if self.frame.caller_frame == nil:
           return v
         else:
@@ -267,11 +267,18 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         let gene_type = self.frame.current()
         case gene_type.kind:
-          of VkFunction, VkCompileFn:
+          of VkFunction:
             var r = new_ref(VkScope)
             r.scope = new_scope()
             self.frame.push(r.to_ref_value())
             pc = inst.arg0.int
+            inst = self.cu.instructions[pc].addr
+            continue
+          of VkCompileFn:
+            var r = new_ref(VkScope)
+            r.scope = new_scope()
+            self.frame.push(r.to_ref_value())
+            pc.inc()
             inst = self.cu.instructions[pc].addr
             continue
           else:
