@@ -35,6 +35,7 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         when not defined(release):
           indent.delete(indent.len-2..indent.len-1)
+        # TODO: validate that there is only one value on the stack
         let v = self.frame.default
         if self.frame.caller_frame == nil:
           return v
@@ -48,7 +49,14 @@ proc exec*(self: VirtualMachine): Value =
             let start_pos = caller_instr.arg0.int
             var new_instructions: seq[Instruction] = @[]
             for item in v.ref.arr:
-              new_instructions.add(item.ref.instr)
+              case item.kind:
+                of VkInstruction:
+                  new_instructions.add(item.ref.instr)
+                of VkArray:
+                  for item2 in item.ref.arr:
+                    new_instructions.add(item2.ref.instr)
+                else:
+                  todo($item.kind)
             cu.replace_chunk(start_pos, end_pos, new_instructions)
             self.cu = self.frame.caller_address.cu
             pc = start_pos
@@ -439,7 +447,7 @@ proc exec*(self: VirtualMachine): Value =
               self.frame.push(f(self, v))
 
             else:
-              todo($gene_type.kind)
+              discard
         {.pop.}
 
       of IkAdd:

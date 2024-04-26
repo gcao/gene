@@ -87,7 +87,7 @@ proc vm_compile(self: VirtualMachine, args: Value): Value {.gcsafe.} =
     let instrs = new_ref(VkArray)
     for instr in compiler.output.instructions:
       instrs.arr.add instr.to_value()
-    return instrs.to_value()
+    result = instrs.to_ref_value()
 
 proc vm_push(self: VirtualMachine, args: Value): Value =
   new_instr(IkPushValue, args.gene.children[0])
