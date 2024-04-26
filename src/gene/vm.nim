@@ -461,7 +461,16 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var second: Value
         self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int + second.int)
+        let first = self.frame.pop()
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.push(first.int + second.int)
+              else:
+                todo("Unsupported second operand for addition: " & $second)
+          else:
+            todo("Unsupported first operand for addition: " & $first)
         {.pop.}
 
       of IkSub:
