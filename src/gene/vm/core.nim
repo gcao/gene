@@ -80,6 +80,15 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
   else:
     not_allowed()
 
+proc vm_compile(self: VirtualMachine, args: Value): Value {.gcsafe.} =
+  {.cast(gcsafe).}:
+    let compiler = Compiler(output: CompilationUnit(id: new_id()))
+    compiler.compile(args.gene.children[0])
+    let instrs = new_ref(VkArray)
+    for instr in compiler.output.instructions:
+      instrs.arr.add instr.to_value()
+    return instrs.to_value()
+
 proc vm_push(self: VirtualMachine, args: Value): Value =
   new_instr(IkPushValue, args.gene.children[0])
 
@@ -103,5 +112,6 @@ VMCreatedCallbacks.add proc() =
 
   let vm_ns = new_namespace("vm")
   App.app.gene_ns.ns["vm".to_key()] = vm_ns.to_value()
+  vm_ns["compile".to_key()] = NativeFn(vm_compile)
   vm_ns["PUSH".to_key()] = vm_push
   vm_ns["ADD" .to_key()] = vm_add
