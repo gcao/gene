@@ -29,25 +29,52 @@ test_vm """
   (c)
 """, 3
 
-# test_vm """
-#   (compile c a
-#     [
-#       ($vm/PUSH a)
-#       ($vm/PUSH 1)
-#       ($vm/ADD)
-#     ]
-#   )
-#   (c 2)
-# """, 3
+test_vm """
+  (compile c _
+    (var a 1)
+    [
+      ($vm/PUSH a)
+      ($vm/PUSH 2)
+      ($vm/ADD)
+    ]
+  )
+  (c)
+""", 3
 
-# test_vm """
+test_vm """
+  (compile c a
+    [
+      ($vm/PUSH a)
+      ($vm/PUSH 2)
+      ($vm/ADD)
+    ]
+  )
+  (c 1)
+""", 3
+
+test_vm """
+  (compile c a
+    [
+      ($vm/PUSH a)
+      ($vm/PUSH 2)
+      ($vm/ADD)
+    ]
+  )
+  (var b 1)
+  (c b)
+""", 3
+
+# test_vm true, """
 #   (compile c a
 #     [
-#       ($vm/PUSH a)
+#       ($vm/compile a)
 #       ($vm/PUSH 2)
 #       ($vm/ADD)
 #     ]
 #   )
-#   (var b 1)
-#   (c b)
-# """, 3
+#   (fn f x
+#     (c x)
+#   )
+#   (f 1)
+#   (f 2)
+# """, 4

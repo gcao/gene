@@ -544,7 +544,34 @@ proc compile*(f: CompileFn) =
   if f.body_compiled != nil:
     return
 
-  f.body_compiled = compile(f.body)
+  let self = Compiler(output: new_compilation_unit())
+  self.output.instructions.add(Instruction(kind: IkStart))
+  self.output.scope_tracker.parent = f.parent_scope_tracker
+  self.output.scope_tracker.parent_index_max = f.parent_scope_max
+  self.scope_trackers.add(self.output.scope_tracker)
+
+  # generate code for arguments
+  for i, m in f.matcher.children:
+    self.output.scope_tracker.mappings[m.name_key] = i.int16
+    let label = new_label()
+    self.output.instructions.add(Instruction(
+      kind: IkJumpIfMatchSuccess,
+      arg0: i.Value,
+      arg1: label,
+    ))
+    if m.default_value != nil:
+      self.compile(m.default_value)
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
+      self.output.instructions.add(Instruction(kind: IkPop))
+    else:
+      self.output.instructions.add(Instruction(kind: IkThrow))
+    self.output.instructions.add(Instruction(kind: IkNoop, label: label))
+
+  self.compile(f.body)
+  self.output.instructions.add(Instruction(kind: IkEnd))
+  discard self.scope_trackers.pop()
+  self.output.update_jumps()
+  f.body_compiled = self.output
   f.body_compiled.kind = CkCompileFn
   f.body_compiled.matcher = f.matcher
 

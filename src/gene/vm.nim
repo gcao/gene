@@ -259,14 +259,7 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         let gene_type = self.frame.current()
         case gene_type.kind:
-          of VkFunction:
-            var r = new_ref(VkScope)
-            r.scope = new_scope()
-            self.frame.push(r.to_ref_value())
-            pc = inst.arg0.int
-            inst = self.cu.instructions[pc].addr
-            continue
-          of VkCompileFn:
+          of VkFunction, VkCompileFn:
             var r = new_ref(VkScope)
             r.scope = new_scope()
             self.frame.push(r.to_ref_value())
@@ -282,7 +275,7 @@ proc exec*(self: VirtualMachine): Value =
         case inst.arg1.int:
           of 1:   # Fn
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2, VkCompileFn:
+              of VkFunction, VkNativeFn, VkNativeFn2:
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -300,7 +293,7 @@ proc exec*(self: VirtualMachine): Value =
 
           of 2:   # Macro
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2, VkCompileFn:
+              of VkFunction, VkNativeFn, VkNativeFn2:
                 not_allowed("Macro expected here")
               of VkMacro:
                 discard
@@ -314,7 +307,7 @@ proc exec*(self: VirtualMachine): Value =
 
           else:   # Not sure
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2, VkCompileFn:
+              of VkFunction, VkNativeFn, VkNativeFn2:
                 inst.arg1 = 1
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
