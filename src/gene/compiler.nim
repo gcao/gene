@@ -239,6 +239,7 @@ proc compile_gene_default(self: Compiler, gene: ptr Gene) {.inline.} =
 # * GeneLabel: GeneEnd
 # Similar logic is used for regular method calls and macro-method calls
 proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
+  let start_pos = self.output.instructions.len
   self.compile(gene.type)
 
   # if gene.args_are_literal():
@@ -254,7 +255,6 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
 
   let fn_label = new_label()
   let end_label = new_label()
-  let start_pos = self.output.instructions.len
   self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.Value))
 
   # self.output.instructions.add(Instruction(kind: IkGeneStartMacro))

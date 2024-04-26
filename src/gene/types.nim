@@ -1376,11 +1376,11 @@ proc locate(self: ScopeTracker, key: Key, max: int): VarIndex =
   let found = self.mappings.get_or_default(key, -1)
   if found >= 0 and found < max:
     return VarIndex(parent_index: 0, local_index: found)
-  elif self.parent != nil:
+  elif self.parent.is_nil():
+    return VarIndex(parent_index: 0, local_index: -1)
+  else:
     result = self.parent.locate(key, self.parent_index_max.int)
     result.parent_index.inc()
-  else:
-    return VarIndex(parent_index: 0, local_index: -1)
 
 proc locate*(self: ScopeTracker, key: Key): VarIndex =
   let found = self.mappings.get_or_default(key, -1)
