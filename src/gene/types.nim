@@ -136,7 +136,7 @@ type
 
   ScopeObj* = object
     ref_count*: int32
-    # tracker*: ScopeTracker
+    tracker*: ScopeTracker
     parent*: Scope
     parent_index_max*: int16   # To remove
     members*:  seq[Value]
@@ -1977,6 +1977,11 @@ template default*(self: Frame): Value =
   self.stack[REG_DEFAULT]
 
 #################### COMPILER ####################
+
+proc to_value*(self: ScopeTracker): Value =
+  let r = new_ref(VkScopeTracker)
+  r.scope_tracker = self
+  result = r.to_ref_value()
 
 proc new_compilation_unit*(): CompilationUnit =
   CompilationUnit(

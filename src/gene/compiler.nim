@@ -489,12 +489,15 @@ proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())
   self.scope_trackers.add(self.output.scope_tracker)
   self.output.instructions.add(Instruction(kind: IkStart))
+  let st = self.output.scope_tracker.to_value()
+  self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
 
   for i, v in input:
     self.compile(v)
     if i < input.len - 1:
       self.output.instructions.add(Instruction(kind: IkPop))
 
+  self.output.instructions.add(Instruction(kind: IkScopeEnd, arg0: st))
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   result = self.output
@@ -528,7 +531,6 @@ proc compile*(f: Function) =
 
   self.compile(f.body)
   self.output.instructions.add(Instruction(kind: IkEnd))
-  discard self.scope_trackers.pop()
   self.output.update_jumps()
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
@@ -569,7 +571,6 @@ proc compile*(f: CompileFn) =
 
   self.compile(f.body)
   self.output.instructions.add(Instruction(kind: IkEnd))
-  discard self.scope_trackers.pop()
   self.output.update_jumps()
   f.body_compiled = self.output
   f.body_compiled.kind = CkCompileFn
@@ -579,9 +580,12 @@ proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: CompilationUnit(id: new_id()))
   self.output.skip_return = true
   self.output.instructions.add(Instruction(kind: IkStart))
+  let st = self.output.scope_tracker.to_value()
+  self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
 
   self.compile(input)
 
+  self.output.instructions.add(Instruction(kind: IkScopeEnd, arg0: st))
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   result = self.output

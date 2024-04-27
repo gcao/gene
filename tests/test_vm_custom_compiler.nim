@@ -52,7 +52,7 @@ test_vm """
   (c 1)
 """, 3
 
-test_vm true, """
+test_vm """
   (compile c a
     [
       ($vm/compile a)
@@ -64,17 +64,17 @@ test_vm true, """
   (c b)
 """, 3
 
-# test_vm true, """
-#   (compile c a
-#     [
-#       ($vm/compile a)
-#       ($vm/PUSH 2)
-#       ($vm/ADD)
-#     ]
-#   )
-#   (fn f x
-#     (c x)
-#   )
-#   (f 1)
-#   (f 2)
-# """, 4
+test_vm true, """
+  (compile c a
+    [
+      ($vm/compile a)
+      ($vm/PUSH 2)
+      ($vm/ADD)
+    ]
+  )
+  (fn f x
+    (c x)
+  )
+  (f 1)
+  (f 2)
+""", 4

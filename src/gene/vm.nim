@@ -76,6 +76,13 @@ proc exec*(self: VirtualMachine): Value =
           continue
         {.pop.}
 
+      of IkScopeStart:
+        self.frame.scope = new_scope()
+        self.frame.scope.tracker = inst.arg0.ref.scope_tracker
+      of IkScopeEnd:
+        self.frame.scope = nil
+        discard
+
       of IkVar:
         {.push checks: off.}
         self.frame.scope.members.add(self.frame.current())
@@ -381,6 +388,7 @@ proc exec*(self: VirtualMachine): Value =
               pc.inc()
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+              self.frame.scope.tracker = self.cu.scope_tracker
               self.frame.ns = f.ns
               self.cu = f.body_compiled
               pc = 0
@@ -396,6 +404,7 @@ proc exec*(self: VirtualMachine): Value =
               # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+              self.frame.scope.tracker = self.cu.scope_tracker
               self.frame.ns = f.ns
               self.cu = f.body_compiled
               pc = 0
