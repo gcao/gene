@@ -89,26 +89,40 @@ proc compile_map(self: Compiler, input: Value) =
 proc compile_do(self: Compiler, gene: ptr Gene) =
   self.compile(gene.children)
 
-proc compile_if(self: Compiler, gene: ptr Gene) =
-  normalize_if(gene)
-
+proc start_scope(self: Compiler) =
   let scope_tracker = new_scope_tracker(self.scope_tracker)
   self.scope_trackers.add(scope_tracker)
   let st = scope_tracker.to_value()
   self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
 
+proc end_scope(self: Compiler) =
+  discard self.scope_trackers.pop()
+  self.output.instructions.add(Instruction(kind: IkScopeEnd))
+
+proc compile_if(self: Compiler, gene: ptr Gene) =
+  normalize_if(gene)
+
+  self.start_scope()
+
   self.compile(gene.props[COND_KEY.to_key()])
   let else_label = new_label()
   let end_label = new_label()
   self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
+
+  self.start_scope()
   self.compile(gene.props[THEN_KEY.to_key()])
+  self.end_scope()
+
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+
   self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
+  self.start_scope()
   self.compile(gene.props[ELSE_KEY.to_key()])
+  self.end_scope()
 
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
-  discard self.scope_trackers.pop()
-  self.output.instructions.add(Instruction(kind: IkScopeEnd))
+
+  self.end_scope()
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
