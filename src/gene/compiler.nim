@@ -91,6 +91,12 @@ proc compile_do(self: Compiler, gene: ptr Gene) =
 
 proc compile_if(self: Compiler, gene: ptr Gene) =
   normalize_if(gene)
+
+  let scope_tracker = new_scope_tracker(self.scope_tracker)
+  self.scope_trackers.add(scope_tracker)
+  let st = scope_tracker.to_value()
+  self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
+
   self.compile(gene.props[COND_KEY.to_key()])
   let else_label = new_label()
   let end_label = new_label()
@@ -99,7 +105,10 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
   self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
   self.compile(gene.props[ELSE_KEY.to_key()])
+
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
+  discard self.scope_trackers.pop()
+  self.output.instructions.add(Instruction(kind: IkScopeEnd))
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
@@ -484,6 +493,10 @@ proc update_jumps(self: CompilationUnit) =
         self.instructions[i].arg1 = self.find_label(inst.arg1.Label).int32
       else:
         discard
+
+# Clean up scopes by removing unnecessary ScopeStart and ScopeEnd instructions
+proc cleanup_scopes(self: CompilationUnit) =
+  todo("cleanup_scopes")
 
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

@@ -77,10 +77,10 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkScopeStart:
-        self.frame.scope = new_scope()
+        self.frame.scope = new_scope(self.frame.scope)
         self.frame.scope.tracker = inst.arg0.ref.scope_tracker
       of IkScopeEnd:
-        self.frame.scope = nil
+        self.frame.scope = self.frame.scope.parent
         discard
 
       of IkVar:

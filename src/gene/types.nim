@@ -1372,6 +1372,12 @@ proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
   self.parent = parent
   self.parent_index_max = max
 
+proc new_scope*(parent: Scope): Scope =
+  result = new_scope()
+  if not parent.is_nil():
+    result.set_parent(parent, 0)
+    result.set_parent(parent, parent.max())
+
 proc locate(self: ScopeTracker, key: Key, max: int): VarIndex =
   let found = self.mappings.get_or_default(key, -1)
   if found >= 0 and found < max:
@@ -1390,6 +1396,17 @@ proc locate*(self: ScopeTracker, key: Key): VarIndex =
     return VarIndex(parent_index: 0, local_index: -1)
   else:
     result = self.locate(key, self.parent_index_max.int)
+
+#################### ScopeTracker ################
+
+proc new_scope_tracker*(): ScopeTracker =
+  ScopeTracker()
+
+proc new_scope_tracker*(parent: ScopeTracker): ScopeTracker =
+  ScopeTracker(
+    parent: parent,
+    parent_index_max: parent.next_index,
+  )
 
 #################### Pattern Matching ############
 
@@ -1992,7 +2009,7 @@ proc new_compilation_unit*(): CompilationUnit =
 proc `$`*(self: Instruction): string =
   case self.kind
     of IkPushValue,
-      IkVar,
+      IkVar, IkVarResolve,
       IkAddValue, IkLtValue,
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
