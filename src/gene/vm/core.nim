@@ -84,7 +84,7 @@ proc vm_compile(self: VirtualMachine, args: Value): Value {.gcsafe.} =
   {.cast(gcsafe).}:
     let compiler = Compiler(output: new_compilation_unit())
     let scope_tracker = self.frame.caller_frame.scope.tracker
-    compiler.output.scope_tracker = scope_tracker
+    # compiler.output.scope_tracker = scope_tracker
     compiler.scope_trackers.add(scope_tracker)
     compiler.compile(args.gene.children[0])
     let instrs = new_ref(VkArray)

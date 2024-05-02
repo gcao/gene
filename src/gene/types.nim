@@ -270,7 +270,10 @@ type
     async*: bool
     name*: string
     ns*: Namespace
-    parent_scope_tracker*: ScopeTracker
+    # Before body is compiled, scope_tracker is the parent scope tracker
+    # Once body is compiled, scope_tracker is the root scope tracker of the function
+    scope_tracker*: ScopeTracker
+    # parent_scope_tracker*: ScopeTracker
     parent_scope*: Scope
     parent_scope_max*: int16
     matcher*: RootMatcher
@@ -282,7 +285,10 @@ type
   CompileFn* = ref object
     ns*: Namespace
     name*: string
-    parent_scope_tracker*: ScopeTracker
+    # Before body is compiled, scope_tracker is the parent scope tracker
+    # Once body is compiled, scope_tracker is the root scope tracker of the function
+    scope_tracker*: ScopeTracker
+    # parent_scope_tracker*: ScopeTracker
     parent_scope*: Scope
     parent_scope_max*: int16
     matcher*: RootMatcher
@@ -507,7 +513,6 @@ type
     matcher*: RootMatcher
     instructions*: seq[Instruction]
     labels*: Table[Label, int]
-    scope_tracker*: ScopeTracker
 
   # Used by the compiler to keep track of scopes and variables
   #
@@ -1403,10 +1408,14 @@ proc new_scope_tracker*(): ScopeTracker =
   ScopeTracker()
 
 proc new_scope_tracker*(parent: ScopeTracker): ScopeTracker =
-  ScopeTracker(
-    parent: parent,
-    parent_index_max: parent.next_index,
-  )
+  result = ScopeTracker()
+  var p = parent
+  while not p.is_nil():
+    if p.next_index > 0:
+      result.parent = p
+      result.parent_index_max = p.next_index
+      return
+    p = p.parent
 
 #################### Pattern Matching ############
 
@@ -2003,7 +2012,6 @@ proc to_value*(self: ScopeTracker): Value =
 proc new_compilation_unit*(): CompilationUnit =
   CompilationUnit(
     id: new_id(),
-    scope_tracker: ScopeTracker(),
   )
 
 proc `$`*(self: Instruction): string =
@@ -2030,6 +2038,8 @@ proc `$`*(self: Instruction): string =
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
       else:
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
+    of IkVarResolveInherited:
+      result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1}"
     else:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"

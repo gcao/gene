@@ -92,12 +92,23 @@ proc compile_do(self: Compiler, gene: ptr Gene) =
 proc start_scope(self: Compiler) =
   let scope_tracker = new_scope_tracker(self.scope_tracker)
   self.scope_trackers.add(scope_tracker)
-  let st = scope_tracker.to_value()
-  self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
+  # ScopeStart is added when the first variable is declared
+  # let st = scope_tracker.to_value()
+  # self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
+
+proc start_scope(self: Compiler, parent: ScopeTracker, parent_index_max: int) =
+  var scope_tracker = new_scope_tracker(parent)
+  scope_tracker.parent_index_max = parent_index_max.int16
+  self.scope_trackers.add(scope_tracker)
+
+proc add_scope_start(self: Compiler) =
+  if self.scope_tracker.next_index == 0:
+    self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: self.scope_tracker.to_value()))
 
 proc end_scope(self: Compiler) =
+  if self.scope_tracker.next_index > 0:
+    self.output.instructions.add(Instruction(kind: IkScopeEnd))
   discard self.scope_trackers.pop()
-  self.output.instructions.add(Instruction(kind: IkScopeEnd))
 
 proc compile_if(self: Compiler, gene: ptr Gene) =
   normalize_if(gene)
@@ -126,6 +137,7 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
+  self.add_scope_start()
   let index = self.scope_tracker.next_index
   self.scope_tracker.mappings[name.str.to_key()] = index
   self.scope_tracker.next_index.inc()
@@ -514,17 +526,15 @@ proc cleanup_scopes(self: CompilationUnit) =
 
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())
-  self.scope_trackers.add(self.output.scope_tracker)
   self.output.instructions.add(Instruction(kind: IkStart))
-  let st = self.output.scope_tracker.to_value()
-  self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
+  self.start_scope()
 
   for i, v in input:
     self.compile(v)
     if i < input.len - 1:
       self.output.instructions.add(Instruction(kind: IkPop))
 
-  self.output.instructions.add(Instruction(kind: IkScopeEnd, arg0: st))
+  self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   result = self.output
@@ -535,13 +545,12 @@ proc compile*(f: Function) =
 
   let self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
-  self.output.scope_tracker.parent = f.parent_scope_tracker
-  self.output.scope_tracker.parent_index_max = f.parent_scope_max
-  self.scope_trackers.add(self.output.scope_tracker)
+  self.start_scope(f.scope_tracker, f.parent_scope_max)
+  f.scope_tracker = self.scope_tracker
 
   # generate code for arguments
   for i, m in f.matcher.children:
-    self.output.scope_tracker.mappings[m.name_key] = i.int16
+    self.scope_tracker.mappings[m.name_key] = i.int16
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
@@ -557,6 +566,8 @@ proc compile*(f: Function) =
     self.output.instructions.add(Instruction(kind: IkNoop, label: label))
 
   self.compile(f.body)
+
+  self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   f.body_compiled = self.output
@@ -575,13 +586,12 @@ proc compile*(f: CompileFn) =
 
   let self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
-  self.output.scope_tracker.parent = f.parent_scope_tracker
-  self.output.scope_tracker.parent_index_max = f.parent_scope_max
-  self.scope_trackers.add(self.output.scope_tracker)
+  self.start_scope(f.scope_tracker, f.parent_scope_max)
+  f.scope_tracker = self.scope_tracker
 
   # generate code for arguments
   for i, m in f.matcher.children:
-    self.output.scope_tracker.mappings[m.name_key] = i.int16
+    self.scope_tracker.mappings[m.name_key] = i.int16
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
@@ -597,6 +607,8 @@ proc compile*(f: CompileFn) =
     self.output.instructions.add(Instruction(kind: IkNoop, label: label))
 
   self.compile(f.body)
+
+  self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   f.body_compiled = self.output
@@ -604,15 +616,14 @@ proc compile*(f: CompileFn) =
   f.body_compiled.matcher = f.matcher
 
 proc compile_init*(input: Value): CompilationUnit =
-  let self = Compiler(output: CompilationUnit(id: new_id()))
+  let self = Compiler(output: new_compilation_unit())
   self.output.skip_return = true
   self.output.instructions.add(Instruction(kind: IkStart))
-  let st = self.output.scope_tracker.to_value()
-  self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
+  self.start_scope()
 
   self.compile(input)
 
-  self.output.instructions.add(Instruction(kind: IkScopeEnd, arg0: st))
+  self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   result = self.output

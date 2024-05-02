@@ -388,7 +388,7 @@ proc exec*(self: VirtualMachine): Value =
               pc.inc()
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-              self.frame.scope.tracker = f.body_compiled.scope_tracker
+              self.frame.scope.tracker = f.scope_tracker
               self.frame.ns = f.ns
               self.cu = f.body_compiled
               pc = 0
@@ -404,7 +404,7 @@ proc exec*(self: VirtualMachine): Value =
               # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
               self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
               self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-              self.frame.scope.tracker = f.body_compiled.scope_tracker
+              self.frame.scope.tracker = f.scope_tracker
               self.frame.ns = f.ns
               self.cu = f.body_compiled
               pc = 0
@@ -584,7 +584,7 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
-        f.parent_scope_tracker = inst.arg0.ref.scope_tracker
+        f.scope_tracker = inst.arg0.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         let r = new_ref(VkFunction)
@@ -601,7 +601,7 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
-        f.parent_scope_tracker = inst.arg0.ref.scope_tracker
+        f.scope_tracker = inst.arg0.ref.scope_tracker
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
         let r = new_ref(VkCompileFn)
