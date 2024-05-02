@@ -1391,7 +1391,8 @@ proc locate(self: ScopeTracker, key: Key, max: int): VarIndex =
     return VarIndex(parent_index: 0, local_index: -1)
   else:
     result = self.parent.locate(key, self.parent_index_max.int)
-    result.parent_index.inc()
+    if self.next_index > 0: # if current scope is not empty
+      result.parent_index.inc()
 
 proc locate*(self: ScopeTracker, key: Key): VarIndex =
   let found = self.mappings.get_or_default(key, -1)
@@ -1410,7 +1411,7 @@ proc new_scope_tracker*(): ScopeTracker =
 proc new_scope_tracker*(parent: ScopeTracker): ScopeTracker =
   result = ScopeTracker()
   var p = parent
-  while not p.is_nil():
+  while p != nil:
     if p.next_index > 0:
       result.parent = p
       result.parent_index_max = p.next_index
@@ -2089,8 +2090,9 @@ proc find_loop_end*(self: CompilationUnit, pos: int): int =
       return pos
   not_allowed("Loop end not found")
 
-template scope_tracker*(self: Compiler): ScopeTracker =
-  self.scope_trackers[^1]
+proc scope_tracker*(self: Compiler): ScopeTracker =
+  if self.scope_trackers.len > 0:
+    return self.scope_trackers[^1]
 
 #################### Instruction #################
 

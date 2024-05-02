@@ -24,6 +24,10 @@ import ./helpers
 #   The compilation or execution should throw error when trying to access a variable
 #     that doesn't exist.
 
+# Handling of arguments, optional arguments:
+# Compilation:
+# Execution:
+
 test_vm """
   (var a 1)
   # Should produce a warning about shadowing
@@ -38,7 +42,7 @@ test_vm """
 #   a
 # """, 2
 
-test_vm true, """
+test_vm """
   (var a 1)
   (if true
     (var a 2)
@@ -54,7 +58,7 @@ test_vm """
   )
 """, 2
 
-test_vm true, """
+test_vm """
   (var a 1)
   (if false
     (var a 2)

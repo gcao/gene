@@ -93,8 +93,7 @@ proc start_scope(self: Compiler) =
   let scope_tracker = new_scope_tracker(self.scope_tracker)
   self.scope_trackers.add(scope_tracker)
   # ScopeStart is added when the first variable is declared
-  # let st = scope_tracker.to_value()
-  # self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st))
+  # self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st.to_value()))
 
 proc start_scope(self: Compiler, parent: ScopeTracker, parent_index_max: int) =
   var scope_tracker = new_scope_tracker(parent)
@@ -137,14 +136,15 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
-  self.add_scope_start()
   let index = self.scope_tracker.next_index
   self.scope_tracker.mappings[name.str.to_key()] = index
   self.scope_tracker.next_index.inc()
   if gene.children.len > 1:
     self.compile(gene.children[1])
+    self.add_scope_start()
     self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
   else:
+    self.add_scope_start()
     self.output.instructions.add(Instruction(kind: IkVarValue, arg0: NIL, arg1: index))
 
 proc compile_assignment(self: Compiler, gene: ptr Gene) =
