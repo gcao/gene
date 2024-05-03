@@ -138,13 +138,14 @@ proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
   let index = self.scope_tracker.next_index
   self.scope_tracker.mappings[name.str.to_key()] = index
-  self.scope_tracker.next_index.inc()
   if gene.children.len > 1:
     self.compile(gene.children[1])
     self.add_scope_start()
+    self.scope_tracker.next_index.inc()
     self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
   else:
     self.add_scope_start()
+    self.scope_tracker.next_index.inc()
     self.output.instructions.add(Instruction(kind: IkVarValue, arg0: NIL, arg1: index))
 
 proc compile_assignment(self: Compiler, gene: ptr Gene) =
@@ -559,6 +560,7 @@ proc compile*(f: Function) =
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
+      self.add_scope_start()
       self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
@@ -600,6 +602,7 @@ proc compile*(f: CompileFn) =
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
+      self.add_scope_start()
       self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
