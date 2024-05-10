@@ -58,7 +58,7 @@ proc class_ctor(self: VirtualMachine, args: Value): Value =
   self.frame.self.ref.class.constructor = r.to_ref_value()
 
 proc class_fn(self: VirtualMachine, args: Value): Value =
-  let self = args.gene.type.ref.bound_method.self
+  let x = args.gene.type.ref.bound_method.self
   # define a fn like method on a class
   let fn = to_function(args)
 
@@ -68,15 +68,15 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
      name: fn.name,
     callable: r.to_ref_value(),
   )
-  case self.kind:
+  case x.kind:
   of VkClass:
-    let class = self.ref.class
+    let class = x.ref.class
     m.class = class
     fn.ns = class.ns
     class.methods[m.name.to_key()] = m
   # of VkMixin:
-  #   fn.ns = self.mixin.ns
-  #   self.mixin.methods[m.name] = m
+  #   fn.ns = x.mixin.ns
+  #   x.mixin.methods[m.name] = m
   else:
     not_allowed()
 

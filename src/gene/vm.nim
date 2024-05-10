@@ -275,12 +275,27 @@ proc exec*(self: VirtualMachine): Value =
         let gene_type = self.frame.current()
         case gene_type.kind:
           of VkFunction:
-            var r = new_ref(VkScope)
-            r.scope = new_scope()
-            self.frame.push(r.to_ref_value())
+            if inst.arg1 == 2:
+              not_allowed("Macro not allowed here")
+            inst.arg1 = 1
+
+            let scope = new_scope()
+            # TODO: scope should be initialized and ready to be used
+            #   while evaluating arguments
+            # let fn = gene_type.ref.fn
+            # scope.tracker = ...
+            # scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+            var r = new_ref(VkInvocation)
+            r.invocation = Invocation(
+              kind: IvFunction,
+              fn: gene_type,
+              fn_scope: scope,
+            )
+            self.frame.replace(r.to_ref_value())
             pc = inst.arg0.int
             inst = self.cu.instructions[pc].addr
             continue
+
           of VkCompileFn:
             var r = new_ref(VkScope)
             r.scope = new_scope()
@@ -297,7 +312,7 @@ proc exec*(self: VirtualMachine): Value =
         case inst.arg1.int:
           of 1:   # Fn
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction, VkNativeFn:
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -315,7 +330,7 @@ proc exec*(self: VirtualMachine): Value =
 
           of 2:   # Macro
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction, VkNativeFn:
                 not_allowed("Macro expected here")
               of VkMacro:
                 discard
@@ -329,7 +344,7 @@ proc exec*(self: VirtualMachine): Value =
 
           else:   # Not sure
             case v.kind:
-              of VkFunction, VkNativeFn, VkNativeFn2:
+              of VkFunction, VkNativeFn:
                 inst.arg1 = 1
                 pc = inst.arg0.int
                 inst = self.cu.instructions[pc].addr
@@ -366,52 +381,86 @@ proc exec*(self: VirtualMachine): Value =
         var child: Value
         self.frame.pop2(child)
         let v = self.frame.current()
-        if v.kind == VkScope:
-          v.ref.scope.members.add(child)
-        else:
-          v.gene.children.add(child)
+        case v.kind:
+          of VkInvocation:
+            case v.ref.invocation.kind:
+              of IvFunction:
+                v.ref.invocation.fn_scope.members.add(child)
+              else:
+                todo("GeneAddChild Invocation: " & $v.ref.invocation.kind)
+
+          of VkScope:
+            v.ref.scope.members.add(child)
+          of VkGene:
+            v.gene.children.add(child)
+          else:
+            todo("GeneAddChild: " & $v.kind)
         {.pop.}
 
       of IkGeneEnd:
         {.push checks: off}
-        if self.frame.current().kind == VkScope:
-          let scope = self.frame.pop().ref.scope
-          let v = self.frame.current()
-          case v.kind:
-            of VkFunction:
-              discard self.frame.pop()
+        let kind = self.frame.current().kind
+        case kind:
+          of VkInvocation:
+            let inv = self.frame.current().ref.invocation
+            case inv.kind:
+              of IvFunction:
+                let f = inv.fn.ref.fn
+                if f.body_compiled == nil:
+                  f.compile()
 
-              let f = v.ref.fn
-              if f.body_compiled == nil:
-                f.compile()
+                pc.inc()
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.fn_scope)
+                self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+                self.frame.scope.tracker = f.scope_tracker
+                self.frame.ns = f.ns
+                self.cu = f.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+              else:
+                todo($inv.kind)
 
-              pc.inc()
-              self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
-              self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-              self.frame.scope.tracker = f.scope_tracker
-              self.frame.ns = f.ns
-              self.cu = f.body_compiled
-              pc = 0
-              inst = self.cu.instructions[pc].addr
-              continue
-            of VkCompileFn:
-              discard self.frame.pop()
+          of VkScope:
+            let scope = self.frame.pop().ref.scope
+            let v = self.frame.current()
+            case v.kind:
+              of VkFunction:
+                discard self.frame.pop()
 
-              let f = v.ref.compile_fn
-              if f.body_compiled == nil:
-                f.compile()
+                let f = v.ref.fn
+                if f.body_compiled == nil:
+                  f.compile()
 
-              # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
-              self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
-              self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-              self.frame.scope.tracker = f.scope_tracker
-              self.frame.ns = f.ns
-              self.cu = f.body_compiled
-              pc = 0
-              inst = self.cu.instructions[pc].addr
-              continue
-            else:
-              todo($v.kind)
+                pc.inc()
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
+                self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+                self.frame.scope.tracker = f.scope_tracker
+                self.frame.ns = f.ns
+                self.cu = f.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+              of VkCompileFn:
+                discard self.frame.pop()
+
+                let f = v.ref.compile_fn
+                if f.body_compiled == nil:
+                  f.compile()
+
+                # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
+                self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+                self.frame.scope.tracker = f.scope_tracker
+                self.frame.ns = f.ns
+                self.cu = f.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+              else:
+                todo($v.kind)
+          else:
+            discard
 
         let v = self.frame.current()
         let gene_type = v.gene.type
@@ -584,9 +633,13 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
-        f.scope_tracker = inst.arg0.ref.scope_tracker
+        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
+
+        for child in f.matcher.children:
+          f.scope_tracker.add(child.name_key)
+
         let r = new_ref(VkFunction)
         r.fn = f
         let v = r.to_ref_value()
@@ -601,9 +654,13 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
-        f.scope_tracker = inst.arg0.ref.scope_tracker
+        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
         f.parent_scope.update(self.frame.scope)
         f.parent_scope_max = self.frame.scope.max
+
+        for child in f.matcher.children:
+          f.scope_tracker.add(child.name_key)
+
         let r = new_ref(VkCompileFn)
         r.compile_fn = f
         let v = r.to_ref_value()

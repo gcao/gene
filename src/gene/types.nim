@@ -43,12 +43,13 @@ type
     VkBoundMethod
     VkInstance
     VkNativeFn
-    VkNativeFn2
+    # VkNativeFn2
 
     VkCompiledUnit
     VkInstruction
     VkScopeTracker
     VkScope
+    VkInvocation
 
   Key* = distinct int64
   Value* = distinct int64
@@ -104,8 +105,8 @@ type
         # instance_props*: Table[Key, Value]
       of VkNativeFn:
         native_fn*: NativeFn
-      of VkNativeFn2:
-        native_fn2*: NativeFn2
+      # of VkNativeFn2:
+      #   native_fn2*: NativeFn2
       of VkCompiledUnit:
         cu*: CompilationUnit
       of VkInstruction:
@@ -114,6 +115,8 @@ type
         scope_tracker*: ScopeTracker
       of VkScope:
         scope*: Scope
+      of VkInvocation:
+        invocation*: Invocation
       else:
         discard
     ref_count*: int32
@@ -554,6 +557,31 @@ type
 
   Frame* = ptr FrameObj
 
+  InvocationKind* {.size: sizeof(int16).} = enum
+    IvDefault   # E.g. when the gene type is not invokable
+    IvFunction
+    IvNativeFn
+    IvMacro
+    IvBlock
+    IvNew
+    IvMethod
+    # IvSuper
+    IvBoundMethod
+
+  Invocation* = ref object
+    case kind*: InvocationKind
+      of IvFunction:
+        fn*: Value
+        fn_scope*: Scope
+      of IvNativeFn:
+        native_fn*: Value
+        native_fn_args*: Value
+      of IvMacro:
+        `macro`*: Value
+        macro_scope*: Scope
+      else:
+        data: Value
+
   # No symbols should be removed.
   ManagedSymbols = object
     store: seq[string]
@@ -568,7 +596,7 @@ type
   ArgumentError* = object of Exception
 
   NativeFn* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe, nimcall.}
-  NativeFn2* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe.}
+  # NativeFn2* = proc(vm_data: VirtualMachine, args: Value): Value {.gcsafe.}
 
 const INST_SIZE* = sizeof(Instruction)
 
@@ -1418,6 +1446,10 @@ proc new_scope_tracker*(parent: ScopeTracker): ScopeTracker =
       return
     p = p.parent
 
+proc add*(self: var ScopeTracker, name: Key) =
+  self.mappings[name] = self.next_index
+  self.next_index.inc()
+
 #################### Pattern Matching ############
 
 proc new_match_matcher*(): RootMatcher =
@@ -1874,14 +1906,14 @@ proc def_native_method*(self: Class, name: string, f: NativeFn) =
     callable: r.to_ref_value(),
   )
 
-proc def_native_method*(self: Class, name: string, f: NativeFn2) =
-  let r = new_ref(VkNativeFn2)
-  r.native_fn2 = f
-  self.methods[name.to_key()] = Method(
-    class: self,
-    name: name,
-    callable: r.to_ref_value(),
-  )
+# proc def_native_method*(self: Class, name: string, f: NativeFn2) =
+#   let r = new_ref(VkNativeFn2)
+#   r.native_fn2 = f
+#   self.methods[name.to_key()] = Method(
+#     class: self,
+#     name: name,
+#     callable: r.to_ref_value(),
+#   )
 
 proc def_native_macro_method*(self: Class, name: string, f: NativeFn) =
   let r = new_ref(VkNativeFn)
@@ -1898,10 +1930,10 @@ proc def_native_constructor*(self: Class, f: NativeFn) =
   r.native_fn = f
   self.constructor = r.to_ref_value()
 
-proc def_native_constructor*(self: Class, f: NativeFn2) =
-  let r = new_ref(VkNativeFn2)
-  r.native_fn2 = f
-  self.constructor = r.to_ref_value()
+# proc def_native_constructor*(self: Class, f: NativeFn2) =
+#   let r = new_ref(VkNativeFn2)
+#   r.native_fn2 = f
+#   self.constructor = r.to_ref_value()
 
 #################### Method ######################
 
@@ -1928,10 +1960,10 @@ converter to_value*(f: NativeFn): Value {.inline.} =
   r.native_fn = f
   result = r.to_ref_value()
 
-converter to_value*(f: NativeFn2): Value {.inline.} =
-  let r = new_ref(VkNativeFn2)
-  r.native_fn2 = f
-  result = r.to_ref_value()
+# converter to_value*(f: NativeFn2): Value {.inline.} =
+#   let r = new_ref(VkNativeFn2)
+#   r.native_fn2 = f
+#   result = r.to_ref_value()
 
 #################### Frame #######################
 
