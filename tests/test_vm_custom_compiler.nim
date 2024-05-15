@@ -64,7 +64,7 @@ test_vm """
   (c b)
 """, 3
 
-test_vm true, """
+test_vm """
   (compile c a
     [
       ($vm/compile a)

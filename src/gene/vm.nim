@@ -311,7 +311,7 @@ proc exec*(self: VirtualMachine): Value =
               compile_fn_scope: scope,
             )
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc.inc()
             inst = self.cu.instructions[pc].addr
             continue
 

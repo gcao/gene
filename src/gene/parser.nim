@@ -3,7 +3,7 @@
 # created by Roland Sadowski.
 # 1. https://github.com/rosado/edn.nim
 
-import lexbase, streams, strutils, unicode, tables, sets, times, nre, base64, os
+import lexbase, streams, strutils, unicode, tables, sets, times, nre, base64
 
 import ./types
 
