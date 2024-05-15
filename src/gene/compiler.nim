@@ -547,8 +547,6 @@ proc compile*(f: Function) =
   var self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
   self.scope_trackers.add(f.scope_tracker)
-  # self.start_scope(f.scope_tracker, f.parent_scope_max)
-  # f.scope_tracker = self.scope_tracker
 
   # generate code for arguments
   for i, m in f.matcher.children:
@@ -570,7 +568,7 @@ proc compile*(f: Function) =
 
   self.compile(f.body)
 
-  # self.end_scope()
+  self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   f.body_compiled = self.output
@@ -590,8 +588,6 @@ proc compile*(f: CompileFn) =
   let self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
   self.scope_trackers.add(f.scope_tracker)
-  # self.start_scope(f.scope_tracker, f.parent_scope_max)
-  # f.scope_tracker = self.scope_tracker
 
   # generate code for arguments
   for i, m in f.matcher.children:
@@ -613,7 +609,7 @@ proc compile*(f: CompileFn) =
 
   self.compile(f.body)
 
-  # self.end_scope()
+  self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   f.body_compiled = self.output

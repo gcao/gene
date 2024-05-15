@@ -141,7 +141,6 @@ type
     ref_count*: int32
     tracker*: ScopeTracker
     parent*: Scope
-    parent_index_max*: int16   # To remove
     members*:  seq[Value]
     # Below fields are replacement of seq[Value] to achieve better performance
     #   Have to benchmark to see if it's worth it.
@@ -272,13 +271,9 @@ type
   Function* = ref object
     async*: bool
     name*: string
-    ns*: Namespace
-    # Before body is compiled, scope_tracker is the parent scope tracker
-    # Once body is compiled, scope_tracker is the root scope tracker of the function
-    scope_tracker*: ScopeTracker
-    # parent_scope_tracker*: ScopeTracker
-    parent_scope*: Scope
-    parent_scope_max*: int16
+    ns*: Namespace  # the namespace of the module wherein this is defined.
+    scope_tracker*: ScopeTracker  # the root scope tracker of the function
+    parent_scope*: Scope  # this could be nil if parent scope is empty.
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -293,7 +288,7 @@ type
     scope_tracker*: ScopeTracker
     # parent_scope_tracker*: ScopeTracker
     parent_scope*: Scope
-    parent_scope_max*: int16
+    # parent_scope_max*: int16
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -1376,7 +1371,6 @@ proc free*(self: Scope) =
     if self.parent != nil:
       self.parent.free()
     self.parent = nil
-    self.parent_index_max = 0
     self.members.set_len(0)
     SCOPES.add(self)
   {.pop.}
@@ -1390,26 +1384,25 @@ proc update*(self: var Scope, scope: Scope) {.inline.} =
   self = scope
   {.pop.}
 
-proc new_scope*(): Scope =
+proc new_scope*(tracker: ScopeTracker): Scope =
   if SCOPES.len > 0:
     result = SCOPES.pop()
   else:
     result = cast[Scope](alloc0(sizeof(ScopeObj)))
   result.ref_count = 1
+  result.tracker = tracker
 
 proc max*(self: Scope): int16 {.inline.} =
   return self.members.len.int16
 
-proc set_parent*(self: Scope, parent: Scope, max: int16) {.inline.} =
+proc set_parent*(self: Scope, parent: Scope) {.inline.} =
   parent.ref_count.inc()
   self.parent = parent
-  self.parent_index_max = max
 
-proc new_scope*(parent: Scope): Scope =
-  result = new_scope()
+proc new_scope*(tracker: ScopeTracker, parent: Scope): Scope =
+  result = new_scope(tracker)
   if not parent.is_nil():
-    result.set_parent(parent, 0)
-    result.set_parent(parent, parent.max())
+    result.set_parent(parent)
 
 proc locate(self: ScopeTracker, key: Key, max: int): VarIndex =
   let found = self.mappings.get_or_default(key, -1)
@@ -1467,6 +1460,9 @@ proc new_matcher*(root: RootMatcher, kind: MatcherKind): Matcher =
     root: root,
     kind: kind,
   )
+
+proc is_empty*(self: RootMatcher): bool =
+  self.children.len == 0
 
 proc required*(self: Matcher): bool =
   # return self.default_value_expr == nil and not self.is_splat
@@ -1976,7 +1972,8 @@ proc free*(self: var Frame) =
   if self.ref_count <= 0:
     if self.caller_frame != nil:
       self.caller_frame.free()
-    self.scope.free()
+    if self.scope != nil:
+      self.scope.free()
     self[].reset()
     FRAMES.add(self)
   {.pop.}
@@ -1992,7 +1989,12 @@ proc new_frame(): Frame =
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
   result.ns = ns
-  result.scope = new_scope()
+
+proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} =
+  result = new_frame()
+  caller_frame.ref_count.inc()
+  result.caller_frame = caller_frame
+  result.caller_address = caller_address
 
 proc new_frame*(caller_frame: Frame, caller_address: Address, scope: Scope): Frame {.inline.} =
   result = new_frame()
@@ -2000,9 +2002,6 @@ proc new_frame*(caller_frame: Frame, caller_address: Address, scope: Scope): Fra
   result.caller_frame = caller_frame
   result.caller_address = caller_address
   result.scope = scope
-
-proc new_frame*(caller_frame: Frame, caller_address: Address): Frame {.inline.} =
-  result = new_frame(caller_frame, caller_address, new_scope())
 
 proc update*(self: var Frame, f: Frame) {.inline.} =
   {.push checks: off, optimization: speed.}

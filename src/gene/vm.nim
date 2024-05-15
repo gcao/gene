@@ -77,8 +77,7 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkScopeStart:
-        self.frame.scope = new_scope(self.frame.scope)
-        self.frame.scope.tracker = inst.arg0.ref.scope_tracker
+        self.frame.scope = new_scope(inst.arg0.ref.scope_tracker, self.frame.scope)
       of IkScopeEnd:
         self.frame.scope = self.frame.scope.parent
         discard
@@ -279,12 +278,13 @@ proc exec*(self: VirtualMachine): Value =
               not_allowed("Macro not allowed here")
             inst.arg1 = 1
 
-            let scope = new_scope()
-            # TODO: scope should be initialized and ready to be used
-            #   while evaluating arguments
-            # let fn = gene_type.ref.fn
-            # scope.tracker = ...
-            # scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+            var scope: Scope
+            let f = gene_type.ref.fn
+            if f.matcher.is_empty():
+              scope = f.parent_scope
+            else:
+              scope = new_scope(f.scope_tracker, f.parent_scope)
+
             var r = new_ref(VkInvocation)
             r.invocation = Invocation(
               kind: IvFunction,
@@ -297,12 +297,7 @@ proc exec*(self: VirtualMachine): Value =
             continue
 
           of VkCompileFn:
-            var r = new_ref(VkScope)
-            r.scope = new_scope()
-            self.frame.push(r.to_ref_value())
-            pc.inc()
-            inst = self.cu.instructions[pc].addr
-            continue
+            todo($gene_type.kind)
           else:
             discard
 
@@ -411,8 +406,6 @@ proc exec*(self: VirtualMachine): Value =
 
                 pc.inc()
                 self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.fn_scope)
-                self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-                self.frame.scope.tracker = f.scope_tracker
                 self.frame.ns = f.ns
                 self.cu = f.body_compiled
                 pc = 0
@@ -422,43 +415,44 @@ proc exec*(self: VirtualMachine): Value =
                 todo($inv.kind)
 
           of VkScope:
-            let scope = self.frame.pop().ref.scope
-            let v = self.frame.current()
-            case v.kind:
-              of VkFunction:
-                discard self.frame.pop()
+            todo($inst.kind)
+            # let scope = self.frame.pop().ref.scope
+            # let v = self.frame.current()
+            # case v.kind:
+            #   of VkFunction:
+            #     discard self.frame.pop()
 
-                let f = v.ref.fn
-                if f.body_compiled == nil:
-                  f.compile()
+            #     let f = v.ref.fn
+            #     if f.body_compiled == nil:
+            #       f.compile()
 
-                pc.inc()
-                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
-                self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-                self.frame.scope.tracker = f.scope_tracker
-                self.frame.ns = f.ns
-                self.cu = f.body_compiled
-                pc = 0
-                inst = self.cu.instructions[pc].addr
-                continue
-              of VkCompileFn:
-                discard self.frame.pop()
+            #     pc.inc()
+            #     self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
+            #     self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+            #     self.frame.scope.tracker = f.scope_tracker
+            #     self.frame.ns = f.ns
+            #     self.cu = f.body_compiled
+            #     pc = 0
+            #     inst = self.cu.instructions[pc].addr
+            #     continue
+            #   of VkCompileFn:
+            #     discard self.frame.pop()
 
-                let f = v.ref.compile_fn
-                if f.body_compiled == nil:
-                  f.compile()
+            #     let f = v.ref.compile_fn
+            #     if f.body_compiled == nil:
+            #       f.compile()
 
-                # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
-                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
-                self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-                self.frame.scope.tracker = f.scope_tracker
-                self.frame.ns = f.ns
-                self.cu = f.body_compiled
-                pc = 0
-                inst = self.cu.instructions[pc].addr
-                continue
-              else:
-                todo($v.kind)
+            #     # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
+            #     self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
+            #     self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
+            #     self.frame.scope.tracker = f.scope_tracker
+            #     self.frame.ns = f.ns
+            #     self.cu = f.body_compiled
+            #     pc = 0
+            #     inst = self.cu.instructions[pc].addr
+            #     continue
+            #   else:
+            #     todo($v.kind)
           else:
             discard
 
@@ -467,49 +461,52 @@ proc exec*(self: VirtualMachine): Value =
         if gene_type != nil:
           case gene_type.kind:
             of VkMacro:
-              discard self.frame.pop()
+              todo($gene_type.kind)
+              # discard self.frame.pop()
 
-              gene_type.ref.macro.compile()
+              # gene_type.ref.macro.compile()
 
-              pc.inc()
-              self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
-              self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
-              self.frame.ns = gene_type.ref.macro.ns
-              self.frame.args = v
-              self.cu = gene_type.ref.macro.body_compiled
-              pc = 0
-              inst = self.cu.instructions[pc].addr
-              continue
+              # pc.inc()
+              # self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
+              # self.frame.scope.set_parent(gene_type.ref.macro.parent_scope, gene_type.ref.macro.parent_scope_max)
+              # self.frame.ns = gene_type.ref.macro.ns
+              # self.frame.args = v
+              # self.cu = gene_type.ref.macro.body_compiled
+              # pc = 0
+              # inst = self.cu.instructions[pc].addr
+              # continue
 
             of VkBoundMethod:
-              discard self.frame.pop()
+              todo($gene_type.kind)
+              # discard self.frame.pop()
 
-              let meth = gene_type.ref.bound_method.method
-              case meth.callable.kind:
-                of VkNativeFn:
-                  self.frame.push(meth.callable.ref.native_fn(self, v))
-                of VkFunction:
-                  let fn = meth.callable.ref.fn
-                  fn.compile()
+              # let meth = gene_type.ref.bound_method.method
+              # case meth.callable.kind:
+              #   of VkNativeFn:
+              #     self.frame.push(meth.callable.ref.native_fn(self, v))
+              #   of VkFunction:
+              #     let fn = meth.callable.ref.fn
+              #     fn.compile()
 
-                  pc.inc()
-                  self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
-                  self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-                  self.frame.ns = fn.ns
-                  self.frame.self = gene_type.ref.bound_method.self
-                  self.frame.args = v
-                  self.cu = fn.body_compiled
-                  pc = 0
-                  inst = self.cu.instructions[pc].addr
-                  continue
-                else:
-                  todo("Bound method: " & $meth.callable.kind)
+              #     pc.inc()
+              #     self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
+              #     self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+              #     self.frame.ns = fn.ns
+              #     self.frame.self = gene_type.ref.bound_method.self
+              #     self.frame.args = v
+              #     self.cu = fn.body_compiled
+              #     pc = 0
+              #     inst = self.cu.instructions[pc].addr
+              #     continue
+              #   else:
+              #     todo("Bound method: " & $meth.callable.kind)
 
             of VkNativeFn:
-              discard self.frame.pop()
+              todo($gene_type.kind)
+              # discard self.frame.pop()
 
-              let f = gene_type.ref.native_fn
-              self.frame.push(f(self, v))
+              # let f = gene_type.ref.native_fn
+              # self.frame.push(f(self, v))
 
             else:
               discard
@@ -633,12 +630,12 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
-        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
         f.parent_scope.update(self.frame.scope)
-        f.parent_scope_max = self.frame.scope.max
+        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
 
-        for child in f.matcher.children:
-          f.scope_tracker.add(child.name_key)
+        if not f.matcher.is_empty():
+          for child in f.matcher.children:
+            f.scope_tracker.add(child.name_key)
 
         let r = new_ref(VkFunction)
         r.fn = f
@@ -654,12 +651,12 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
-        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
         f.parent_scope.update(self.frame.scope)
-        f.parent_scope_max = self.frame.scope.max
+        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
 
-        for child in f.matcher.children:
-          f.scope_tracker.add(child.name_key)
+        if not f.matcher.is_empty():
+          for child in f.matcher.children:
+            f.scope_tracker.add(child.name_key)
 
         let r = new_ref(VkCompileFn)
         r.compile_fn = f
@@ -757,31 +754,31 @@ proc exec*(self: VirtualMachine): Value =
         )
         self.frame.push(r.to_ref_value())
 
-      of IkCallMethodNoArgs:
-        let v = self.frame.pop()
+      # of IkCallMethodNoArgs:
+      #   let v = self.frame.pop()
 
-        let class = v.get_class()
-        let meth = class.get_method(inst.arg0.str)
-        case meth.callable.kind:
-          of VkNativeFn:
-            self.frame.push(meth.callable.ref.native_fn(self, v))
-          of VkFunction:
-            pc.inc()
-            inst = self.cu.instructions[pc].addr
+      #   let class = v.get_class()
+      #   let meth = class.get_method(inst.arg0.str)
+      #   case meth.callable.kind:
+      #     of VkNativeFn:
+      #       self.frame.push(meth.callable.ref.native_fn(self, v))
+      #     of VkFunction:
+      #       pc.inc()
+      #       inst = self.cu.instructions[pc].addr
 
-            let fn = meth.callable.ref.fn
-            fn.compile()
+      #       let fn = meth.callable.ref.fn
+      #       fn.compile()
 
-            self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
-            self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
-            self.frame.ns = fn.ns
-            self.frame.self = v
-            self.cu = fn.body_compiled
-            pc = 0
-            inst = self.cu.instructions[pc].addr
-            continue
-          else:
-            todo("CallMethodNoArgs: " & $meth.callable.kind)
+      #       self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
+      #       self.frame.scope.set_parent(fn.parent_scope, fn.parent_scope_max)
+      #       self.frame.ns = fn.ns
+      #       self.frame.self = v
+      #       self.cu = fn.body_compiled
+      #       pc = 0
+      #       inst = self.cu.instructions[pc].addr
+      #       continue
+      #     else:
+      #       todo("CallMethodNoArgs: " & $meth.callable.kind)
 
       else:
         todo($inst.kind)

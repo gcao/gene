@@ -18,7 +18,7 @@ task test, "Runs the test suite":
   exec "nim c -r tests/test_vm.nim"
   exec "nim c -r tests/test_vm_namespace.nim"
   exec "nim c -r tests/test_vm_fp.nim"
-  exec "nim c -r tests/test_vm_fp_scope.nim"
+  exec "nim c -r tests/test_vm_scope.nim"
   # exec "nim c -r tests/test_vm_macro.nim"
   # exec "nim c -r tests/test_vm_block.nim"
   # exec "nim c -r tests/test_vm_oop.nim"
