@@ -297,7 +297,24 @@ proc exec*(self: VirtualMachine): Value =
             continue
 
           of VkCompileFn:
-            todo($gene_type.kind)
+            var scope: Scope
+            let f = gene_type.ref.compile_fn
+            if f.matcher.is_empty():
+              scope = f.parent_scope
+            else:
+              scope = new_scope(f.scope_tracker, f.parent_scope)
+
+            var r = new_ref(VkInvocation)
+            r.invocation = Invocation(
+              kind: IvCompileFn,
+              compile_fn: gene_type,
+              compile_fn_scope: scope,
+            )
+            self.frame.replace(r.to_ref_value())
+            pc = inst.arg0.int
+            inst = self.cu.instructions[pc].addr
+            continue
+
           else:
             discard
 
@@ -381,6 +398,8 @@ proc exec*(self: VirtualMachine): Value =
             case v.ref.invocation.kind:
               of IvFunction:
                 v.ref.invocation.fn_scope.members.add(child)
+              of IvCompileFn:
+                v.ref.invocation.compile_fn_scope.members.add(child)
               else:
                 todo("GeneAddChild Invocation: " & $v.ref.invocation.kind)
 
@@ -411,6 +430,20 @@ proc exec*(self: VirtualMachine): Value =
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
+
+              of IvCompileFn:
+                let f = inv.fn.ref.compile_fn
+                if f.body_compiled == nil:
+                  f.compile()
+
+                # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.fn_scope)
+                self.frame.ns = f.ns
+                self.cu = f.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+
               else:
                 todo($inv.kind)
 
@@ -502,11 +535,10 @@ proc exec*(self: VirtualMachine): Value =
               #     todo("Bound method: " & $meth.callable.kind)
 
             of VkNativeFn:
-              todo($gene_type.kind)
-              # discard self.frame.pop()
+              discard self.frame.pop()
 
-              # let f = gene_type.ref.native_fn
-              # self.frame.push(f(self, v))
+              let f = gene_type.ref.native_fn
+              self.frame.push(f(self, v))
 
             else:
               discard

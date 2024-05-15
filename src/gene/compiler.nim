@@ -95,10 +95,10 @@ proc start_scope(self: Compiler) =
   # ScopeStart is added when the first variable is declared
   # self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st.to_value()))
 
-proc start_scope(self: Compiler, parent: ScopeTracker, parent_index_max: int) =
-  var scope_tracker = new_scope_tracker(parent)
-  scope_tracker.parent_index_max = parent_index_max.int16
-  self.scope_trackers.add(scope_tracker)
+# proc start_scope(self: Compiler, parent: ScopeTracker, parent_index_max: int) =
+#   var scope_tracker = new_scope_tracker(parent)
+#   scope_tracker.parent_index_max = parent_index_max.int16
+#   self.scope_trackers.add(scope_tracker)
 
 proc add_scope_start(self: Compiler) =
   if self.scope_tracker.next_index == 0:
@@ -521,9 +521,9 @@ proc update_jumps(self: CompilationUnit) =
       else:
         discard
 
-# Clean up scopes by removing unnecessary ScopeStart and ScopeEnd instructions
-proc cleanup_scopes(self: CompilationUnit) =
-  todo("cleanup_scopes")
+# # Clean up scopes by removing unnecessary ScopeStart and ScopeEnd instructions
+# proc cleanup_scopes(self: CompilationUnit) =
+#   todo("cleanup_scopes")
 
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

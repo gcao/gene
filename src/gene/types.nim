@@ -555,6 +555,7 @@ type
   InvocationKind* {.size: sizeof(int16).} = enum
     IvDefault   # E.g. when the gene type is not invokable
     IvFunction
+    IvCompileFn
     IvNativeFn
     IvMacro
     IvBlock
@@ -568,6 +569,9 @@ type
       of IvFunction:
         fn*: Value
         fn_scope*: Scope
+      of IvCompileFn:
+        compile_fn*: Value
+        compile_fn_scope*: Scope
       of IvNativeFn:
         native_fn*: Value
         native_fn_args*: Value
