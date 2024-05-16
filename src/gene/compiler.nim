@@ -581,7 +581,34 @@ proc compile*(m: Macro) =
   if m.body_compiled != nil:
     return
 
-  m.body_compiled = compile(m.body)
+  var self = Compiler(output: new_compilation_unit())
+  self.output.instructions.add(Instruction(kind: IkStart))
+  self.scope_trackers.add(m.scope_tracker)
+
+  # generate code for arguments
+  for i, m in m.matcher.children:
+    self.scope_tracker.mappings[m.name_key] = i.int16
+    let label = new_label()
+    self.output.instructions.add(Instruction(
+      kind: IkJumpIfMatchSuccess,
+      arg0: i.Value,
+      arg1: label,
+    ))
+    if m.default_value != nil:
+      self.compile(m.default_value)
+      self.add_scope_start()
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
+      self.output.instructions.add(Instruction(kind: IkPop))
+    else:
+      self.output.instructions.add(Instruction(kind: IkThrow))
+    self.output.instructions.add(Instruction(kind: IkNoop, label: label))
+
+  self.compile(m.body)
+
+  self.end_scope()
+  self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.update_jumps()
+  m.body_compiled = self.output
   m.body_compiled.matcher = m.matcher
 
 proc compile*(f: CompileFn) =
