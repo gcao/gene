@@ -303,8 +303,8 @@ type
   Block* = ref object
     # frame*: Frame
     ns*: Namespace
-    parent_scope*: Scope
-    parent_scope_max*: int16
+    scope_tracker*: ScopeTracker
+    frame*: Frame # The frame wherein the block is defined
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -431,15 +431,12 @@ type
 
     IkFunction
     IkReturn
-    # IkCallFunction
-    # IkCallFunctionNoArgs
-    # IkCallSimple  # call class or namespace body
 
     IkCompileFn
-    # IkCallCompileFn
 
     IkMacro
-    # IkCallMacro
+
+    IkBlock
 
     IkClass
     IkSubClass
@@ -1749,6 +1746,23 @@ proc new_block*(matcher: RootMatcher,  body: sink seq[Value]): Block =
     # matching_hint: matcher.hint,
     body: body,
   )
+
+proc to_block*(node: Value): Block {.gcsafe.} =
+  let matcher = new_arg_matcher()
+  var body_start: int
+  if node.gene.type == "->".to_symbol_value():
+    body_start = 0
+  else:
+    matcher.parse(node.gene.type)
+    body_start = 1
+
+  matcher.check_hint()
+  var body: seq[Value] = @[]
+  for i in body_start..<node.gene.children.len:
+    body.add node.gene.children[i]
+
+  # body = wrap_with_try(body)
+  result = new_block(matcher, body)
 
 #################### Class #######################
 

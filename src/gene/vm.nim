@@ -432,8 +432,6 @@ proc exec*(self: VirtualMachine): Value =
               else:
                 todo("GeneAddChild Invocation: " & $v.ref.invocation.kind)
 
-          of VkScope:
-            v.ref.scope.members.add(child)
           of VkGene:
             v.gene.children.add(child)
           else:
@@ -489,45 +487,6 @@ proc exec*(self: VirtualMachine): Value =
               else:
                 todo($inv.kind)
 
-          of VkScope:
-            todo($inst.kind)
-            # let scope = self.frame.pop().ref.scope
-            # let v = self.frame.current()
-            # case v.kind:
-            #   of VkFunction:
-            #     discard self.frame.pop()
-
-            #     let f = v.ref.fn
-            #     if f.body_compiled == nil:
-            #       f.compile()
-
-            #     pc.inc()
-            #     self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
-            #     self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-            #     self.frame.scope.tracker = f.scope_tracker
-            #     self.frame.ns = f.ns
-            #     self.cu = f.body_compiled
-            #     pc = 0
-            #     inst = self.cu.instructions[pc].addr
-            #     continue
-            #   of VkCompileFn:
-            #     discard self.frame.pop()
-
-            #     let f = v.ref.compile_fn
-            #     if f.body_compiled == nil:
-            #       f.compile()
-
-            #     # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
-            #     self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), scope)
-            #     self.frame.scope.set_parent(f.parent_scope, f.parent_scope_max)
-            #     self.frame.scope.tracker = f.scope_tracker
-            #     self.frame.ns = f.ns
-            #     self.cu = f.body_compiled
-            #     pc = 0
-            #     inst = self.cu.instructions[pc].addr
-            #     continue
-            #   else:
-            #     todo($v.kind)
           else:
             discard
 
@@ -731,6 +690,26 @@ proc exec*(self: VirtualMachine): Value =
         let v = r.to_ref_value()
         m.ns[m.name.to_key()] = v
         self.frame.push(v)
+
+      of IkBlock:
+        {.push checks: off}
+        let b = to_block(inst.arg0)
+        b.ns = self.frame.ns
+        # More data are stored in the next instruction slot
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        b.frame.update(self.frame)
+        b.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+
+        if not b.matcher.is_empty():
+          for child in b.matcher.children:
+            b.scope_tracker.add(child.name_key)
+
+        let r = new_ref(VkBlock)
+        r.block = b
+        let v = r.to_ref_value()
+        self.frame.push(v)
+        {.pop.}
 
       of IkCompileFn:
         {.push checks: off}

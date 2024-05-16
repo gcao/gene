@@ -215,6 +215,12 @@ proc compile_macro(self: Compiler, input: Value) =
   r.scope_tracker = self.scope_tracker
   self.output.instructions.add(Instruction(kind: IkNoop, arg0: r.to_ref_value()))
 
+proc compile_block(self: Compiler, input: Value) =
+  self.output.instructions.add(Instruction(kind: IkBlock, arg0: input))
+  var r = new_ref(VkScopeTracker)
+  r.scope_tracker = self.scope_tracker
+  self.output.instructions.add(Instruction(kind: IkNoop, arg0: r.to_ref_value()))
+
 proc compile_compile(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkCompileFn, arg0: input))
   var r = new_ref(VkScopeTracker)
@@ -438,6 +444,9 @@ proc compile_gene(self: Compiler, input: Value) =
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkOr))
           return
+        of "->":
+          self.compile_block(input)
+          return
         else:
           if first.str.starts_with("."):
             self.compile_method_call(gene)
@@ -465,6 +474,9 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "macro":
         self.compile_macro(input)
+        return
+      of "->":
+        self.compile_block(input)
         return
       of "compile":
         self.compile_compile(input)
