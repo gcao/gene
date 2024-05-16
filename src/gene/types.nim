@@ -283,12 +283,8 @@ type
   CompileFn* = ref object
     ns*: Namespace
     name*: string
-    # Before body is compiled, scope_tracker is the parent scope tracker
-    # Once body is compiled, scope_tracker is the root scope tracker of the function
     scope_tracker*: ScopeTracker
-    # parent_scope_tracker*: ScopeTracker
     parent_scope*: Scope
-    # parent_scope_max*: int16
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -297,8 +293,8 @@ type
   Macro* = ref object
     ns*: Namespace
     name*: string
+    scope_tracker*: ScopeTracker
     parent_scope*: Scope
-    parent_scope_max*: int16
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
@@ -569,15 +565,15 @@ type
       of IvFunction:
         fn*: Value
         fn_scope*: Scope
+      of IvMacro:
+        `macro`*: Value
+        macro_scope*: Scope
       of IvCompileFn:
         compile_fn*: Value
         compile_fn_scope*: Scope
       of IvNativeFn:
         native_fn*: Value
         native_fn_args*: Value
-      of IvMacro:
-        `macro`*: Value
-        macro_scope*: Scope
       else:
         data: Value
 

@@ -211,6 +211,9 @@ proc compile_return(self: Compiler, gene: ptr Gene) =
 
 proc compile_macro(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMacro, arg0: input))
+  var r = new_ref(VkScopeTracker)
+  r.scope_tracker = self.scope_tracker
+  self.output.instructions.add(Instruction(kind: IkNoop, arg0: r.to_ref_value()))
 
 proc compile_compile(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkCompileFn, arg0: input))

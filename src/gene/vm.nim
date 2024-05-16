@@ -274,9 +274,9 @@ proc exec*(self: VirtualMachine): Value =
         let gene_type = self.frame.current()
         case gene_type.kind:
           of VkFunction:
-            if inst.arg1 == 2:
-              not_allowed("Macro not allowed here")
-            inst.arg1 = 1
+            # if inst.arg1 == 2:
+            #   not_allowed("Macro not allowed here")
+            # inst.arg1 = 1
 
             var scope: Scope
             let f = gene_type.ref.fn
@@ -296,7 +296,34 @@ proc exec*(self: VirtualMachine): Value =
             inst = self.cu.instructions[pc].addr
             continue
 
+          of VkMacro:
+            # if inst.arg1 == 1:
+            #   not_allowed("Macro expected here")
+            # inst.arg1 = 2
+
+            var scope: Scope
+            let m = gene_type.ref.macro
+            if m.matcher.is_empty():
+              scope = m.parent_scope
+            else:
+              scope = new_scope(m.scope_tracker, m.parent_scope)
+
+            var r = new_ref(VkInvocation)
+            r.invocation = Invocation(
+              kind: IvMacro,
+              `macro`: gene_type,
+              macro_scope: scope,
+            )
+            self.frame.replace(r.to_ref_value())
+            pc.inc()
+            inst = self.cu.instructions[pc].addr
+            continue
+
           of VkCompileFn:
+            # if inst.arg1 == 1:
+            #   not_allowed("Macro expected here")
+            # inst.arg1 = 2
+
             var scope: Scope
             let f = gene_type.ref.compile_fn
             if f.matcher.is_empty():
@@ -318,61 +345,61 @@ proc exec*(self: VirtualMachine): Value =
           else:
             discard
 
-        var v: Value
-        self.frame.pop2(v)
-        self.frame.push(new_gene_value(v))
-        case inst.arg1.int:
-          of 1:   # Fn
-            case v.kind:
-              of VkFunction, VkNativeFn:
-                pc = inst.arg0.int
-                inst = self.cu.instructions[pc].addr
-                continue
-              of VkMacro:
-                not_allowed("Macro not allowed here")
-              of VkBoundMethod:
-                if v.ref.bound_method.method.is_macro:
-                  not_allowed("Macro not allowed here")
-                else:
-                  pc = inst.arg0.int
-                  inst = self.cu.instructions[pc].addr
-                  continue
-              else:
-                todo($v.kind)
+        # var v: Value
+        # self.frame.pop2(v)
+        # self.frame.push(new_gene_value(v))
+        # case inst.arg1.int:
+        #   of 1:   # Fn
+        #     case v.kind:
+        #       of VkFunction, VkNativeFn:
+        #         pc = inst.arg0.int
+        #         inst = self.cu.instructions[pc].addr
+        #         continue
+        #       of VkMacro:
+        #         not_allowed("Macro not allowed here")
+        #       of VkBoundMethod:
+        #         if v.ref.bound_method.method.is_macro:
+        #           not_allowed("Macro not allowed here")
+        #         else:
+        #           pc = inst.arg0.int
+        #           inst = self.cu.instructions[pc].addr
+        #           continue
+        #       else:
+        #         todo($v.kind)
 
-          of 2:   # Macro
-            case v.kind:
-              of VkFunction, VkNativeFn:
-                not_allowed("Macro expected here")
-              of VkMacro:
-                discard
-              of VkBoundMethod:
-                if v.ref.bound_method.method.is_macro:
-                  discard
-                else:
-                  not_allowed("Macro expected here")
-              else:
-                todo($v.kind)
+        #   of 2:   # Macro
+        #     case v.kind:
+        #       of VkFunction, VkNativeFn:
+        #         not_allowed("Macro expected here")
+        #       of VkMacro:
+        #         discard
+        #       of VkBoundMethod:
+        #         if v.ref.bound_method.method.is_macro:
+        #           discard
+        #         else:
+        #           not_allowed("Macro expected here")
+        #       else:
+        #         todo($v.kind)
 
-          else:   # Not sure
-            case v.kind:
-              of VkFunction, VkNativeFn:
-                inst.arg1 = 1
-                pc = inst.arg0.int
-                inst = self.cu.instructions[pc].addr
-                continue
-              of VkMacro:
-                inst.arg1 = 2
-              of VkBoundMethod:
-                if v.ref.bound_method.method.is_macro:
-                  inst.arg1 = 2
-                else:
-                  inst.arg1 = 1
-                  pc = inst.arg0.int
-                  inst = self.cu.instructions[pc].addr
-                  continue
-              else:
-                todo($v.kind)
+        #   else:   # Not sure
+        #     case v.kind:
+        #       of VkFunction, VkNativeFn:
+        #         inst.arg1 = 1
+        #         pc = inst.arg0.int
+        #         inst = self.cu.instructions[pc].addr
+        #         continue
+        #       of VkMacro:
+        #         inst.arg1 = 2
+        #       of VkBoundMethod:
+        #         if v.ref.bound_method.method.is_macro:
+        #           inst.arg1 = 2
+        #         else:
+        #           inst.arg1 = 1
+        #           pc = inst.arg0.int
+        #           inst = self.cu.instructions[pc].addr
+        #           continue
+        #       else:
+        #         todo($v.kind)
         {.pop.}
 
       of IkGeneSetType:
@@ -398,6 +425,8 @@ proc exec*(self: VirtualMachine): Value =
             case v.ref.invocation.kind:
               of IvFunction:
                 v.ref.invocation.fn_scope.members.add(child)
+              of IvMacro:
+                v.ref.invocation.macro_scope.members.add(child)
               of IvCompileFn:
                 v.ref.invocation.compile_fn_scope.members.add(child)
               else:
@@ -427,6 +456,19 @@ proc exec*(self: VirtualMachine): Value =
                 self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.fn_scope)
                 self.frame.ns = f.ns
                 self.cu = f.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+
+              of IvMacro:
+                let m = inv.fn.ref.macro
+                if m.body_compiled == nil:
+                  m.compile()
+
+                pc.inc()
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.macro_scope)
+                self.frame.ns = m.ns
+                self.cu = m.body_compiled
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -676,6 +718,20 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(v)
         {.pop.}
 
+      of IkMacro:
+        let m = to_macro(inst.arg0)
+        m.ns = self.frame.ns
+        # More data are stored in the next instruction slot
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        m.parent_scope.update(self.frame.scope)
+        m.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+        let r = new_ref(VkMacro)
+        r.macro = m
+        let v = r.to_ref_value()
+        m.ns[m.name.to_key()] = v
+        self.frame.push(v)
+
       of IkCompileFn:
         {.push checks: off}
         let f = to_compile_fn(inst.arg0)
@@ -696,15 +752,6 @@ proc exec*(self: VirtualMachine): Value =
         f.ns[f.name.to_key()] = v
         self.frame.push(v)
         {.pop.}
-
-      of IkMacro:
-        let m = to_macro(inst.arg0)
-        m.ns = self.frame.ns
-        let r = new_ref(VkMacro)
-        r.macro = m
-        let v = r.to_ref_value()
-        m.ns[m.name.to_key()] = v
-        self.frame.push(v)
 
       of IkReturn:
         {.push checks: off}

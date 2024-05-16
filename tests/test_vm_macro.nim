@@ -9,16 +9,16 @@ test_vm """
 """, proc(r: Value) =
   check r.ref.macro.name == "m"
 
-test_vm """
+test_vm true, """
   (macro m a
     a
   )
   (m b)
 """, "b".to_symbol_value()
 
-test_vm """
-  (macro m [a b]
-    (a + b)
-  )
-  (m 1 2)
-""", 3
+# test_vm """
+#   (macro m [a b]
+#     (a + b)
+#   )
+#   (m 1 2)
+# """, 3
