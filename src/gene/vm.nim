@@ -319,6 +319,29 @@ proc exec*(self: VirtualMachine): Value =
             inst = self.cu.instructions[pc].addr
             continue
 
+          of VkBlock:
+            # if inst.arg1 == 2:
+            #   not_allowed("Macro not allowed here")
+            # inst.arg1 = 1
+
+            var scope: Scope
+            let b = gene_type.ref.block
+            if b.matcher.is_empty():
+              scope = b.frame.scope
+            else:
+              scope = new_scope(b.scope_tracker, b.frame.scope)
+
+            var r = new_ref(VkInvocation)
+            r.invocation = Invocation(
+              kind: IvBlock,
+              `block`: gene_type,
+              block_scope: scope,
+            )
+            self.frame.replace(r.to_ref_value())
+            pc = inst.arg0.int
+            inst = self.cu.instructions[pc].addr
+            continue
+
           of VkCompileFn:
             # if inst.arg1 == 1:
             #   not_allowed("Macro expected here")
@@ -467,6 +490,19 @@ proc exec*(self: VirtualMachine): Value =
                 self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.macro_scope)
                 self.frame.ns = m.ns
                 self.cu = m.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+
+              of IvBlock:
+                let b = inv.fn.ref.block
+                if b.body_compiled == nil:
+                  b.compile()
+
+                pc.inc()
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc), inv.block_scope)
+                self.frame.ns = b.ns
+                self.cu = b.body_compiled
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -694,6 +730,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkBlock:
         {.push checks: off}
         let b = to_block(inst.arg0)
+        b.frame = self.frame
         b.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()

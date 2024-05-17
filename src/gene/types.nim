@@ -301,14 +301,12 @@ type
     body_compiled*: CompilationUnit
 
   Block* = ref object
-    # frame*: Frame
+    frame*: Frame # The frame wherein the block is defined
     ns*: Namespace
     scope_tracker*: ScopeTracker
-    frame*: Frame # The frame wherein the block is defined
     matcher*: RootMatcher
     # matching_hint*: MatchingHint
     body*: seq[Value]
-    # body_compiled*: Expr
     body_compiled*: CompilationUnit
 
   MatchingMode* {.size: sizeof(int16) .} = enum
@@ -548,10 +546,10 @@ type
   InvocationKind* {.size: sizeof(int16).} = enum
     IvDefault   # E.g. when the gene type is not invokable
     IvFunction
-    IvCompileFn
-    IvNativeFn
     IvMacro
     IvBlock
+    IvCompileFn
+    IvNativeFn
     IvNew
     IvMethod
     # IvSuper
@@ -565,6 +563,9 @@ type
       of IvMacro:
         `macro`*: Value
         macro_scope*: Scope
+      of IvBlock:
+        `block`*: Value
+        block_scope*: Scope
       of IvCompileFn:
         compile_fn*: Value
         compile_fn_scope*: Scope
