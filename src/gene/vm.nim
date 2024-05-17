@@ -450,6 +450,8 @@ proc exec*(self: VirtualMachine): Value =
                 v.ref.invocation.fn_scope.members.add(child)
               of IvMacro:
                 v.ref.invocation.macro_scope.members.add(child)
+              of IvBlock:
+                v.ref.invocation.block_scope.members.add(child)
               of IvCompileFn:
                 v.ref.invocation.compile_fn_scope.members.add(child)
               else:
