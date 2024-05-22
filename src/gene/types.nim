@@ -49,7 +49,10 @@ type
     VkInstruction
     VkScopeTracker
     VkScope
-    VkInvocation
+
+    VkFrame
+    VkNativeFrame
+    # VkInvocation
 
   Key* = distinct int64
   Value* = distinct int64
@@ -115,8 +118,12 @@ type
         scope_tracker*: ScopeTracker
       of VkScope:
         scope*: Scope
-      of VkInvocation:
-        invocation*: Invocation
+      of VkFrame:
+        frame*: Frame
+      of VkNativeFrame:
+        native_frame*: NativeFrame
+      # of VkInvocation:
+      #   invocation*: Invocation
       else:
         discard
     ref_count*: int32
@@ -530,50 +537,86 @@ type
 
   VmCallback* = proc() {.gcsafe.}
 
+  FrameKind* {.size: sizeof(int16).} = enum
+    FkPristine      # not initialized
+    FrModule
+    FrBody          # namespace/class/... body
+    FrEval
+    FkFunction
+    FkMacro
+    FkBlock
+    FkCompileFn
+    # FkNativeFn
+    # FkNativeMacro
+    FkNew
+    FkMethod
+    FkMacroMethod
+    # FkNativeMethod
+    # FkNativeMacroMethod
+    # FkSuper
+    # FkMacroSuper
+    # FkBoundMethod
+    # FkBoundNativeMethod
+
   FrameObj = object
     ref_count*: int32
+    kind*: FrameKind
     caller_frame*: Frame
     caller_address*: Address
     ns*: Namespace
     scope*: Scope
+    target*: Value  # target of the invocation
     self*: Value
     args*: Value
-    stack*: array[24, Value]
+    stack*: array[20, Value]
     stack_index*: uint8
 
   Frame* = ptr FrameObj
 
-  InvocationKind* {.size: sizeof(int16).} = enum
-    IvDefault   # E.g. when the gene type is not invokable
-    IvFunction
-    IvMacro
-    IvBlock
-    IvCompileFn
-    IvNativeFn
-    IvNew
-    IvMethod
-    # IvSuper
-    IvBoundMethod
+  NativeFrameKind* {.size: sizeof(int16).} = enum
+    NfFunction
+    NfMacro
+    NfCompileFn
+    NfMethod
+    NfMacroMethod
 
-  Invocation* = ref object
-    case kind*: InvocationKind
-      of IvFunction:
-        fn*: Value
-        fn_scope*: Scope
-      of IvMacro:
-        `macro`*: Value
-        macro_scope*: Scope
-      of IvBlock:
-        `block`*: Value
-        block_scope*: Scope
-      of IvCompileFn:
-        compile_fn*: Value
-        compile_fn_scope*: Scope
-      of IvNativeFn:
-        native_fn*: Value
-        native_fn_args*: Value
-      else:
-        data: Value
+  # NativeFrame is used to call native functions etc
+  NativeFrame* = ref object
+    kind*: NativeFrameKind
+    target*: Value
+    args*: Value
+
+  # InvocationKind* {.size: sizeof(int16).} = enum
+  #   IvDefault   # E.g. when the gene type is not invokable
+  #   IvFunction
+  #   IvMacro
+  #   IvBlock
+  #   IvCompileFn
+  #   IvNativeFn
+  #   IvNew
+  #   IvMethod
+  #   # IvSuper
+  #   IvBoundMethod
+
+  # Invocation* = ref object
+  #   case kind*: InvocationKind
+  #     of IvFunction:
+  #       fn*: Value
+  #       fn_scope*: Scope
+  #     of IvMacro:
+  #       `macro`*: Value
+  #       macro_scope*: Scope
+  #     of IvBlock:
+  #       `block`*: Value
+  #       block_scope*: Scope
+  #     of IvCompileFn:
+  #       compile_fn*: Value
+  #       compile_fn_scope*: Scope
+  #     of IvNativeFn:
+  #       native_fn*: Value
+  #       native_fn_args*: Value
+  #     else:
+  #       data: Value
 
   # No symbols should be removed.
   ManagedSymbols = object
@@ -1978,7 +2021,7 @@ converter to_value*(f: NativeFn): Value {.inline.} =
 
 #################### Frame #######################
 
-const REG_DEFAULT = 6
+# const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
 proc free*(self: var Frame) =
@@ -1993,13 +2036,13 @@ proc free*(self: var Frame) =
     FRAMES.add(self)
   {.pop.}
 
-proc new_frame(): Frame =
+proc new_frame*(): Frame =
   if FRAMES.len > 0:
     result = FRAMES.pop()
   else:
     result = cast[Frame](alloc0(sizeof(FrameObj)))
   result.ref_count = 1
-  result.stack_index = REG_DEFAULT
+  # result.stack_index = REG_DEFAULT
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
@@ -2046,8 +2089,8 @@ template pop2*(self: var Frame, to: var Value) =
   copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
   self.stack[self.stack_index] = NIL
 
-template default*(self: Frame): Value =
-  self.stack[REG_DEFAULT]
+# template default*(self: Frame): Value =
+#   self.stack[REG_DEFAULT]
 
 #################### COMPILER ####################
 
