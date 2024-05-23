@@ -22,3 +22,11 @@ test_vm """
   )
   (m 1 2)
 """, 3
+
+# test_vm true, """
+#   (macro m a
+#     ($caller_eval a)
+#   )
+#   (var b 1)
+#   (m b)
+# """, 1
