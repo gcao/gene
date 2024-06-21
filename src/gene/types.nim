@@ -336,7 +336,7 @@ type
   # MatchingHint* = object
   #   mode*: MatchingHintMode
 
-  MatcherKind* = enum
+  MatcherKind* {.size: sizeof(int16) .} = enum
     MatchType
     MatchProp
     MatchData
@@ -357,7 +357,41 @@ type
     children*: seq[Matcher]
     # required*: bool # computed property: true if splat is false and default value is not given
 
-  # MatchedFieldKind* = enum
+  EffectKind* {.size: sizeof(int16) .} = enum
+    EfCustom
+    EfEvent   # Event
+    EfReturn  # Return from function
+    EfBreak   # Break out of the current loop
+    EfNext    # Continue to the next iteration
+    EfYield   # Yield the current value and continue
+    EfGoto    # Jump to a label in the current computation unit
+    EfThrow   # Throw an exception
+
+  EffectState* {.size: sizeof(int16) .} = enum
+    EsNew
+    EsConsumed
+
+  Effect* = ref object
+    kind*: EffectKind
+    state*: EffectState
+    data*: Value    # The data associated with the effect
+    context*: Value # The context in which the effect is created
+
+  EffectHandlerKind* {.size: sizeof(int16) .} = enum
+    EhDefault
+    EhSimple
+    EhThrow
+
+  # The handler decides whether it consumes the effect or not
+  EffectHandler* = ref object
+    id*: Id
+    case kind*: EffectHandlerKind
+      of EhSimple:
+        simple_pos*: int
+      else:
+        handler*: Value
+
+  # MatchedFieldKind* {.size: sizeof(int16) .} = enum
   #   MfMissing
   #   MfSuccess
   #   MfTypeMismatch # E.g. map is passed but array or gene is expected
@@ -396,6 +430,7 @@ type
     IkAssign      # TODO: rename to IkSetMemberOnCurrentNS
 
     IkJump        # unconditional jump
+    IkJumpIfTrue
     IkJumpIfFalse
 
     IkJumpIfMatchSuccess  # Special instruction for argument matching
@@ -425,6 +460,12 @@ type
     IkOr
 
     IkCompileInit
+
+    IkEffectConfigure
+    IkEffectTrigger
+    IkEffectLoad
+    IkEffectConsume
+    IkEffectExit  # Exit from the effect range.
 
     IkThrow
 

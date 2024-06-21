@@ -204,6 +204,15 @@ proc exec*(self: VirtualMachine): Value =
         inst = self.cu.instructions[pc].addr
         continue
         {.pop.}
+      of IkJumpIfTrue:
+        {.push checks: off}
+        var value: Value
+        self.frame.pop2(value)
+        if value.to_bool():
+          pc = inst.arg0.int
+          inst = self.cu.instructions[pc].addr
+          continue
+        {.pop.}
       of IkJumpIfFalse:
         {.push checks: off}
         var value: Value
@@ -225,6 +234,10 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkLoopStart, IkLoopEnd:
         discard
+
+      # of IkEffectConfigure:
+      # of IkEffectTrigger:
+      # of IkEffectHandle:
 
       of IkContinue:
         {.push checks: off}

@@ -134,6 +134,21 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
   self.end_scope()
 
+proc compile_if_not(self: Compiler, gene: ptr Gene) =
+  self.start_scope()
+
+  self.compile(gene.children[0])
+  let end_label = new_label()
+  self.output.instructions.add(Instruction(kind: IkJumpIfTrue, arg0: end_label.Value))
+
+  self.start_scope()
+  self.compile(gene.children[1..^1])
+  self.end_scope()
+
+  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
+
+  self.end_scope()
+
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
   let index = self.scope_tracker.next_index
@@ -195,6 +210,21 @@ proc compile_break(self: Compiler, gene: ptr Gene) =
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   self.output.instructions.add(Instruction(kind: IkBreak))
+
+proc compile_xloop(self: Compiler, gene: ptr Gene) =
+  let label = new_label()
+  self.output.instructions.add(Instruction(kind: IkEffectConfigure, arg0: label.Value))
+  self.output.instructions.add(Instruction(kind: IkNoop, label: label))
+  self.compile(gene.children)
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: label.Value))
+  self.output.instructions.add(Instruction(kind: IkEffectConsume, arg1: EfBreak.int32))
+
+proc compile_xbreak(self: Compiler, gene: ptr Gene) =
+  if gene.children.len > 0:
+    self.compile(gene.children[0])
+  else:
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  self.output.instructions.add(Instruction(kind: IkEffectTrigger, arg1: EfBreak.int32))
 
 proc compile_fn(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
@@ -460,6 +490,9 @@ proc compile_gene(self: Compiler, input: Value) =
       of "if":
         self.compile_if(gene)
         return
+      of "if_not":
+        self.compile_if_not(gene)
+        return
       of "var":
         self.compile_var(gene)
         return
@@ -468,6 +501,12 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "break":
         self.compile_break(gene)
+        return
+      of "xloop":
+        self.compile_xloop(gene)
+        return
+      of "xbreak":
+        self.compile_xbreak(gene)
         return
       of "fn", "fnx":
         self.compile_fn(input)

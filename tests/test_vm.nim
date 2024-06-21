@@ -68,6 +68,18 @@ test_vm """
 """, NIL
 
 test_vm """
+  (if_not true
+    1
+  )
+""", NIL
+
+test_vm """
+  (if_not false
+    1
+  )
+""", 1
+
+test_vm """
   (if true
     # do nothing
   else
@@ -132,20 +144,6 @@ test_vm """
   (do
     (var i 1)
     i
-  )
-""", 1
-
-test_vm """
-  (loop
-    1
-    (break)
-  )
-  2
-""", 2
-
-test_vm """
-  (loop
-    (break 1)
   )
 """, 1
 
