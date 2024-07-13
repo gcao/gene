@@ -235,9 +235,11 @@ proc exec*(self: VirtualMachine): Value =
       of IkLoopStart, IkLoopEnd:
         discard
 
-      # of IkEffectConfigure:
+      # of IkEffectEnter:
+      # of IkEffectExit:
       # of IkEffectTrigger:
-      # of IkEffectHandle:
+      # of IkEffectLoad:
+      # of IkEffectConsume:
 
       of IkContinue:
         {.push checks: off}

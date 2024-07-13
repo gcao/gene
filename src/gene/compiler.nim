@@ -212,12 +212,20 @@ proc compile_break(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkBreak))
 
 proc compile_xloop(self: Compiler, gene: ptr Gene) =
+  let id = new_id()
   let label = new_label()
-  self.output.instructions.add(Instruction(kind: IkEffectConfigure, arg0: label.Value))
+  let effect_config = new_map_value()
+  self.output.instructions.add(Instruction(kind: IkEffectEnter, arg0: effect_config, arg1: id.int32))
+
   self.output.instructions.add(Instruction(kind: IkNoop, label: label))
   self.compile(gene.children)
-  self.output.instructions.add(Instruction(kind: IkJump, arg0: label.Value))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: label.Value)) # jump back to the beginning of the loop
+
+  # Break effect handler
   self.output.instructions.add(Instruction(kind: IkEffectConsume, arg1: EfBreak.int32))
+
+  # Clean up the effect handlers
+  self.output.instructions.add(Instruction(kind: IkEffectExit, arg1: id.int32))
 
 proc compile_xbreak(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:

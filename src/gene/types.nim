@@ -364,7 +364,7 @@ type
     EfBreak   # Break out of the current loop
     EfNext    # Continue to the next iteration
     EfYield   # Yield the current value and continue
-    EfGoto    # Jump to a label in the current computation unit
+    # EfGoto    # Jump to a label in the current computation unit
     EfThrow   # Throw an exception
 
   EffectState* {.size: sizeof(int16) .} = enum
@@ -377,10 +377,16 @@ type
     data*: Value    # The data associated with the effect
     context*: Value # The context in which the effect is created
 
+  EffectConfig* = ref object
+    id*: Id
+    handlers*: Table[EffectKind, EffectHandler]
+    start_pos*: int # When the current position is less than start_pos, the effect handlers are deregistered
+    end_pos*: int   # When the current position is greater than end_pos, the effect handlers are deregistered
+
   EffectHandlerKind* {.size: sizeof(int16) .} = enum
     EhDefault
     EhSimple
-    EhThrow
+    EhGroup # a group of handlers like multiple catches for an exception
 
   # The handler decides whether it consumes the effect or not
   EffectHandler* = ref object
@@ -388,6 +394,8 @@ type
     case kind*: EffectHandlerKind
       of EhSimple:
         simple_pos*: int
+      of EhGroup:
+        group*: seq[EffectHandler]
       else:
         handler*: Value
 
@@ -461,11 +469,11 @@ type
 
     IkCompileInit
 
-    IkEffectConfigure
-    IkEffectTrigger
-    IkEffectLoad
-    IkEffectConsume
-    IkEffectExit  # Exit from the effect range.
+    IkEffectEnter   # Enter into the effect range, register handlers
+    IkEffectTrigger # Trigger a new effect and store in the designated field, start the handling process
+    IkEffectLoad    # Load the effect data from the designated field to the stack
+    IkEffectConsume # Remove the effect from the designated field
+    IkEffectExit    # Exit from the effect range, deregister handlers
 
     IkThrow
 
