@@ -54,6 +54,8 @@ type
     VkNativeFrame
     # VkInvocation
 
+    VkEffectConfig
+
   Key* = distinct int64
   Value* = distinct int64
 
@@ -124,6 +126,8 @@ type
         native_frame*: NativeFrame
       # of VkInvocation:
       #   invocation*: Invocation
+      of VkEffectConfig:
+        effect_config*: EffectConfig
       else:
         discard
     ref_count*: int32
@@ -377,20 +381,33 @@ type
     data*: Value    # The data associated with the effect
     context*: Value # The context in which the effect is created
 
+  EffectScopeKind* {.size: sizeof(int16) .} = enum
+    EScopeGlobal
+    EScopeBounded
+
+  EffectScope* = object
+    case kind*: EffectScopeKind
+      of EScopeBounded:
+        start_pos*: int32 # When the current position is less than start_pos, the effect handlers are deregistered
+        end_pos*: int32   # When the current position is greater than end_pos, the effect handlers are deregistered
+      else:
+        discard
+
   EffectConfig* = ref object
-    id*: Id
+    prev*: EffectConfig   # The previous effect config when exiting from this
+    scope*: EffectScope
     handlers*: Table[EffectKind, EffectHandler]
-    start_pos*: int # When the current position is less than start_pos, the effect handlers are deregistered
-    end_pos*: int   # When the current position is greater than end_pos, the effect handlers are deregistered
 
   EffectHandlerKind* {.size: sizeof(int16) .} = enum
     EhDefault
-    EhSimple
-    EhGroup # a group of handlers like multiple catches for an exception
+    EhSimple          # jump
+    EhConsumeAndJump  # consume effect and jump
+    EhGroup           # a group of handlers like multiple catches for an exception
 
   # The handler decides whether it consumes the effect or not
   EffectHandler* = ref object
-    id*: Id
+    # config*: EffectConfig
+    # prev*, next*: EffectHandler
     case kind*: EffectHandlerKind
       of EhSimple:
         simple_pos*: int
@@ -609,16 +626,18 @@ type
 
   FrameObj = object
     ref_count*: int32
+    stack_index*: uint8
     kind*: FrameKind
     caller_frame*: Frame
     caller_address*: Address
     ns*: Namespace
     scope*: Scope
+    effect_config*: EffectConfig
+    effect*: Effect
     target*: Value  # target of the invocation
     self*: Value
     args*: Value
     stack*: array[20, Value]
-    stack_index*: uint8
 
   Frame* = ptr FrameObj
 
@@ -2140,6 +2159,13 @@ template pop2*(self: var Frame, to: var Value) =
 
 # template default*(self: Frame): Value =
 #   self.stack[REG_DEFAULT]
+
+#################### EFFECT ######################
+
+proc to_value*(self: EffectConfig): Value =
+  let r = new_ref(VkEffectConfig)
+  r.effect_config = self
+  result = r.to_ref_value()
 
 #################### COMPILER ####################
 

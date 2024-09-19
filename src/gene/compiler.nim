@@ -212,20 +212,29 @@ proc compile_break(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkBreak))
 
 proc compile_xloop(self: Compiler, gene: ptr Gene) =
-  let id = new_id()
   let label = new_label()
-  let effect_config = new_map_value()
-  self.output.instructions.add(Instruction(kind: IkEffectEnter, arg0: effect_config, arg1: id.int32))
+  let config = EffectConfig(
+    scope: EffectScope(kind: EScopeBounded, start_pos: self.output.instructions.len.int32),
+    handlers: initTable[EffectKind, EffectHandler]()
+  )
+  let v = config.to_value()
+  self.output.instructions.add(Instruction(kind: IkEffectEnter, arg0: v))
 
   self.output.instructions.add(Instruction(kind: IkNoop, label: label))
   self.compile(gene.children)
   self.output.instructions.add(Instruction(kind: IkJump, arg0: label.Value)) # jump back to the beginning of the loop
 
   # Break effect handler
+  let break_handler_pos = self.output.instructions.len
+  config.handlers[EfBreak] = EffectHandler(kind: EhSimple, simple_pos: break_handler_pos)
   self.output.instructions.add(Instruction(kind: IkEffectConsume, arg1: EfBreak.int32))
 
-  # Clean up the effect handlers
-  self.output.instructions.add(Instruction(kind: IkEffectExit, arg1: id.int32))
+  let end_label = new_label()
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value)) # Jump past the loop
+
+  config.scope.end_pos = self.output.instructions.len.int32
+  self.output.instructions.add(Instruction(kind: IkEffectExit, arg0: v))
+  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
 proc compile_xbreak(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
@@ -233,6 +242,31 @@ proc compile_xbreak(self: Compiler, gene: ptr Gene) =
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   self.output.instructions.add(Instruction(kind: IkEffectTrigger, arg1: EfBreak.int32))
+
+# proc compile_xloop(self: Compiler, gene: ptr Gene) =
+#   let label = new_label()
+#   let config = EffectConfig()
+#   let v = config.to_value()
+#   self.output.instructions.add(Instruction(kind: IkEffectEnter, arg0: v))
+
+#   self.output.instructions.add(Instruction(kind: IkNoop, label: label))
+#   self.compile(gene.children)
+#   self.output.instructions.add(Instruction(kind: IkJump, arg0: label.Value)) # jump back to the beginning of the loop
+
+#   # Break effect handler
+#   config.handlers[EfBreak] = EffectHandler(kind: EhSimple, simple_pos: self.output.instructions.len)
+#   self.output.instructions.add(Instruction(kind: IkEffectConsume, arg1: EfBreak.int32))
+
+#   # Use boundary check instead of IkEffectExit?
+#   # Clean up the effect handlers
+#   # self.output.instructions.add(Instruction(kind: IkEffectExit, arg0: v))
+
+# proc compile_xbreak(self: Compiler, gene: ptr Gene) =
+#   if gene.children.len > 0:
+#     self.compile(gene.children[0])
+#   else:
+#     self.output.instructions.add(Instruction(kind: IkPushNil))
+#   self.output.instructions.add(Instruction(kind: IkEffectTrigger, arg1: EfBreak.int32))
 
 proc compile_fn(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))

@@ -235,9 +235,70 @@ proc exec*(self: VirtualMachine): Value =
       of IkLoopStart, IkLoopEnd:
         discard
 
+      of IkEffectEnter:
+        let config = inst.arg0.ref.effect_config
+        if not self.frame.effect_config.is_nil():
+          config.prev = self.frame.effect_config
+        self.frame.effect_config = config
+
+      of IkEffectExit:
+        if not self.frame.effect_config.is_nil():
+          self.frame.effect_config = self.frame.effect_config.prev
+
+      of IkEffectTrigger:
+        {.push checks: off}
+        let kind = cast[EffectKind](inst.arg1)
+        var value: Value
+        self.frame.pop2(value)
+        self.frame.effect = Effect(kind: kind, data: value)
+        if self.frame.effect_config.is_nil:
+          todo("Bubble effect up to the caller")
+        let handler = self.frame.effect_config.handlers.get_or_default(kind, nil)
+        if handler.is_nil:
+          todo("Bubble effect up to the caller")
+        case handler.kind:
+          of EhSimple:
+            pc = handler.simple_pos
+            inst = self.cu.instructions[pc].addr
+            continue
+          else:
+            todo($handler.kind)
+        {.pop.}
+
+      of IkEffectConsume:
+        {.push checks: off}
+        let kind = cast[EffectKind](inst.arg1)
+        if self.frame.effect.kind == kind:
+          self.frame.push(self.frame.effect.data)
+          self.frame.effect = nil
+        {.pop.}
+
       # of IkEffectEnter:
-      # of IkEffectExit:
+      #   let c = inst.arg0.ref.effect_config
+      #   if not self.frame.effect_config.is_nil():
+      #     c.prev = self.frame.effect_config
+      #   self.frame.effect_config = c
+
+      # # of IkEffectExit:
+
       # of IkEffectTrigger:
+      #   {.push checks: off}
+      #   let kind = cast[EffectKind](inst.arg1)
+      #   self.frame.effect = Effect(kind: kind)
+      #   if self.frame.effect_config.is_nil:
+      #     todo("Bubble effect up to the caller")
+      #   let handler = self.frame.effect_config.handlers.get_or_default(kind, nil)
+      #   if handler.is_nil:
+      #     todo("Bubble effect up to the caller")
+      #   case handler.kind:
+      #     of EhSimple:
+      #       # TODO: check effect boundary
+      #       pc = handler.simple_pos
+      #       inst = self.cu.instructions[pc].addr
+      #     else:
+      #       todo($handler.kind)
+      #   {.pop.}
+
       # of IkEffectLoad:
       # of IkEffectConsume:
 
