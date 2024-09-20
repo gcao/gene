@@ -32,12 +32,23 @@ test_vm """
   )
 """, 1
 
-test_vm true, """
+test_vm """
   (xloop
     (xbreak)
   )
   1
 """, 1
+
+test_vm """
+  (var a 3)
+  (xloop
+    (if (a == 0)
+      (xbreak)
+    )
+    (a = (a - 1))
+  )
+  a
+""", 0
 
 # test_vm """
 #   (var a 0)
