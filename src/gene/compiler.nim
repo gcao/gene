@@ -233,8 +233,7 @@ proc compile_xloop(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value)) # Jump past the loop
 
   config.scope.end_pos = self.output.instructions.len.int32
-  self.output.instructions.add(Instruction(kind: IkEffectExit, arg0: v))
-  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
+  self.output.instructions.add(Instruction(kind: IkEffectExit, arg0: v, label: end_label))
 
 proc compile_xbreak(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:

@@ -50,6 +50,20 @@ test_vm """
   a
 """, 0
 
+test_vm """
+  (var a 3)
+  (xloop
+    (if (a == 0)
+      (xbreak)
+    )
+    (xloop
+      (a = (a - 1))
+      (xbreak)
+    )
+  )
+  a
+""", 0
+
 # test_vm """
 #   (var a 0)
 #   (loop
