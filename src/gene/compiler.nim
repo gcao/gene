@@ -138,15 +138,20 @@ proc compile_if_not(self: Compiler, gene: ptr Gene) =
   self.start_scope()
 
   self.compile(gene.children[0])
+  let else_label = new_label()
   let end_label = new_label()
-  self.output.instructions.add(Instruction(kind: IkJumpIfTrue, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJumpIfTrue, arg0: else_label.Value))
 
   self.start_scope()
   self.compile(gene.children[1..^1])
   self.end_scope()
 
-  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
 
+  self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
+  self.output.instructions.add(Instruction(kind: IkPushNil))
+
+  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
   self.end_scope()
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
