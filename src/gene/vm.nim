@@ -595,7 +595,11 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkMul:
-        self.frame.push(self.frame.pop().int * self.frame.pop().int)
+        {.push checks: off}
+        var second: Value
+        self.frame.pop2(second)
+        self.frame.replace(self.frame.current().int * second.int)
+        {.pop.}
 
       of IkDiv:
         let second = self.frame.pop().int
