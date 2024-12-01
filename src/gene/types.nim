@@ -2,6 +2,9 @@ import math, hashes, tables, sets, re, bitops, unicode, strutils, strformat
 import random
 import dynlib
 
+const
+  MAX_REGISTERS* = 32
+
 type
   ValueKind* {.size: sizeof(int16) .} = enum
     # void vs nil vs placeholder:
@@ -494,10 +497,6 @@ type
 
     IkThrow
 
-    # IkApplication
-    # IkPackage
-    # IkModule
-
     IkNamespace
 
     IkFunction
@@ -547,12 +546,80 @@ type
     IkYield
     IkResume
 
+    # Register operations
+    IkMove
+    IkLoadConst
+    IkLoadNil
+    IkStore
+    IkLoad
+    IkLoadReg
+    IkStoreReg
+    IkMoveReg
+    IkAddReg
+    IkSubReg
+    IkMulReg
+    IkDivReg
+
   # Keep the size of Instruction to 2*8 = 16 bytes
   Instruction* = object
-    kind*: InstructionKind
     label*: Label
-    arg1*: int32
-    arg0*: Value
+    case kind*: InstructionKind
+    of IkNoop, IkStart, IkEnd, IkLoopStart, IkLoopEnd, IkBreak,
+       IkMapStart, IkMapEnd, IkArrayStart, IkArrayEnd, IkGeneStart,
+       IkCompileInit, IkCallInit:
+      discard
+    of IkPushValue, IkPushNil, IkPop:
+      push_value*: Value
+    of IkScopeStart, IkScopeEnd:
+      scope_arg0*: Value
+    of IkReturn, IkThrow, IkYield, IkResume:
+      return_value*: Value
+    of IkVar, IkVarResolve, IkVarAssign, IkAssign, IkResolveSymbol, IkSelf,
+       IkSetMember, IkGetMember, IkSetChild, IkGetChild, IkFunction, IkMacro,
+       IkBlock, IkCompileFn, IkNamespace, IkClass, IkNew, IkSubClass, IkResolveMethod,
+       IkCallMethod, IkCallMethodNoArgs:
+      var_arg0*: Value
+    of IkVarResolveInherited, IkVarAssignInherited, IkEffectEnter, IkEffectExit,
+       IkEffectTrigger, IkEffectConsume, IkEffectLoad:
+      effect_arg0*: Value
+      effect_arg1*: Value
+    of IkJump, IkJumpIfTrue, IkJumpIfFalse, IkJumpIfMatchSuccess, IkContinue, IkGeneEnd:
+      jump_arg0*: Value
+      jump_arg1*: Value
+    of IkAdd, IkSub, IkMul, IkDiv, IkPow, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr:
+      op_arg0*: Value
+      op_arg1*: Value
+    of IkAddValue, IkSubValue, IkLtValue:
+      value_arg0*: Value
+      value_arg1*: Value
+    of IkMapSetProp, IkMapSetPropValue, IkArrayAddChild, IkArrayAddChildValue,
+       IkGeneSetType, IkGeneSetProp, IkGeneSetPropValue, IkGeneAddChild, IkGeneAddChildValue,
+       IkGeneStartDefault, IkVarValue:
+      prop_arg0*: Value
+      prop_arg1*: Value
+    of IkMove, IkMoveReg:
+      move_dest*: Value
+      move_src*: Value
+    of IkLoadConst:
+      load_const_reg*: Value
+      const_val*: Value
+    of IkLoadNil:
+      load_nil_reg*: Value
+    of IkStore:
+      store_reg*: Value
+      store_name*: Value
+    of IkLoad:
+      load_reg*: Value
+      load_name*: Value
+    of IkLoadReg:
+      load_reg_name*: Value
+      load_reg_reg*: Value
+    of IkStoreReg:
+      store_reg_name*: Value
+      store_reg_reg*: Value
+    of IkAddReg, IkSubReg, IkMulReg, IkDivReg:
+      reg_reg*: Value
+      reg_value*: Value
 
   VarIndex* = object
     local_index*: int32
@@ -625,19 +692,19 @@ type
     # FkBoundNativeMethod
 
   FrameObj = object
-    ref_count*: int32
-    stack_index*: uint8
     kind*: FrameKind
+    target*: Value
     caller_frame*: Frame
     caller_address*: Address
-    ns*: Namespace
     scope*: Scope
+    ns*: Namespace
+    self*: Value
     effect_config*: EffectConfig
     effect*: Effect
-    target*: Value  # target of the invocation
-    self*: Value
-    args*: Value
-    stack*: array[20, Value]
+    ref_count*: int32
+    registers*: array[MAX_REGISTERS, Value]  # Fixed-size register array
+    stack*: seq[Value]      # Keep for backward compatibility
+    stack_index*: int32     # Current stack pointer
 
   Frame* = ptr FrameObj
 
@@ -2110,6 +2177,8 @@ proc new_frame*(): Frame =
   else:
     result = cast[Frame](alloc0(sizeof(FrameObj)))
   result.ref_count = 1
+  result.stack = newSeq[Value](256)  # Initialize stack with fixed size
+  result.stack_index = 0
   # result.stack_index = REG_DEFAULT
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
@@ -2180,36 +2249,105 @@ proc new_compilation_unit*(): CompilationUnit =
   )
 
 proc `$`*(self: Instruction): string =
-  case self.kind
-    of IkPushValue,
-      IkVar, IkVarResolve,
-      IkAddValue, IkLtValue,
-      IkMapSetProp, IkMapSetPropValue,
-      IkArrayAddChildValue,
-      IkResolveSymbol, IkResolveMethod,
-      IkSetMember, IkGetMember,
-      IkSetChild, IkGetChild:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
-    of IkJump, IkJumpIfFalse:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {self.arg0.int:03}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]} {self.arg0.int:03}"
-    of IkJumpIfMatchSuccess:
-      if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
-      else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
-    of IkVarResolveInherited:
-      result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1}"
-    else:
-      if self.label.int > 0:
+  case self.kind:
+    of IkNoop, IkStart, IkEnd, IkLoopStart, IkLoopEnd, IkBreak,
+       IkMapStart, IkMapEnd, IkArrayStart, IkArrayEnd, IkGeneStart,
+       IkCompileInit, IkCallInit:
+      if self.label.int32 != 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
       else:
         result = fmt"         {($self.kind)[2..^1]}"
+    of IkPushValue, IkPushNil, IkPop:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.push_value}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.push_value}"
+    of IkScopeStart, IkScopeEnd:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.scope_arg0}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.scope_arg0}"
+    of IkReturn, IkThrow, IkYield, IkResume:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.return_value}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.return_value}"
+    of IkVar, IkVarResolve, IkVarAssign, IkAssign, IkResolveSymbol, IkSelf,
+       IkSetMember, IkGetMember, IkSetChild, IkGetChild, IkFunction, IkMacro,
+       IkBlock, IkCompileFn, IkNamespace, IkClass, IkNew, IkSubClass, IkResolveMethod,
+       IkCallMethod, IkCallMethodNoArgs:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.var_arg0}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.var_arg0}"
+    of IkVarResolveInherited, IkVarAssignInherited, IkEffectEnter, IkEffectExit,
+       IkEffectTrigger, IkEffectConsume, IkEffectLoad:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.effect_arg0} {$self.effect_arg1}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.effect_arg0} {$self.effect_arg1}"
+    of IkJump, IkJumpIfTrue, IkJumpIfFalse, IkJumpIfMatchSuccess, IkContinue, IkGeneEnd:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.jump_arg0} {$self.jump_arg1}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.jump_arg0} {$self.jump_arg1}"
+    of IkAdd, IkSub, IkMul, IkDiv, IkPow, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.op_arg0} {$self.op_arg1}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.op_arg0} {$self.op_arg1}"
+    of IkAddValue, IkSubValue, IkLtValue:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.value_arg0} {$self.value_arg1}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.value_arg0} {$self.value_arg1}"
+    of IkMapSetProp, IkMapSetPropValue, IkArrayAddChild, IkArrayAddChildValue,
+       IkGeneSetType, IkGeneSetProp, IkGeneSetPropValue, IkGeneAddChild, IkGeneAddChildValue,
+       IkGeneStartDefault, IkVarValue:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.prop_arg0} {$self.prop_arg1}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.prop_arg0} {$self.prop_arg1}"
+    of IkMove, IkMoveReg:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.move_dest} {$self.move_src}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.move_dest} {$self.move_src}"
+    of IkLoadConst:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.load_const_reg} {$self.const_val}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.load_const_reg} {$self.const_val}"
+    of IkLoadNil:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.load_nil_reg}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.load_nil_reg}"
+    of IkStore:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.store_reg} {$self.store_name}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.store_reg} {$self.store_name}"
+    of IkLoad:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.load_reg} {$self.load_name}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.load_reg} {$self.load_name}"
+    of IkLoadReg:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.load_reg_name} {$self.load_reg_reg}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.load_reg_name} {$self.load_reg_reg}"
+    of IkStoreReg:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.store_reg_name} {$self.store_reg_reg}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.store_reg_name} {$self.store_reg_reg}"
+    of IkAddReg, IkSubReg, IkMulReg, IkDivReg:
+      if self.label.int32 != 0:
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.reg_reg} {$self.reg_value}"
+      else:
+        result = fmt"         {($self.kind)[2..^1]} {$self.reg_reg} {$self.reg_value}"
 
 proc `$`*(self: seq[Instruction]): string =
   var i = 0
@@ -2265,16 +2403,52 @@ converter to_value*(i: Instruction): Value =
   r.instr = i
   result = r.to_ref_value()
 
-proc new_instr*(kind: InstructionKind): Instruction =
-  Instruction(
-    kind: kind,
-  )
-
-proc new_instr*(kind: InstructionKind, arg0: Value): Instruction =
-  Instruction(
-    kind: kind,
-    arg0: arg0,
-  )
+proc new_instr*(kind: InstructionKind, value: Value = NIL, arg1: Value = NIL): Instruction =
+  case kind
+  of IkNoop, IkStart, IkEnd, IkLoopStart, IkLoopEnd, IkBreak,
+     IkMapStart, IkMapEnd, IkArrayStart, IkArrayEnd, IkGeneStart,
+     IkCompileInit, IkCallInit:
+    result = Instruction(kind: kind)
+  of IkPushValue, IkPushNil, IkPop:
+    result = Instruction(kind: kind, push_value: value)
+  of IkScopeStart, IkScopeEnd:
+    result = Instruction(kind: kind, scope_arg0: value)
+  of IkReturn, IkThrow, IkYield, IkResume:
+    result = Instruction(kind: kind, return_value: value)
+  of IkVar, IkVarResolve, IkVarAssign, IkAssign, IkResolveSymbol, IkSelf,
+     IkSetMember, IkGetMember, IkSetChild, IkGetChild, IkFunction, IkMacro,
+     IkBlock, IkCompileFn, IkNamespace, IkClass, IkNew, IkSubClass, IkResolveMethod,
+     IkCallMethod, IkCallMethodNoArgs:
+    result = Instruction(kind: kind, var_arg0: value)
+  of IkVarResolveInherited, IkVarAssignInherited, IkEffectEnter, IkEffectExit,
+     IkEffectTrigger, IkEffectConsume, IkEffectLoad:
+    result = Instruction(kind: kind, effect_arg0: value, effect_arg1: arg1)
+  of IkJump, IkJumpIfTrue, IkJumpIfFalse, IkJumpIfMatchSuccess, IkContinue, IkGeneEnd:
+    result = Instruction(kind: kind, jump_arg0: value, jump_arg1: arg1)
+  of IkAdd, IkSub, IkMul, IkDiv, IkPow, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr:
+    result = Instruction(kind: kind, op_arg0: value, op_arg1: arg1)
+  of IkAddValue, IkSubValue, IkLtValue:
+    result = Instruction(kind: kind, value_arg0: value, value_arg1: arg1)
+  of IkMapSetProp, IkMapSetPropValue, IkArrayAddChild, IkArrayAddChildValue,
+     IkGeneSetType, IkGeneSetProp, IkGeneSetPropValue, IkGeneAddChild, IkGeneAddChildValue,
+     IkGeneStartDefault, IkVarValue:
+    result = Instruction(kind: kind, prop_arg0: value, prop_arg1: arg1)
+  of IkMove, IkMoveReg:
+    result = Instruction(kind: kind, move_dest: value, move_src: arg1)
+  of IkLoadConst:
+    result = Instruction(kind: kind, load_const_reg: value, const_val: arg1)
+  of IkLoadNil:
+    result = Instruction(kind: kind, load_nil_reg: value)
+  of IkStore:
+    result = Instruction(kind: kind, store_reg: value, store_name: arg1)
+  of IkLoad:
+    result = Instruction(kind: kind, load_reg: value, load_name: arg1)
+  of IkLoadReg:
+    result = Instruction(kind: kind, load_reg_name: value, load_reg_reg: arg1)
+  of IkStoreReg:
+    result = Instruction(kind: kind, store_reg_name: value, store_reg_reg: arg1)
+  of IkAddReg, IkSubReg, IkMulReg, IkDivReg:
+    result = Instruction(kind: kind, reg_reg: value, reg_value: arg1)
 
 #################### VM ##########################
 
@@ -2320,3 +2494,28 @@ proc init_values*() =
 init_values()
 
 include ./utils
+
+type
+  Register* = distinct int32
+
+proc init_registers*(self: Frame, size: int) =
+  for i in 0..<size:
+    self.registers[i] = NIL
+
+proc get_register*(self: Frame, reg: Register): Value =
+  result = self.registers[reg.int32]
+
+proc set_register*(self: Frame, reg: Register, val: Value) =
+  self.registers[reg.int32] = val
+
+proc move_register*(self: Frame, dest: Register, src: Register) =
+  self.registers[dest.int32] = self.registers[src.int32]
+
+proc move_register*(self: Frame, dest: Value, src: Value) {.inline.} =
+  self.registers[dest.int32] = self.registers[src.int32]
+
+proc set_register*(self: Frame, reg: Value, val: Value) {.inline.} =
+  self.registers[reg.int32] = val
+
+proc get_register*(self: Frame, reg: Value): Value {.inline.} =
+  self.registers[reg.int32]

@@ -46,7 +46,7 @@ proc exec*(self: VirtualMachine): Value =
             var cu = self.frame.caller_address.cu
             let end_pos = self.frame.caller_address.pc
             let caller_instr = self.frame.caller_address.cu.instructions[end_pos]
-            let start_pos = caller_instr.arg0.int
+            let start_pos = caller_instr.jump_arg0.int
             var new_instructions: seq[Instruction] = @[]
             for item in v.ref.arr:
               case item.kind:
@@ -77,7 +77,7 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkScopeStart:
-        self.frame.scope = new_scope(inst.arg0.ref.scope_tracker, self.frame.scope)
+        self.frame.scope = new_scope(inst.scope_arg0.ref.scope_tracker, self.frame.scope)
       of IkScopeEnd:
         self.frame.scope = self.frame.scope.parent
         discard
@@ -89,23 +89,23 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVarResolve:
         {.push checks: off}
-        self.frame.push(self.frame.scope.members[inst.arg0.int])
+        self.frame.push(self.frame.scope.members[inst.var_arg0.int])
         {.pop.}
 
       of IkVarResolveInherited:
-        var parent_index = inst.arg1.int32
+        var parent_index = inst.effect_arg1.int32
         var scope = self.frame.scope
         while parent_index > 0:
           parent_index.dec()
           scope = scope.parent
         {.push checks: off}
-        self.frame.push(scope.members[inst.arg0.int])
+        self.frame.push(scope.members[inst.effect_arg0.int])
         {.pop.}
 
       of IkVarAssign:
         {.push checks: off}
         let value = self.frame.current()
-        self.frame.scope.members[inst.arg0.int] = value
+        self.frame.scope.members[inst.var_arg0.int] = value
         {.pop.}
 
       of IkVarAssignInherited:
@@ -113,12 +113,12 @@ proc exec*(self: VirtualMachine): Value =
         let value = self.frame.current()
         {.pop.}
         var scope = self.frame.scope
-        var parent_index = inst.arg1.int32
+        var parent_index = inst.effect_arg1.int32
         while parent_index > 0:
           parent_index.dec()
           scope = scope.parent
         {.push checks: off}
-        scope.members[inst.arg0.int] = value
+        scope.members[inst.effect_arg0.int] = value
         {.pop.}
 
       of IkAssign:
@@ -127,7 +127,7 @@ proc exec*(self: VirtualMachine): Value =
         # Find the namespace where the member is defined and assign it there
 
       of IkResolveSymbol:
-        case inst.arg0.int64:
+        case inst.var_arg0.int64:
           of SYM_UNDERSCORE:
             self.frame.push(PLACEHOLDER)
           of SYM_SELF:
@@ -135,7 +135,7 @@ proc exec*(self: VirtualMachine): Value =
           of SYM_GENE:
             self.frame.push(App.app.gene_ns)
           else:
-            let name = inst.arg0.Key
+            let name = inst.var_arg0.Key
             let value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
               not_allowed("Unknown symbol " & name.int.get_symbol())
@@ -145,7 +145,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(self.frame.self)
 
       of IkSetMember:
-        let name = inst.arg0.Key
+        let name = inst.var_arg0.Key
         var value: Value
         self.frame.pop2(value)
         var target: Value
@@ -167,7 +167,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(value)
 
       of IkGetMember:
-        let name = inst.arg0.Key
+        let name = inst.var_arg0.Key
         var value: Value
         self.frame.pop2(value)
         # echo "IkGetMember " & $value & " " & $name
@@ -187,7 +187,7 @@ proc exec*(self: VirtualMachine): Value =
             todo($value.kind)
 
       of IkGetChild:
-        let i = inst.arg0.int
+        let i = inst.var_arg0.int
         var value: Value
         self.frame.pop2(value)
         case value.kind:
@@ -200,7 +200,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkJump:
         {.push checks: off}
-        pc = inst.arg0.int
+        pc = inst.jump_arg0.int
         inst = self.cu.instructions[pc].addr
         continue
         {.pop.}
@@ -209,7 +209,7 @@ proc exec*(self: VirtualMachine): Value =
         var value: Value
         self.frame.pop2(value)
         if value.to_bool():
-          pc = inst.arg0.int
+          pc = inst.jump_arg0.int
           inst = self.cu.instructions[pc].addr
           continue
         {.pop.}
@@ -218,16 +218,16 @@ proc exec*(self: VirtualMachine): Value =
         var value: Value
         self.frame.pop2(value)
         if not value.to_bool():
-          pc = inst.arg0.int
+          pc = inst.jump_arg0.int
           inst = self.cu.instructions[pc].addr
           continue
         {.pop.}
 
       of IkJumpIfMatchSuccess:
         {.push checks: off}
-        # if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
-        if self.frame.scope.members.len > inst.arg0.int:
-          pc = inst.arg1.int
+        # if self.frame.match_result.fields[inst.effect_arg0.int64] == MfSuccess:
+        if self.frame.scope.members.len > inst.effect_arg0.int:
+          pc = inst.effect_arg1.int
           inst = self.cu.instructions[pc].addr
           continue
         {.pop.}
@@ -236,7 +236,7 @@ proc exec*(self: VirtualMachine): Value =
         discard
 
       of IkEffectEnter:
-        let config = inst.arg0.ref.effect_config
+        let config = inst.effect_arg0.ref.effect_config
         if not self.frame.effect_config.is_nil():
           config.prev = self.frame.effect_config
         self.frame.effect_config = config
@@ -247,7 +247,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkEffectTrigger:
         {.push checks: off}
-        let kind = cast[EffectKind](inst.arg1)
+        let kind = cast[EffectKind](inst.effect_arg1)
         var value: Value
         self.frame.pop2(value)
         self.frame.effect = Effect(kind: kind, data: value)
@@ -267,7 +267,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkEffectConsume:
         {.push checks: off}
-        let kind = cast[EffectKind](inst.arg1)
+        let kind = cast[EffectKind](inst.effect_arg1)
         if self.frame.effect.kind == kind:
           self.frame.push(self.frame.effect.data)
           self.frame.effect = nil
@@ -282,7 +282,6 @@ proc exec*(self: VirtualMachine): Value =
       # # of IkEffectExit:
 
       # of IkEffectTrigger:
-      #   {.push checks: off}
       #   let kind = cast[EffectKind](inst.arg1)
       #   self.frame.effect = Effect(kind: kind)
       #   if self.frame.effect_config.is_nil:
@@ -317,7 +316,7 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkPushValue:
-        self.frame.push(inst.arg0)
+        self.frame.push(inst.push_value)
       of IkPushNil:
         self.frame.push(NIL)
       of IkPop:
@@ -335,7 +334,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkMapStart:
         self.frame.push(new_map_value())
       of IkMapSetProp:
-        let key = inst.arg0.Key
+        let key = inst.prop_arg0.Key
         var value: Value
         self.frame.pop2(value)
         self.frame.current().ref.map[key] = value
@@ -367,7 +366,7 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc = inst.jump_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -411,7 +410,7 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc = inst.jump_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -445,7 +444,7 @@ proc exec*(self: VirtualMachine): Value =
               args: new_gene_value(),
             )
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc = inst.jump_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -462,7 +461,7 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
       of IkGeneSetProp:
         {.push checks: off}
-        let key = inst.arg0.Key
+        let key = inst.var_arg0.Key
         var value: Value
         self.frame.pop2(value)
         self.frame.current().gene.props[key] = value
@@ -591,7 +590,7 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
       of IkSubValue:
         {.push checks: off}
-        self.frame.replace(self.frame.current().int - inst.arg0.int)
+        self.frame.replace(self.frame.current().int - inst.value_arg0.int)
         {.pop.}
 
       of IkMul:
@@ -615,7 +614,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkLtValue:
         var first: Value
         self.frame.pop2(first)
-        self.frame.push(first.int < inst.arg0.int)
+        self.frame.push(first.int < inst.value_arg0.int)
 
       of IkLe:
         let second = self.frame.pop().int
@@ -684,13 +683,13 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkFunction:
         {.push checks: off}
-        let f = to_function(inst.arg0)
+        let f = to_function(inst.var_arg0)
         f.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
         f.parent_scope.update(self.frame.scope)
-        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+        f.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
 
         if not f.matcher.is_empty():
           for child in f.matcher.children:
@@ -704,13 +703,13 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkMacro:
-        let m = to_macro(inst.arg0)
+        let m = to_macro(inst.var_arg0)
         m.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
         m.parent_scope.update(self.frame.scope)
-        m.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+        m.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
         let r = new_ref(VkMacro)
         r.macro = m
         let v = r.to_ref_value()
@@ -719,14 +718,14 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkBlock:
         {.push checks: off}
-        let b = to_block(inst.arg0)
+        let b = to_block(inst.var_arg0)
         b.frame = self.frame
         b.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
         b.frame.update(self.frame)
-        b.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+        b.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
 
         if not b.matcher.is_empty():
           for child in b.matcher.children:
@@ -740,13 +739,13 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkCompileFn:
         {.push checks: off}
-        let f = to_compile_fn(inst.arg0)
+        let f = to_compile_fn(inst.var_arg0)
         f.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
         f.parent_scope.update(self.frame.scope)
-        f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+        f.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
 
         if not f.matcher.is_empty():
           for child in f.matcher.children:
@@ -775,7 +774,7 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkNamespace:
-        let name = inst.arg0
+        let name = inst.var_arg0
         let ns = new_namespace(name.str)
         let r = new_ref(VkNamespace)
         r.ns = ns
@@ -784,7 +783,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(v)
 
       of IkClass:
-        let name = inst.arg0
+        let name = inst.var_arg0
         let class = new_class(name.str)
         let r = new_ref(VkClass)
         r.class = class
@@ -819,7 +818,7 @@ proc exec*(self: VirtualMachine): Value =
             todo($class.constructor.kind)
 
       of IkSubClass:
-        let name = inst.arg0
+        let name = inst.var_arg0
         let class = new_class(name.str)
         class.parent = self.frame.pop().ref.class
         let r = new_ref(VkClass)
@@ -830,7 +829,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkResolveMethod:
         let v = self.frame.pop()
         let class = v.get_class()
-        let meth = class.get_method(inst.arg0.str)
+        let meth = class.get_method(inst.var_arg0.str)
         let r = new_ref(VkBoundMethod)
         r.bound_method = BoundMethod(
           self: v,
@@ -839,6 +838,45 @@ proc exec*(self: VirtualMachine): Value =
         )
         self.frame.push(r.to_ref_value())
 
+      # Register operations
+      of IkMove:
+        self.frame.move_register(inst.move_dest, inst.move_src)
+      of IkLoadConst:
+        self.frame.set_register(inst.load_const_reg, inst.const_val)
+      of IkLoadNil:
+        self.frame.set_register(inst.load_nil_reg, NIL)
+      of IkStore:
+        let val = self.frame.get_register(inst.store_reg)
+        let index = self.frame.scope.tracker.mappings[inst.store_name.Key]
+        self.frame.scope.members[index] = val
+      of IkLoad:
+        let index = self.frame.scope.tracker.mappings[inst.load_name.Key]
+        let val = self.frame.scope.members[index]
+        self.frame.set_register(inst.load_reg, val)
+      of IkLoadReg:
+        let index = self.frame.scope.tracker.mappings[inst.load_reg_name.Key]
+        let val = self.frame.scope.members[index]
+        self.frame.registers[inst.load_reg_reg.int32] = val
+      of IkStoreReg:
+        let val = self.frame.registers[inst.store_reg_reg.int32]
+        let index = self.frame.scope.tracker.mappings[inst.store_reg_name.Key]
+        self.frame.scope.members[index] = val
+      of IkMoveReg:
+        self.frame.move_register(inst.move_dest, inst.move_src)
+      of IkAddReg:
+        let val = self.frame.get_register(inst.reg_reg)
+        self.frame.set_register(inst.reg_reg, Value(val.int + inst.reg_value.int))
+      of IkSubReg:
+        let val = self.frame.get_register(inst.reg_reg)
+        self.frame.set_register(inst.reg_reg, Value(val.int - inst.reg_value.int))
+      of IkMulReg:
+        let val = self.frame.get_register(inst.reg_reg)
+        self.frame.set_register(inst.reg_reg, Value(val.int * inst.reg_value.int))
+      of IkDivReg:
+        let val = self.frame.get_register(inst.reg_reg)
+        self.frame.set_register(inst.reg_reg, Value(val.int / inst.reg_value.int))
+
+      # Stack operations (for backward compatibility)
       else:
         todo($inst.kind)
 
