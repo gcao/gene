@@ -75,7 +75,8 @@ proc compile_symbol(self: Compiler, input: Value) =
 proc compile_array(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkArrayStart))
   for child in input.ref.arr:
-    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkPushValue, push_value: child))
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
     self.output.instructions.add(Instruction(kind: IkArrayAddChild))
   self.output.instructions.add(Instruction(kind: IkArrayEnd))
 

@@ -703,8 +703,6 @@ type
     effect*: Effect
     ref_count*: int32
     registers*: array[MAX_REGISTERS, Value]  # Fixed-size register array
-    stack*: seq[Value]      # Keep for backward compatibility
-    stack_index*: int32     # Current stack pointer
 
   Frame* = ptr FrameObj
 
@@ -855,6 +853,8 @@ proc new_namespace*(name: string): Namespace {.gcsafe.}
 proc new_namespace*(parent: Namespace): Namespace {.gcsafe.}
 proc `[]=`*(self: Namespace, key: Key, val: Value) {.inline.}
 
+proc find_label*(self: CompilationUnit, label: Label): int
+
 #################### Common ######################
 
 template `==`*(a, b: Key): bool =
@@ -982,9 +982,15 @@ proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
   result.ref_count = 1
 
 template `ref`*(v: Value): ptr Reference =
-  cast[ptr Reference](bitand(AND_MASK, v.uint64))
+  let v1 = cast[uint64](v)
+  if v1.shr(48) == REF_PREFIX:
+    cast[ptr Reference](bitand(AND_MASK, v1))
+  else:
+    nil
 
 proc to_ref_value*(v: ptr Reference): Value {.inline.} =
+  if v == nil:
+    return NIL
   v.ref_count.inc()
   cast[Value](bitor(REF_MASK, cast[uint64](v)))
 
@@ -1012,7 +1018,10 @@ proc kind*(v: Value): ValueKind =
     case prefix:
       of REF_PREFIX:
         # echo "kind: REF_PREFIX"
-        return v.ref.kind
+        let r = v.ref
+        if r == nil:
+          return VkNil
+        return r.kind
         {.linearScanEnd.}
       of NIL_PREFIX:
         return VkNil
@@ -1350,7 +1359,9 @@ proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
 
 proc new_array_value*(v: varargs[Value]): Value =
   let r = new_ref(VkArray)
-  r.arr = @v
+  r.arr = @[]  # Initialize empty sequence
+  for item in v:
+    r.arr.add(item)  # Add each item
   result = r.to_ref_value()
 
 #################### Stream ######################
@@ -2159,12 +2170,27 @@ converter to_value*(f: NativeFn): Value {.inline.} =
 # const REG_DEFAULT = 6
 var FRAMES: seq[Frame] = @[]
 
+proc get_register*(self: Frame, reg: Value): Value {.inline.} =
+  self.registers[reg.int32]
+
+proc set_register*(self: Frame, reg: Value, value: Value) {.inline.} =
+  self.registers[reg.int32] = value
+
+proc move_register*(self: Frame, dest: Value, src: Value) {.inline.} =
+  self.registers[dest.int32] = self.registers[src.int32]
+
+proc init_registers*(self: Frame, size: int) =
+  for i in 0..<size:
+    self.registers[i] = NIL
+
 proc free*(self: var Frame) =
   {.push checks: off, optimization: speed.}
   self.ref_count.dec()
   if self.ref_count <= 0:
     if self.caller_frame != nil:
-      self.caller_frame.free()
+      var caller = self.caller_frame
+      self.caller_frame = nil  # Clear reference before freeing
+      caller.free()
     if self.scope != nil:
       self.scope.free()
     self[].reset()
@@ -2174,12 +2200,19 @@ proc free*(self: var Frame) =
 proc new_frame*(): Frame =
   if FRAMES.len > 0:
     result = FRAMES.pop()
+    result[] = FrameObj()  # Reset all fields to default values
   else:
     result = cast[Frame](alloc0(sizeof(FrameObj)))
   result.ref_count = 1
-  result.stack = newSeq[Value](256)  # Initialize stack with fixed size
-  result.stack_index = 0
-  # result.stack_index = REG_DEFAULT
+  result.kind = FkPristine
+  result.target = NIL
+  result.caller_frame = nil
+  result.scope = nil
+  result.ns = nil
+  result.self = NIL
+  result.effect_config = nil
+  result.effect = nil
+  init_registers(result, MAX_REGISTERS)
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
@@ -2206,29 +2239,6 @@ proc update*(self: var Frame, f: Frame) {.inline.} =
   self = f
   {.pop.}
 
-template current*(self: Frame): Value =
-  self.stack[self.stack_index - 1]
-
-proc replace*(self: var Frame, v: Value) {.inline.} =
-  self.stack[self.stack_index - 1] = v
-
-template push*(self: var Frame, value: sink Value) =
-  self.stack[self.stack_index] = value
-  self.stack_index.inc()
-
-proc pop*(self: var Frame): Value {.inline.} =
-  self.stack_index.dec()
-  result = self.stack[self.stack_index]
-  self.stack[self.stack_index] = NIL
-
-template pop2*(self: var Frame, to: var Value) =
-  self.stack_index.dec()
-  copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
-  self.stack[self.stack_index] = NIL
-
-# template default*(self: Frame): Value =
-#   self.stack[REG_DEFAULT]
-
 #################### EFFECT ######################
 
 proc to_value*(self: EffectConfig): Value =
@@ -2247,6 +2257,25 @@ proc new_compilation_unit*(): CompilationUnit =
   CompilationUnit(
     id: new_id(),
   )
+
+################### INSTRUCTION ####################
+
+converter to_value*(instr: Instruction): Value =
+  let r = new_ref(VkInstruction)
+  r.instr = instr
+  result = r.to_ref_value()
+
+proc update_jumps(self: CompilationUnit) =
+  for i, inst in self.instructions:
+    case inst.kind
+      of IkJump, IkJumpIfFalse, IkJumpIfTrue, IkContinue:
+        self.instructions[i].jump_arg0 = self.find_label(inst.jump_arg0.Label).Value
+      of IkGeneStartDefault:
+        self.instructions[i].prop_arg0 = self.find_label(inst.prop_arg0.Label).Value
+      of IkJumpIfMatchSuccess:
+        self.instructions[i].jump_arg0 = self.find_label(inst.jump_arg0.Label).Value
+      else:
+        discard
 
 proc `$`*(self: Instruction): string =
   case self.kind:
@@ -2396,60 +2425,6 @@ proc scope_tracker*(self: Compiler): ScopeTracker =
   if self.scope_trackers.len > 0:
     return self.scope_trackers[^1]
 
-#################### Instruction #################
-
-converter to_value*(i: Instruction): Value =
-  let r = new_ref(VkInstruction)
-  r.instr = i
-  result = r.to_ref_value()
-
-proc new_instr*(kind: InstructionKind, value: Value = NIL, arg1: Value = NIL): Instruction =
-  case kind
-  of IkNoop, IkStart, IkEnd, IkLoopStart, IkLoopEnd, IkBreak,
-     IkMapStart, IkMapEnd, IkArrayStart, IkArrayEnd, IkGeneStart,
-     IkCompileInit, IkCallInit:
-    result = Instruction(kind: kind)
-  of IkPushValue, IkPushNil, IkPop:
-    result = Instruction(kind: kind, push_value: value)
-  of IkScopeStart, IkScopeEnd:
-    result = Instruction(kind: kind, scope_arg0: value)
-  of IkReturn, IkThrow, IkYield, IkResume:
-    result = Instruction(kind: kind, return_value: value)
-  of IkVar, IkVarResolve, IkVarAssign, IkAssign, IkResolveSymbol, IkSelf,
-     IkSetMember, IkGetMember, IkSetChild, IkGetChild, IkFunction, IkMacro,
-     IkBlock, IkCompileFn, IkNamespace, IkClass, IkNew, IkSubClass, IkResolveMethod,
-     IkCallMethod, IkCallMethodNoArgs:
-    result = Instruction(kind: kind, var_arg0: value)
-  of IkVarResolveInherited, IkVarAssignInherited, IkEffectEnter, IkEffectExit,
-     IkEffectTrigger, IkEffectConsume, IkEffectLoad:
-    result = Instruction(kind: kind, effect_arg0: value, effect_arg1: arg1)
-  of IkJump, IkJumpIfTrue, IkJumpIfFalse, IkJumpIfMatchSuccess, IkContinue, IkGeneEnd:
-    result = Instruction(kind: kind, jump_arg0: value, jump_arg1: arg1)
-  of IkAdd, IkSub, IkMul, IkDiv, IkPow, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr:
-    result = Instruction(kind: kind, op_arg0: value, op_arg1: arg1)
-  of IkAddValue, IkSubValue, IkLtValue:
-    result = Instruction(kind: kind, value_arg0: value, value_arg1: arg1)
-  of IkMapSetProp, IkMapSetPropValue, IkArrayAddChild, IkArrayAddChildValue,
-     IkGeneSetType, IkGeneSetProp, IkGeneSetPropValue, IkGeneAddChild, IkGeneAddChildValue,
-     IkGeneStartDefault, IkVarValue:
-    result = Instruction(kind: kind, prop_arg0: value, prop_arg1: arg1)
-  of IkMove, IkMoveReg:
-    result = Instruction(kind: kind, move_dest: value, move_src: arg1)
-  of IkLoadConst:
-    result = Instruction(kind: kind, load_const_reg: value, const_val: arg1)
-  of IkLoadNil:
-    result = Instruction(kind: kind, load_nil_reg: value)
-  of IkStore:
-    result = Instruction(kind: kind, store_reg: value, store_name: arg1)
-  of IkLoad:
-    result = Instruction(kind: kind, load_reg: value, load_name: arg1)
-  of IkLoadReg:
-    result = Instruction(kind: kind, load_reg_name: value, load_reg_reg: arg1)
-  of IkStoreReg:
-    result = Instruction(kind: kind, store_reg_name: value, store_reg_reg: arg1)
-  of IkAddReg, IkSubReg, IkMulReg, IkDivReg:
-    result = Instruction(kind: kind, reg_reg: value, reg_value: arg1)
-
 #################### VM ##########################
 
 proc init_app_and_vm*() =
@@ -2495,39 +2470,3 @@ init_values()
 
 include ./utils
 
-type
-  Register* = distinct int32
-
-proc init_registers*(self: Frame, size: int) =
-  for i in 0..<size:
-    self.registers[i] = NIL
-
-proc get_register*(self: Frame, reg: Register): Value =
-  result = self.registers[reg.int32]
-
-proc set_register*(self: Frame, reg: Register, val: Value) =
-  self.registers[reg.int32] = val
-
-proc move_register*(self: Frame, dest: Register, src: Register) =
-  self.registers[dest.int32] = self.registers[src.int32]
-
-proc move_register*(self: Frame, dest: Value, src: Value) {.inline.} =
-  self.registers[dest.int32] = self.registers[src.int32]
-
-proc set_register*(self: Frame, reg: Value, val: Value) {.inline.} =
-  self.registers[reg.int32] = val
-
-proc get_register*(self: Frame, reg: Value): Value {.inline.} =
-  self.registers[reg.int32]
-
-proc update_jumps(self: CompilationUnit) =
-  for i, inst in self.instructions:
-    case inst.kind
-      of IkJump, IkJumpIfFalse, IkJumpIfTrue, IkContinue:
-        self.instructions[i].jump_arg0 = self.find_label(inst.jump_arg0.Label).Value
-      of IkGeneStartDefault:
-        self.instructions[i].prop_arg0 = self.find_label(inst.prop_arg0.Label).Value
-      of IkJumpIfMatchSuccess:
-        self.instructions[i].jump_arg1 = self.find_label(inst.jump_arg1.Label).Value
-      else:
-        discard

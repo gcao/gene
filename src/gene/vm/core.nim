@@ -1,3 +1,17 @@
+import ../types
+import ../compiler
+
+proc todo() = discard
+
+proc new_instr(kind: InstructionKind, value: Value = NIL): Value =
+  var instr = Instruction(kind: kind)
+  case kind:
+    of IkPushValue:
+      instr.push_value = value
+    else:
+      discard
+  instr.to_value()
+
 # Show the code
 # JIT the code (create a temporary block, reuse the frame)
 # Execute the code
@@ -15,26 +29,24 @@ proc println(self: VirtualMachine, args: Value): Value =
 
 proc trace_start(self: VirtualMachine, args: Value): Value =
   self.trace = true
-  self.frame.push(NIL)
+  self.frame.set_register(0, NIL)
 
 proc trace_end(self: VirtualMachine, args: Value): Value =
   self.trace = false
-  self.frame.push(NIL)
+  self.frame.set_register(0, NIL)
 
 proc print_stack(self: VirtualMachine, args: Value): Value =
-  var s = "Stack: "
-  for i, reg in self.frame.stack:
+  var s = "Registers: "
+  for i in 0..<MAX_REGISTERS:
     if i > 0:
       s &= ", "
-    if i == self.frame.stack_index.int:
-      s &= "=> "
-    s &= $self.frame.stack[i]
+    s &= $self.frame.registers[i]
   echo s
-  self.frame.push(NIL)
+  self.frame.set_register(0, NIL)
 
 proc print_instructions(self: VirtualMachine, args: Value): Value =
   echo self.cu
-  self.frame.push(NIL)
+  self.frame.set_register(0, NIL)
 
 proc to_ctor(node: Value): Function =
   let name = "ctor"

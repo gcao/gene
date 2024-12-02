@@ -1,4 +1,4 @@
-import tables, strutils, strformat
+import tables, strutils, strformat, math
 
 import ./types
 import ./parser
@@ -35,8 +35,7 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         when not defined(release):
           indent.delete(indent.len-2..indent.len-1)
-        # TODO: validate that there is only one value on the stack
-        let v = self.frame.current
+        let v = self.frame.get_register(0)  # Use register 0 for return value
         if self.frame.caller_frame == nil:
           return v
         else:
@@ -48,31 +47,38 @@ proc exec*(self: VirtualMachine): Value =
             let caller_instr = self.frame.caller_address.cu.instructions[end_pos]
             let start_pos = caller_instr.jump_arg0.int
             var new_instructions: seq[Instruction] = @[]
-            for item in v.ref.arr:
-              case item.kind:
-                of VkInstruction:
-                  new_instructions.add(item.ref.instr)
-                of VkArray:
-                  for item2 in item.ref.arr:
-                    new_instructions.add(item2.ref.instr)
-                else:
-                  todo($item.kind)
+            if v.kind == VkArray:
+              let r = v.ref
+              if r != nil:
+                for item in r.arr:
+                  case item.kind:
+                    of VkInstruction:
+                      new_instructions.add(item.ref.instr)
+                    of VkArray:
+                      let r2 = item.ref
+                      if r2 != nil:
+                        for item2 in r2.arr:
+                          new_instructions.add(item2.ref.instr)
+                    else:
+                      todo($item.kind)
             cu.replace_chunk(start_pos, end_pos, new_instructions)
             self.cu = self.frame.caller_address.cu
             pc = start_pos
             inst = self.cu.instructions[pc].addr
+            var old_frame = self.frame
             self.frame.update(self.frame.caller_frame)
-            self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+            old_frame.free()  # Properly free the old frame
             continue
 
           let skip_return = self.cu.skip_return
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
+          var old_frame = self.frame
           self.frame.update(self.frame.caller_frame)
-          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+          old_frame.free()  # Properly free the old frame
           if not skip_return:
-            self.frame.push(v)
+            self.frame.set_register(0, v)  # Use register 0 for return value
           continue
         {.pop.}
 
@@ -84,269 +90,166 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVar:
         {.push checks: off.}
-        self.frame.scope.members.add(self.frame.current())
+        self.frame.scope.members.add(self.frame.get_register(0))  # Use register 0 for current value
         {.pop.}
 
       of IkVarResolve:
         {.push checks: off}
-        self.frame.push(self.frame.scope.members[inst.var_arg0.int])
+        self.frame.set_register(0, self.frame.scope.members[inst.var_arg0.int])  # Use register 0 for resolved value
         {.pop.}
 
       of IkVarResolveInherited:
-        var parent_index = inst.effect_arg1.int32
-        var scope = self.frame.scope
-        while parent_index > 0:
-          parent_index.dec()
-          scope = scope.parent
         {.push checks: off}
-        self.frame.push(scope.members[inst.effect_arg0.int])
+        let index = inst.effect_arg0.int
+        let parent_index = inst.effect_arg1.int
+        var scope = self.frame.scope
+        for i in 0..<parent_index:
+          scope = scope.parent
+        self.frame.set_register(0, scope.members[index])  # Use register 0 for resolved value
         {.pop.}
 
       of IkVarAssign:
         {.push checks: off}
-        let value = self.frame.current()
+        let value = self.frame.get_register(0)  # Use register 0 for value to assign
         self.frame.scope.members[inst.var_arg0.int] = value
         {.pop.}
 
       of IkVarAssignInherited:
         {.push checks: off}
-        let value = self.frame.current()
-        {.pop.}
+        let value = self.frame.get_register(0)  # Use register 0 for value to assign
+        let index = inst.effect_arg0.int
+        let parent_index = inst.effect_arg1.int
         var scope = self.frame.scope
-        var parent_index = inst.effect_arg1.int32
-        while parent_index > 0:
-          parent_index.dec()
+        for i in 0..<parent_index:
           scope = scope.parent
+        scope.members[index] = value
+        {.pop.}
+
+      of IkVarValue:
         {.push checks: off}
-        scope.members[inst.effect_arg0.int] = value
+        self.frame.scope.members.add(inst.prop_arg0)
         {.pop.}
 
       of IkAssign:
-        todo($IkAssign)
-        # let value = self.frame.current()
-        # Find the namespace where the member is defined and assign it there
+        {.push checks: off}
+        let value = self.frame.get_register(0)  # Use register 0 for value to assign
+        self.frame.ns[inst.var_arg0.Key] = value
+        {.pop.}
 
       of IkResolveSymbol:
         case inst.var_arg0.int64:
           of SYM_UNDERSCORE:
-            self.frame.push(PLACEHOLDER)
+            self.frame.set_register(0, PLACEHOLDER)  # Use register 0 for resolved symbol
           of SYM_SELF:
-            self.frame.push(self.frame.self)
+            self.frame.set_register(0, self.frame.self)  # Use register 0 for resolved symbol
           of SYM_GENE:
-            self.frame.push(App.app.gene_ns)
+            self.frame.set_register(0, App.app.gene_ns)  # Use register 0 for resolved symbol
           else:
             let name = inst.var_arg0.Key
             let value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
               not_allowed("Unknown symbol " & name.int.get_symbol())
-            self.frame.push(value)
+            self.frame.set_register(0, value)  # Use register 0 for resolved symbol
 
       of IkSelf:
-        self.frame.push(self.frame.self)
+        self.frame.set_register(0, self.frame.self)  # Use register 0 for self value
 
       of IkSetMember:
         let name = inst.var_arg0.Key
-        var value: Value
-        self.frame.pop2(value)
-        var target: Value
-        self.frame.pop2(target)
-        case target.kind:
+        let value = self.frame.get_register(1)  # Use register 1 for value to set
+        let obj = self.frame.get_register(0)    # Use register 0 for target object
+        case obj.kind:
           of VkMap:
-            target.ref.map[name] = value
+            obj.ref.map[name] = value
           of VkGene:
-            target.gene.props[name] = value
+            obj.gene.props[name] = value
           of VkNamespace:
-            target.ref.ns[name] = value
+            obj.ref.ns[name] = value
           of VkClass:
-            target.ref.class.ns[name] = value
+            obj.ref.class.ns[name] = value
           of VkInstance:
             todo()
-            # target.ref.instance_props[name] = value
           else:
-            todo($target.kind)
-        self.frame.push(value)
+            todo($obj.kind)
 
       of IkGetMember:
         let name = inst.var_arg0.Key
-        var value: Value
-        self.frame.pop2(value)
-        # echo "IkGetMember " & $value & " " & $name
-        case value.kind:
+        let obj = self.frame.get_register(0)  # Use register 0 for target object
+        case obj.kind:
           of VkMap:
-            self.frame.push(value.ref.map[name])
+            self.frame.set_register(0, obj.ref.map[name])  # Store result in register 0
           of VkGene:
-            self.frame.push(value.gene.props[name])
+            self.frame.set_register(0, obj.gene.props[name])  # Store result in register 0
           of VkNamespace:
-            self.frame.push(value.ref.ns[name])
+            self.frame.set_register(0, obj.ref.ns[name])  # Store result in register 0
           of VkClass:
-            self.frame.push(value.ref.class.ns[name])
+            self.frame.set_register(0, obj.ref.class.ns[name])  # Store result in register 0
           of VkInstance:
             todo()
-            # self.frame.push(value.ref.instance_props[name])
           else:
-            todo($value.kind)
+            todo($obj.kind)
 
       of IkGetChild:
         let i = inst.var_arg0.int
-        var value: Value
-        self.frame.pop2(value)
-        case value.kind:
+        let obj = self.frame.get_register(0)  # Use register 0 for target object
+        case obj.kind:
           of VkArray:
-            self.frame.push(value.ref.arr[i])
+            self.frame.set_register(0, obj.ref.arr[i])  # Store result in register 0
           of VkGene:
-            self.frame.push(value.gene.children[i])
+            self.frame.set_register(0, obj.gene.children[i])  # Store result in register 0
           else:
-            todo($value.kind)
+            todo($obj.kind)
 
-      of IkJump:
-        {.push checks: off}
-        pc = inst.jump_arg0.int
-        inst = self.cu.instructions[pc].addr
-        continue
-        {.pop.}
-      of IkJumpIfTrue:
-        {.push checks: off}
-        var value: Value
-        self.frame.pop2(value)
-        if value.to_bool():
-          pc = inst.jump_arg0.int
-          inst = self.cu.instructions[pc].addr
-          continue
-        {.pop.}
-      of IkJumpIfFalse:
-        {.push checks: off}
-        var value: Value
-        self.frame.pop2(value)
-        if not value.to_bool():
-          pc = inst.jump_arg0.int
-          inst = self.cu.instructions[pc].addr
-          continue
-        {.pop.}
-
-      of IkJumpIfMatchSuccess:
-        {.push checks: off}
-        # if self.frame.match_result.fields[inst.effect_arg0.int64] == MfSuccess:
-        if self.frame.scope.members.len > inst.effect_arg0.int:
-          pc = inst.effect_arg1.int
-          inst = self.cu.instructions[pc].addr
-          continue
-        {.pop.}
-
-      of IkLoopStart, IkLoopEnd:
-        discard
-
-      of IkEffectEnter:
-        let config = inst.effect_arg0.ref.effect_config
-        if not self.frame.effect_config.is_nil():
-          config.prev = self.frame.effect_config
-        self.frame.effect_config = config
-
-      of IkEffectExit:
-        if not self.frame.effect_config.is_nil():
-          self.frame.effect_config = self.frame.effect_config.prev
-
-      of IkEffectTrigger:
-        {.push checks: off}
-        let kind = cast[EffectKind](inst.effect_arg1)
-        var value: Value
-        self.frame.pop2(value)
-        self.frame.effect = Effect(kind: kind, data: value)
-        if self.frame.effect_config.is_nil:
-          todo("Bubble effect up to the caller")
-        let handler = self.frame.effect_config.handlers.get_or_default(kind, nil)
-        if handler.is_nil:
-          todo("Bubble effect up to the caller")
-        case handler.kind:
-          of EhSimple:
-            pc = handler.simple_pos
-            inst = self.cu.instructions[pc].addr
-            continue
+      of IkSetChild:
+        let i = inst.var_arg0.int
+        let value = self.frame.get_register(1)  # Use register 1 for value to set
+        let obj = self.frame.get_register(0)    # Use register 0 for target object
+        case obj.kind:
+          of VkArray:
+            obj.ref.arr[i] = value
+          of VkGene:
+            obj.gene.children[i] = value
           else:
-            todo($handler.kind)
-        {.pop.}
-
-      of IkEffectConsume:
-        {.push checks: off}
-        let kind = cast[EffectKind](inst.effect_arg1)
-        if self.frame.effect.kind == kind:
-          self.frame.push(self.frame.effect.data)
-          self.frame.effect = nil
-        {.pop.}
-
-      # of IkEffectEnter:
-      #   let c = inst.arg0.ref.effect_config
-      #   if not self.frame.effect_config.is_nil():
-      #     c.prev = self.frame.effect_config
-      #   self.frame.effect_config = c
-
-      # # of IkEffectExit:
-
-      # of IkEffectTrigger:
-      #   let kind = cast[EffectKind](inst.arg1)
-      #   self.frame.effect = Effect(kind: kind)
-      #   if self.frame.effect_config.is_nil:
-      #     todo("Bubble effect up to the caller")
-      #   let handler = self.frame.effect_config.handlers.get_or_default(kind, nil)
-      #   if handler.is_nil:
-      #     todo("Bubble effect up to the caller")
-      #   case handler.kind:
-      #     of EhSimple:
-      #       # TODO: check effect boundary
-      #       pc = handler.simple_pos
-      #       inst = self.cu.instructions[pc].addr
-      #     else:
-      #       todo($handler.kind)
-      #   {.pop.}
-
-      # of IkEffectLoad:
-      # of IkEffectConsume:
-
-      of IkContinue:
-        {.push checks: off}
-        pc = self.cu.find_loop_start(pc)
-        inst = self.cu.instructions[pc].addr
-        continue
-        {.pop.}
-
-      of IkBreak:
-        {.push checks: off}
-        pc = self.cu.find_loop_end(pc)
-        inst = self.cu.instructions[pc].addr
-        continue
-        {.pop.}
+            todo($obj.kind)
 
       of IkPushValue:
-        self.frame.push(inst.push_value)
+        self.frame.set_register(0, inst.push_value)  # Use register 0 for pushed value
       of IkPushNil:
-        self.frame.push(NIL)
+        self.frame.set_register(0, NIL)  # Use register 0 for nil value
       of IkPop:
-        discard self.frame.pop()
+        discard  # No-op with registers
 
       of IkArrayStart:
-        self.frame.push(new_array_value())
+        let arr = new_array_value()  # Create new array
+        self.frame.set_register(0, arr)  # Store array in register 0
       of IkArrayAddChild:
-        var child: Value
-        self.frame.pop2(child)
-        self.frame.current().ref.arr.add(child)
+        let value = self.frame.get_register(1)  # Get value to add from register 1
+        var arr = self.frame.get_register(0)  # Get array from register 0
+        if arr.kind == VkArray:
+          if arr.ref == nil:
+            arr = new_array_value()  # Create new array if ref is nil
+          arr.ref.arr.add(value)  # Add value to array
+          self.frame.set_register(0, arr)  # Store modified array back in register 0
+        else:
+          todo("Expected array in register 0")
       of IkArrayEnd:
-        discard
+        discard  # Array is already in register 0
 
       of IkMapStart:
-        self.frame.push(new_map_value())
+        self.frame.set_register(0, new_map_value())  # Use register 0 for new map
       of IkMapSetProp:
         let key = inst.prop_arg0.Key
-        var value: Value
-        self.frame.pop2(value)
-        self.frame.current().ref.map[key] = value
+        let value = self.frame.get_register(1)  # Use register 1 for value to set
+        self.frame.get_register(0).ref.map[key] = value  # Use register 0 for target map
       of IkMapEnd:
         discard
 
       of IkGeneStart:
-        self.frame.push(new_gene_value())
+        self.frame.set_register(0, new_gene_value())  # Use register 0 for new gene
 
       of IkGeneStartDefault:
         {.push checks: off}
-        let gene_type = self.frame.current()
+        let gene_type = self.frame.get_register(0)  # Use register 0 for gene type
         case gene_type.kind:
           of VkFunction:
             var scope: Scope
@@ -361,7 +264,8 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.kind = FkFunction
             r.frame.target = gene_type
             r.frame.scope = scope
-            self.frame.replace(r.to_ref_value())
+            init_registers(r.frame, MAX_REGISTERS)  # Initialize registers
+            self.frame.set_register(0, r.to_ref_value())  # Use register 0 for frame value
             pc = inst.prop_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
@@ -379,7 +283,8 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.kind = FkMacro
             r.frame.target = gene_type
             r.frame.scope = scope
-            self.frame.replace(r.to_ref_value())
+            init_registers(r.frame, MAX_REGISTERS)  # Initialize registers
+            self.frame.set_register(0, r.to_ref_value())  # Use register 0 for frame value
             pc.inc()
             inst = self.cu.instructions[pc].addr
             continue
@@ -397,7 +302,8 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.kind = FkBlock
             r.frame.target = gene_type
             r.frame.scope = scope
-            self.frame.replace(r.to_ref_value())
+            init_registers(r.frame, MAX_REGISTERS)  # Initialize registers
+            self.frame.set_register(0, r.to_ref_value())  # Use register 0 for frame value
             pc = inst.prop_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
@@ -415,7 +321,8 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.kind = FkCompileFn
             r.frame.target = gene_type
             r.frame.scope = scope
-            self.frame.replace(r.to_ref_value())
+            init_registers(r.frame, MAX_REGISTERS)  # Initialize registers
+            self.frame.set_register(0, r.to_ref_value())  # Use register 0 for frame value
             pc.inc()
             inst = self.cu.instructions[pc].addr
             continue
@@ -427,7 +334,7 @@ proc exec*(self: VirtualMachine): Value =
               target: gene_type,
               args: new_gene_value(),
             )
-            self.frame.replace(r.to_ref_value())
+            self.frame.set_register(0, r.to_ref_value())  # Use register 0 for frame value
             pc = inst.prop_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
@@ -439,22 +346,19 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGeneSetType:
         {.push checks: off}
-        var value: Value
-        self.frame.pop2(value)
-        self.frame.current().gene.type = value
+        let value = self.frame.get_register(1)  # Use register 1 for type value
+        self.frame.get_register(0).gene.type = value  # Use register 0 for target gene
         {.pop.}
       of IkGeneSetProp:
         {.push checks: off}
         let key = inst.var_arg0.Key
-        var value: Value
-        self.frame.pop2(value)
-        self.frame.current().gene.props[key] = value
+        let value = self.frame.get_register(1)  # Use register 1 for property value
+        self.frame.get_register(0).gene.props[key] = value  # Use register 0 for target gene
         {.pop.}
       of IkGeneAddChild:
         {.push checks: off}
-        var child: Value
-        self.frame.pop2(child)
-        let v = self.frame.current()
+        let child = self.frame.get_register(1)  # Use register 1 for child value
+        let v = self.frame.get_register(0)  # Use register 0 for target gene/frame
         case v.kind:
           of VkFrame:
             v.ref.frame.scope.members.add(child)
@@ -468,10 +372,10 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGeneEnd:
         {.push checks: off}
-        let kind = self.frame.current().kind
+        let kind = self.frame.get_register(0).kind  # Use register 0 for current value
         case kind:
           of VkFrame:
-            let frame = self.frame.current().ref.frame
+            let frame = self.frame.get_register(0).ref.frame
             case frame.kind:
               of FkFunction:
                 let f = frame.target.ref.fn
@@ -523,7 +427,6 @@ proc exec*(self: VirtualMachine): Value =
                 if f.body_compiled == nil:
                   f.compile()
 
-                # pc.inc() # Do not increment pc, the callee will use pc to find current instruction
                 frame.caller_frame.update(self.frame)
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = f.ns
@@ -537,11 +440,11 @@ proc exec*(self: VirtualMachine): Value =
                 todo($frame.kind)
 
           of VkNativeFrame:
-            let frame = self.frame.current().ref.native_frame
+            let frame = self.frame.get_register(0).ref.native_frame
             case frame.kind:
               of NfFunction:
                 let f = frame.target.ref.native_fn
-                self.frame.replace(f(self, frame.args))
+                self.frame.set_register(0, f(self, frame.args))  # Use register 0 for function result
               else:
                 todo($frame.kind)
 
@@ -551,101 +454,82 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkAdd:
-        {.push checks: off}
-        var second: Value
-        self.frame.pop2(second)
-        let first = self.frame.pop()
-        case first.kind:
-          of VkInt:
-            case second.kind:
-              of VkInt:
-                self.frame.push(first.int + second.int)
-              else:
-                todo("Unsupported second operand for addition: " & $second)
-          else:
-            todo("Unsupported first operand for addition: " & $first)
-        {.pop.}
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, Value(first.int + second.int))  # Store result in register 0
 
       of IkSub:
-        {.push checks: off}
-        var second: Value
-        self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int - second.int)
-        {.pop.}
-      of IkSubValue:
-        {.push checks: off}
-        self.frame.replace(self.frame.current().int - inst.value_arg0.int)
-        {.pop.}
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, Value(first.int - second.int))  # Store result in register 0
 
       of IkMul:
-        {.push checks: off}
-        var second: Value
-        self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int * second.int)
-        {.pop.}
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, Value(first.int * second.int))  # Store result in register 0
 
       of IkDiv:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first / second)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, Value(first.int div second.int))  # Store result in register 0
+
+      of IkPow:
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        let pow_result = first.int.float64.pow(second.int.float64).int64
+        self.frame.set_register(0, Value(pow_result))  # Store result in register 0
 
       of IkLt:
-        {.push checks: off}
-        var second: Value
-        self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int < second.int)
-        {.pop.}
-      of IkLtValue:
-        var first: Value
-        self.frame.pop2(first)
-        self.frame.push(first.int < inst.value_arg0.int)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first.int < second.int)  # Store result in register 0
 
       of IkLe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first <= second)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first.int <= second.int)  # Store result in register 0
 
       of IkGt:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first > second)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first.int > second.int)  # Store result in register 0
 
       of IkGe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first >= second)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first.int >= second.int)  # Store result in register 0
 
       of IkEq:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first == second)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first == second)  # Store result in register 0
 
       of IkNe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first != second)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first != second)  # Store result in register 0
 
       of IkAnd:
-        let second = self.frame.pop()
-        let first = self.frame.pop()
-        self.frame.push(first.to_bool and second.to_bool)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first.to_bool and second.to_bool)  # Store result in register 0
 
       of IkOr:
-        let second = self.frame.pop()
-        let first = self.frame.pop()
-        self.frame.push(first.to_bool or second.to_bool)
+        let second = self.frame.get_register(1)  # Use register 1 for second operand
+        let first = self.frame.get_register(0)   # Use register 0 for first operand
+        self.frame.set_register(0, first.to_bool or second.to_bool)  # Store result in register 0
 
       of IkCompileInit:
-        let input = self.frame.pop()
+        let input = self.frame.get_register(0)  # Use register 0 for input value
         let compiled = compile_init(input)
         let r = new_ref(VkCompiledUnit)
         r.cu = compiled
-        self.frame.push(r.to_ref_value())
+        self.frame.set_register(0, r.to_ref_value())  # Store result in register 0
 
       of IkCallInit:
         {.push checks: off}
-        let compiled = self.frame.pop().ref.cu
-        let obj = self.frame.current()
+        let compiled = self.frame.get_register(1).ref.cu  # Use register 1 for compiled unit
+        let obj = self.frame.get_register(0)  # Use register 0 for target object
         var ns: Namespace
         case obj.kind:
           of VkNamespace:
@@ -683,7 +567,7 @@ proc exec*(self: VirtualMachine): Value =
         r.fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
-        self.frame.push(v)
+        self.frame.set_register(0, v)  # Store result in register 0
         {.pop.}
 
       of IkMacro:
@@ -698,7 +582,7 @@ proc exec*(self: VirtualMachine): Value =
         r.macro = m
         let v = r.to_ref_value()
         m.ns[m.name.to_key()] = v
-        self.frame.push(v)
+        self.frame.set_register(0, v)  # Store result in register 0
 
       of IkBlock:
         {.push checks: off}
@@ -718,7 +602,7 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkBlock)
         r.block = b
         let v = r.to_ref_value()
-        self.frame.push(v)
+        self.frame.set_register(0, v)  # Store result in register 0
         {.pop.}
 
       of IkCompileFn:
@@ -739,7 +623,7 @@ proc exec*(self: VirtualMachine): Value =
         r.compile_fn = f
         let v = r.to_ref_value()
         f.ns[f.name.to_key()] = v
-        self.frame.push(v)
+        self.frame.set_register(0, v)  # Store result in register 0
         {.pop.}
 
       of IkReturn:
@@ -747,13 +631,14 @@ proc exec*(self: VirtualMachine): Value =
         if self.frame.caller_frame == nil:
           not_allowed("Return from top level")
         else:
-          let v = self.frame.pop()
+          let v = self.frame.get_register(0)  # Use register 0 for return value
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
+          var old_frame = self.frame
           self.frame.update(self.frame.caller_frame)
-          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
-          self.frame.push(v)
+          old_frame.free()  # Properly free the old frame
+          self.frame.set_register(0, v)  # Store result in register 0
           continue
         {.pop.}
 
@@ -764,7 +649,7 @@ proc exec*(self: VirtualMachine): Value =
         r.ns = ns
         let v = r.to_ref_value()
         self.frame.ns[name.Key] = v
-        self.frame.push(v)
+        self.frame.set_register(0, v)  # Store result in register 0
 
       of IkClass:
         let name = inst.var_arg0
@@ -773,13 +658,13 @@ proc exec*(self: VirtualMachine): Value =
         r.class = class
         let v = r.to_ref_value()
         self.frame.ns[name.Key] = v
-        self.frame.push(v)
+        self.frame.set_register(0, v)  # Store result in register 0
 
       of IkNew:
-        let v = self.frame.pop()
+        let v = self.frame.get_register(0)  # Use register 0 for input value
         let instance = new_ref(VkInstance)
         instance.instance_class = v.gene.type.ref.class
-        self.frame.push(instance.to_ref_value())
+        self.frame.set_register(0, instance.to_ref_value())  # Store result in register 0
 
         let class = instance.instance_class
         case class.constructor.kind:
@@ -804,14 +689,14 @@ proc exec*(self: VirtualMachine): Value =
       of IkSubClass:
         let name = inst.var_arg0
         let class = new_class(name.str)
-        class.parent = self.frame.pop().ref.class
+        class.parent = self.frame.get_register(0).ref.class  # Use register 0 for parent class
         let r = new_ref(VkClass)
         r.class = class
         self.frame.ns[name.Key] = r.to_ref_value()
-        self.frame.push(r.to_ref_value())
+        self.frame.set_register(0, r.to_ref_value())  # Store result in register 0
 
       of IkResolveMethod:
-        let v = self.frame.pop()
+        let v = self.frame.get_register(0)
         let class = v.get_class()
         let meth = class.get_method(inst.var_arg0.str)
         let r = new_ref(VkBoundMethod)
@@ -820,7 +705,7 @@ proc exec*(self: VirtualMachine): Value =
           # class: class,
           `method`: meth,
         )
-        self.frame.push(r.to_ref_value())
+        self.frame.set_register(0, r.to_ref_value())  # Store result in register 0
 
       # Register operations
       of IkMove:
@@ -869,11 +754,11 @@ proc exec*(self: VirtualMachine): Value =
     inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
     {.pop}
 
-proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
+proc exec*(self: VirtualMachine, code: string, module_name: string = "main"): Value =
   let compiled = compile(read_all(code))
-
   let ns = new_namespace(module_name)
-  self.frame.update(new_frame(ns))
+  var frame = new_frame(ns)
+  self.frame.update(frame)
   self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
   self.cu = compiled
 
