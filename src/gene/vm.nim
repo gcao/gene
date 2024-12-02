@@ -349,10 +349,6 @@ proc exec*(self: VirtualMachine): Value =
         let gene_type = self.frame.current()
         case gene_type.kind:
           of VkFunction:
-            # if inst.arg1 == 2:
-            #   not_allowed("Macro not allowed here")
-            # inst.arg1 = 1
-
             var scope: Scope
             let f = gene_type.ref.fn
             if f.matcher.is_empty():
@@ -366,15 +362,11 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.jump_arg0.int
+            pc = inst.prop_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
 
           of VkMacro:
-            # if inst.arg1 == 1:
-            #   not_allowed("Macro expected here")
-            # inst.arg1 = 2
-
             var scope: Scope
             let m = gene_type.ref.macro
             if m.matcher.is_empty():
@@ -393,10 +385,6 @@ proc exec*(self: VirtualMachine): Value =
             continue
 
           of VkBlock:
-            # if inst.arg1 == 2:
-            #   not_allowed("Macro not allowed here")
-            # inst.arg1 = 1
-
             var scope: Scope
             let b = gene_type.ref.block
             if b.matcher.is_empty():
@@ -410,15 +398,11 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.jump_arg0.int
+            pc = inst.prop_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
 
           of VkCompileFn:
-            # if inst.arg1 == 1:
-            #   not_allowed("Macro expected here")
-            # inst.arg1 = 2
-
             var scope: Scope
             let f = gene_type.ref.compile_fn
             if f.matcher.is_empty():
@@ -444,7 +428,7 @@ proc exec*(self: VirtualMachine): Value =
               args: new_gene_value(),
             )
             self.frame.replace(r.to_ref_value())
-            pc = inst.jump_arg0.int
+            pc = inst.prop_arg0.int
             inst = self.cu.instructions[pc].addr
             continue
 

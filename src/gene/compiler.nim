@@ -614,8 +614,10 @@ proc compile*(self: Compiler, input: Value) =
 proc update_jumps(self: CompilationUnit) =
   for i, inst in self.instructions:
     case inst.kind
-      of IkJump, IkJumpIfFalse, IkJumpIfTrue, IkContinue, IkGeneStartDefault:
+      of IkJump, IkJumpIfFalse, IkJumpIfTrue, IkContinue:
         self.instructions[i].jump_arg0 = self.find_label(inst.jump_arg0.Label).Value
+      of IkGeneStartDefault:
+        self.instructions[i].prop_arg0 = self.find_label(inst.prop_arg0.Label).Value
       of IkJumpIfMatchSuccess:
         self.instructions[i].jump_arg1 = self.find_label(inst.jump_arg1.Label).Value
       else:
