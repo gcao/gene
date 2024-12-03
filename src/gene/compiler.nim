@@ -73,10 +73,17 @@ proc compile_symbol(self: Compiler, input: Value) =
       self.compile_complex_symbol(input)
 
 proc compile_array(self: Compiler, input: Value) =
+  # Create new array and store in register 0
   self.output.instructions.add(Instruction(kind: IkArrayStart))
   for child in input.ref.arr:
-    self.output.instructions.add(Instruction(kind: IkPushValue, push_value: child))
+    # Move array to register 1 temporarily
     self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+    # Push child value to register 0
+    self.output.instructions.add(Instruction(kind: IkPushValue, push_value: child))
+    # Add child to array (array is in register 1, child in register 0)
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 2.Value, move_src: 0.Value))  # Save child in register 2
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 1.Value))  # Move array back to register 0
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 2.Value))  # Move child to register 1
     self.output.instructions.add(Instruction(kind: IkArrayAddChild))
   self.output.instructions.add(Instruction(kind: IkArrayEnd))
 
