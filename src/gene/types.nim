@@ -479,6 +479,7 @@ type
     IkLt
     IkLtValue
     IkLe
+    IkLeValue
     IkGt
     IkGe
     IkEq
@@ -589,7 +590,7 @@ type
     of IkAdd, IkSub, IkMul, IkDiv, IkPow, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr:
       op_arg0*: Value
       op_arg1*: Value
-    of IkAddValue, IkSubValue, IkLtValue:
+    of IkAddValue, IkSubValue, IkLtValue, IkLeValue:
       value_arg0*: Value
       value_arg1*: Value
     of IkMapSetProp, IkMapSetPropValue, IkArrayAddChild, IkArrayAddChildValue,
@@ -2325,7 +2326,7 @@ proc `$`*(self: Instruction): string =
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.op_arg0} {$self.op_arg1}"
       else:
         result = fmt"         {($self.kind)[2..^1]} {$self.op_arg0} {$self.op_arg1}"
-    of IkAddValue, IkSubValue, IkLtValue:
+    of IkAddValue, IkSubValue, IkLtValue, IkLeValue:
       if self.label.int32 != 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.value_arg0} {$self.value_arg1}"
       else:

@@ -90,7 +90,17 @@ proc compile_array(self: Compiler, input: Value) =
 proc compile_map(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMapStart))
   for k, v in input.ref.map:
+    # Move map to register 1 temporarily
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+    # Compile and push value to register 0
     self.compile(v)
+    # Move value to register 2
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 2.Value, move_src: 0.Value))
+    # Move map back to register 0
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 1.Value))
+    # Move value to register 1
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 2.Value))
+    # Set property
     self.output.instructions.add(Instruction(kind: IkMapSetProp, prop_arg0: k))
   self.output.instructions.add(Instruction(kind: IkMapEnd))
 
@@ -464,6 +474,7 @@ proc compile_gene(self: Compiler, input: Value) =
           return
         of "+":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkAdd))
           return
@@ -477,16 +488,19 @@ proc compile_gene(self: Compiler, input: Value) =
           return
         of "*":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkMul))
           return
         of "/":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkDiv))
           return
         of "<":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           if gene.children[1].is_literal():
             self.output.instructions.add(Instruction(kind: IkLtValue, value_arg0: gene.children[1]))
           else:
@@ -495,36 +509,46 @@ proc compile_gene(self: Compiler, input: Value) =
           return
         of "<=":
           self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkLe))
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+          if gene.children[1].is_literal():
+            self.output.instructions.add(Instruction(kind: IkLeValue, value_arg0: gene.children[1]))
+          else:
+            self.compile(gene.children[1])
+            self.output.instructions.add(Instruction(kind: IkLe))
           return
         of ">":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkGt))
           return
         of ">=":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkGe))
           return
         of "==":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkEq))
           return
         of "!=":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkNe))
           return
         of "&&":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkAnd))
           return
         of "||":
           self.compile(`type`)
+          self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkOr))
           return
@@ -802,3 +826,93 @@ proc compile_init*(input: Value): CompilationUnit =
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
+
+proc compile_add(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Add instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkAdd))
+
+proc compile_sub(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Subtract instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkSub))
+
+proc compile_mul(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Multiply instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkMul))
+
+proc compile_div(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Divide instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkDiv))
+
+proc compile_pow(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Power instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkPow))
+
+proc compile_lt(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Less than instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkLt))
+
+proc compile_le(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Less than or equal instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkLe))
+
+proc compile_gt(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Greater than instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkGt))
+
+proc compile_ge(self: Compiler, gene: ptr Gene) =
+  # Compile first operand
+  self.compile(gene.children[0])
+  # Move first operand to register 1
+  self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+  # Compile second operand to register 0
+  self.compile(gene.children[1])
+  # Greater than or equal instruction (uses register 1 and 0)
+  self.output.instructions.add(Instruction(kind: IkGe))

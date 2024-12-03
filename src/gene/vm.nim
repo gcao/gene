@@ -220,18 +220,13 @@ proc exec*(self: VirtualMachine): Value =
         discard  # No-op with registers
 
       of IkArrayStart:
-        let arr = new_array_value()  # Create new array
-        self.frame.set_register(0, arr)  # Store array in register 0
+        self.frame.set_register(0, new_array_value())
+
       of IkArrayAddChild:
-        let value = self.frame.get_register(1)  # Get value to add from register 1
-        var arr = self.frame.get_register(0)  # Get array from register 0
-        if arr.kind == VkArray:
-          if arr.ref == nil:
-            arr = new_array_value()  # Create new array if ref is nil
-          arr.ref.arr.add(value)  # Add value to array
-          self.frame.set_register(0, arr)  # Store modified array back in register 0
-        else:
-          todo("Expected array in register 0")
+        let arr = self.frame.get_register(0)
+        let child = self.frame.get_register(1)
+        arr.ref.arr.add(child)
+
       of IkArrayEnd:
         discard  # Array is already in register 0
 
@@ -240,7 +235,14 @@ proc exec*(self: VirtualMachine): Value =
       of IkMapSetProp:
         let key = inst.prop_arg0.Key
         let value = self.frame.get_register(1)  # Use register 1 for value to set
-        self.frame.get_register(0).ref.map[key] = value  # Use register 0 for target map
+        var map = self.frame.get_register(0)  # Use register 0 for target map
+        if map.kind == VkMap:
+          if map.ref == nil:
+            map = new_map_value()  # Create new map if ref is nil
+            self.frame.set_register(0, map)  # Store new map back in register 0
+          map.ref.map[key] = value  # Set the value in the map
+        else:
+          todo("Expected map in register 0")
       of IkMapEnd:
         discard
 
@@ -454,70 +456,236 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkAdd:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, Value(first.int + second.int))  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        if first.kind == VkFloat or second.kind == VkFloat:
+          self.frame.set_register(0, Value(first.float + second.float))  # Store result in register 0
+        else:
+          self.frame.set_register(0, Value(first.int + second.int))  # Store result in register 0
 
       of IkSub:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, Value(first.int - second.int))  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        if first.kind == VkFloat or second.kind == VkFloat:
+          self.frame.set_register(0, Value(first.float - second.float))  # Store result in register 0
+        else:
+          self.frame.set_register(0, Value(first.int - second.int))  # Store result in register 0
 
       of IkMul:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, Value(first.int * second.int))  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int * second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) * second.float).to_value)
+              else:
+                todo("Multiplication not supported between " & $first.kind & " and " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float * float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float * second.float).to_value)
+              else:
+                todo("Multiplication not supported between " & $first.kind & " and " & $second.kind)
+          else:
+            todo("Multiplication not supported for " & $first.kind)
 
       of IkDiv:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, Value(first.int div second.int))  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                if second.int == 0:
+                  not_allowed("Division by zero")
+                self.frame.set_register(0, (float(first.int) / float(second.int)).to_value)
+              of VkFloat:
+                if second.float == 0.0:
+                  not_allowed("Division by zero")
+                self.frame.set_register(0, (float(first.int) / second.float).to_value)
+              else:
+                todo("Division not supported between " & $first.kind & " and " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                if second.int == 0:
+                  not_allowed("Division by zero")
+                self.frame.set_register(0, (first.float / float(second.int)).to_value)
+              of VkFloat:
+                if second.float == 0.0:
+                  not_allowed("Division by zero")
+                self.frame.set_register(0, (first.float / second.float).to_value)
+              else:
+                todo("Division not supported between " & $first.kind & " and " & $second.kind)
+          else:
+            todo("Division not supported for " & $first.kind)
 
       of IkPow:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        let pow_result = first.int.float64.pow(second.int.float64).int64
-        self.frame.set_register(0, Value(pow_result))  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        if first.kind == VkFloat or second.kind == VkFloat:
+          self.frame.set_register(0, Value(first.float.pow(second.float)))  # Store result in register 0
+        else:
+          self.frame.set_register(0, Value(first.int.float64.pow(second.int.float64)))  # Store result in register 0
 
       of IkLt:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first.int < second.int)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int < second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) < second.float).to_value)
+              else:
+                todo("Less than not supported between " & $first.kind & " and " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float < float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float < second.float).to_value)
+              else:
+                todo("Less than not supported between " & $first.kind & " and " & $second.kind)
+          else:
+            todo("Less than not supported for " & $first.kind)
 
       of IkLe:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first.int <= second.int)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int <= second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) <= second.float).to_value)
+              else:
+                todo("Less than or equal not supported between " & $first.kind & " and " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float <= float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float <= second.float).to_value)
+              else:
+                todo("Less than or equal not supported between " & $first.kind & " and " & $second.kind)
+          else:
+            todo("Less than or equal not supported for " & $first.kind)
 
       of IkGt:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first.int > second.int)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int > second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) > second.float).to_value)
+              else:
+                todo("Greater than not supported between " & $first.kind & " and " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float > float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float > second.float).to_value)
+              else:
+                todo("Greater than not supported between " & $first.kind & " and " & $second.kind)
+          else:
+            todo("Greater than not supported for " & $first.kind)
 
       of IkGe:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first.int >= second.int)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int >= second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) >= second.float).to_value)
+              else:
+                todo("Greater than or equal not supported between " & $first.kind & " and " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float >= float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float >= second.float).to_value)
+              else:
+                todo("Greater than or equal not supported between " & $first.kind & " and " & $second.kind)
+          else:
+            todo("Greater than or equal not supported for " & $first.kind)
 
       of IkEq:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first == second)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int == second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) == second.float).to_value)
+              else:
+                self.frame.set_register(0, false.to_value)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float == float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float == second.float).to_value)
+              else:
+                self.frame.set_register(0, false.to_value)
+          else:
+            self.frame.set_register(0, (first == second).to_value)
 
       of IkNe:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first != second)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int != second.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) != second.float).to_value)
+              else:
+                self.frame.set_register(0, true.to_value)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float != float(second.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float != second.float).to_value)
+              else:
+                self.frame.set_register(0, true.to_value)
+          else:
+            self.frame.set_register(0, (first != second).to_value)
 
       of IkAnd:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first.to_bool and second.to_bool)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        if first.to_bool():
+          self.frame.set_register(0, second.to_bool().to_value)
+        else:
+          self.frame.set_register(0, false.to_value)
 
       of IkOr:
-        let second = self.frame.get_register(1)  # Use register 1 for second operand
-        let first = self.frame.get_register(0)   # Use register 0 for first operand
-        self.frame.set_register(0, first.to_bool or second.to_bool)  # Store result in register 0
+        let second = self.frame.get_register(0)  # Use register 0 for second operand
+        let first = self.frame.get_register(1)   # Use register 1 for first operand
+        if first.to_bool():
+          self.frame.set_register(0, true.to_value)
+        else:
+          self.frame.set_register(0, second.to_bool().to_value)
 
       of IkCompileInit:
         let input = self.frame.get_register(0)  # Use register 0 for input value
@@ -746,6 +914,94 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.set_register(inst.reg_reg, Value(val.int / inst.reg_value.int))
 
       # Stack operations (for backward compatibility)
+      of IkJumpIfFalse:
+        let cond = self.frame.get_register(0)  # Use register 0 for condition
+        if not cond.to_bool():
+          pc = inst.jump_arg0.int
+          inst = self.cu.instructions[pc].addr
+          continue
+
+      of IkJumpIfTrue:
+        let cond = self.frame.get_register(0)  # Use register 0 for condition
+        if cond.to_bool():
+          pc = inst.jump_arg0.int
+          inst = self.cu.instructions[pc].addr
+          continue
+
+      of IkSubValue:
+        let value = inst.value_arg0  # Second operand is literal value
+        let first = self.frame.get_register(0)  # First operand from register 0
+        case first.kind:
+          of VkInt:
+            case value.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int - value.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) - value.float).to_value)
+              else:
+                todo("Subtraction not supported between " & $first.kind & " and " & $value.kind)
+          of VkFloat:
+            case value.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float - float(value.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float - value.float).to_value)
+              else:
+                todo("Subtraction not supported between " & $first.kind & " and " & $value.kind)
+          else:
+            todo("Subtraction not supported for " & $first.kind)
+
+      of IkLtValue:
+        let value = inst.value_arg0  # Second operand is literal value
+        let first = self.frame.get_register(0)  # First operand from register 0
+        case first.kind:
+          of VkInt:
+            case value.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int < value.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) < value.float).to_value)
+              else:
+                todo("Less than not supported between " & $first.kind & " and " & $value.kind)
+          of VkFloat:
+            case value.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float < float(value.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float < value.float).to_value)
+              else:
+                todo("Less than not supported between " & $first.kind & " and " & $value.kind)
+          else:
+            todo("Less than not supported for " & $first.kind)
+
+      of IkJump:
+        pc = inst.jump_arg0.int
+        inst = self.cu.instructions[pc].addr
+        continue
+
+      of IkLeValue:
+        let value = inst.value_arg0  # Second operand is literal value
+        let first = self.frame.get_register(1)  # First operand from register 1
+        case first.kind:
+          of VkInt:
+            case value.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.int <= value.int).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (float(first.int) <= value.float).to_value)
+              else:
+                todo("Less than or equal not supported between " & $first.kind & " and " & $value.kind)
+          of VkFloat:
+            case value.kind:
+              of VkInt:
+                self.frame.set_register(0, (first.float <= float(value.int)).to_value)
+              of VkFloat:
+                self.frame.set_register(0, (first.float <= value.float).to_value)
+              else:
+                todo("Less than or equal not supported between " & $first.kind & " and " & $value.kind)
+          else:
+            todo("Less than or equal not supported for " & $first.kind)
+
       else:
         todo($inst.kind)
 
