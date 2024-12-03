@@ -89,33 +89,26 @@ proc exec*(self: VirtualMachine): Value =
         discard
 
       of IkVar:
-        {.push checks: off.}
-        self.frame.scope.members.add(self.frame.get_register(0))  # Use register 0 for current value
-        {.pop.}
+        let value = self.frame.get_register(0)  # Use register 0 for value to store
+        self.frame.scope.members.add(value)
 
       of IkVarResolve:
-        {.push checks: off}
-        self.frame.set_register(0, self.frame.scope.members[inst.var_arg0.int])  # Use register 0 for resolved value
-        {.pop.}
+        let index = inst.var_arg0.int
+        self.frame.set_register(0, self.frame.scope.members[index])  # Store result in register 0
 
       of IkVarResolveInherited:
-        {.push checks: off}
         let index = inst.effect_arg0.int
         let parent_index = inst.effect_arg1.int
         var scope = self.frame.scope
         for i in 0..<parent_index:
           scope = scope.parent
-        self.frame.set_register(0, scope.members[index])  # Use register 0 for resolved value
-        {.pop.}
+        self.frame.set_register(0, scope.members[index])  # Store result in register 0
 
       of IkVarAssign:
-        {.push checks: off}
         let value = self.frame.get_register(0)  # Use register 0 for value to assign
         self.frame.scope.members[inst.var_arg0.int] = value
-        {.pop.}
 
       of IkVarAssignInherited:
-        {.push checks: off}
         let value = self.frame.get_register(0)  # Use register 0 for value to assign
         let index = inst.effect_arg0.int
         let parent_index = inst.effect_arg1.int
@@ -123,12 +116,9 @@ proc exec*(self: VirtualMachine): Value =
         for i in 0..<parent_index:
           scope = scope.parent
         scope.members[index] = value
-        {.pop.}
 
       of IkVarValue:
-        {.push checks: off}
         self.frame.scope.members.add(inst.prop_arg0)
-        {.pop.}
 
       of IkAssign:
         {.push checks: off}
