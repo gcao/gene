@@ -79,18 +79,7 @@ proc compile_array(self: Compiler, input: Value) =
     # Move array to register 1 temporarily
     self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
     # Compile child value to register 0
-    if child.kind == VkSymbol:
-      let key = child.str.to_key()
-      let found = self.scope_tracker.locate(key)
-      if found.local_index >= 0:
-        if found.parent_index == 0:
-          self.output.instructions.add(Instruction(kind: IkVarResolve, var_arg0: found.local_index.Value))
-        else:
-          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, effect_arg0: found.local_index.Value, effect_arg1: found.parent_index.Value))
-      else:
-        self.output.instructions.add(Instruction(kind: IkResolveSymbol, var_arg0: child))
-    else:
-      self.output.instructions.add(Instruction(kind: IkPushValue, push_value: child))
+    self.compile(child)
     # Add child to array (array is in register 1, child in register 0)
     self.output.instructions.add(Instruction(kind: IkMove, move_dest: 2.Value, move_src: 0.Value))  # Save child in register 2
     self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 1.Value))  # Move array back to register 0
