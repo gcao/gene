@@ -1,0 +1,215 @@
+#<
+  Complete Gene Language Example
+  Demonstrates all major language features and syntax
+>#
+
+# 1. Basic Values and Types
+# ------------------------
+
+# Basic literals
+nil                   # Null value
+true false            # Booleans
+1 -2 3.14 -4.5e6      # Numbers
+"hello"               # String
+'also string'         # Alternative string
+"""multi
+line"""               # Multi-line string
+\n \t \space          # Characters
+:symbol               # Symbol literal
+_                     # Placeholder
+
+# 2. Data Structures
+# -----------------
+
+# Arrays
+[]                    # Empty array
+[1 2 3]               # Space-separated
+[1, 2, 3]             # Comma-separated
+
+# Maps
+{}                    # Empty map
+{^a 1}                # Simple property
+{^a^b 2}              # Nested property
+{^^x}                 # True property
+{^!y}                 # False property
+
+# 3. Variables and Assignment
+# --------------------------
+
+(var x 1)             # Variable declaration
+(x = 2)               # Assignment
+(var y [1 2])         # Array variable
+(var z {^a 1})        # Map variable
+
+# Access
+y/0                   # Array index
+z/a                   # Map/object property
+
+# 4. Control Flow
+# --------------
+
+# Conditionals
+(if (x > 0)
+  "positive"
+  "non-positive")
+
+(if_not (x < 0)
+  "non-negative")
+
+# Blocks
+(do
+  (var temp 1)
+  (temp + x))
+
+# 5. Functions
+# -----------
+
+# Function definitions
+(fn simple []
+  "no args")
+
+(fn with_args [x y]
+  (x + y))
+
+(fn default_args [x = 1 y = 2]
+  (x + y))
+
+(fn rest_params args
+  args)
+
+# Anonymous function
+(fnx [x]
+  (* x x))
+
+# Function calls
+(simple)
+(with_args 1 2)
+(default_args)
+(rest_params 1 2 3)
+
+# 6. Object-Oriented Programming
+# -----------------------------
+
+# Class definition
+(class Point
+  # Constructor
+  (.ctor [x y]
+    (/x = x)
+    (/y = y))
+  
+  # Instance method
+  (.fn move [dx dy]
+    (/x = (+ /x dx))
+    (/y = (+ /y dy)))
+  
+  # Property accessor
+  (.fn get_coords _
+    [/x /y]))
+
+# Inheritance
+(class Circle < Point
+  (.ctor [x y radius]
+    (super x y)
+    (/radius = radius))
+  
+  (.fn area _
+    (* 3.14 (* /radius /radius))))
+
+# Creating and using objects
+(var p (new Point 10 20))
+(p .move 5 5)
+(p .get_coords)
+
+# 7. Namespaces
+# ------------
+
+(ns math
+  (fn square [x]
+    (* x x))
+  
+  (ns geometry
+    (fn circle_area [r]
+      (* 3.14 (math/square r)))))
+
+# Using namespaces
+(math/square 4)
+(math/geometry/circle_area 5)
+
+# 8. Advanced Features
+# ------------------
+
+# Pattern matching
+(match value
+  [x y] (+ x y)
+  {^a a} a
+  _ "default")
+
+# Quotes and unquotes
+:expression          # Quote
+%variable            # Unquote
+%_discard            # Discard unquote
+
+# Properties with metadata
+(fn example ^pure true [x]
+  x)
+
+# Error handling
+(try
+  (dangerous_operation)
+  (catch error
+    (handle_error error))
+  (finally
+    (cleanup)))
+
+# 9. Operators
+# -----------
+
+(1 + 2)              # Addition
+(3 - 4)              # Subtraction
+(5 * 6)              # Multiplication
+(8 / 2)              # Division
+
+(1 < 2)              # Less than
+(2 <= 2)             # Less than or equal
+(3 > 2)              # Greater than
+(4 >= 4)             # Greater than or equal
+(5 == 5)             # Equality
+(6 != 7)             # Inequality
+
+(true && false)      # Logical AND
+(true || false)      # Logical OR
+
+# 10. Comments
+# -----------
+
+# Line comment
+
+#<
+  Block comment
+  Can span multiple lines
+>#
+
+#< 
+  Nested block comment
+  #<< Can contain other comments >>#
+>#
+
+# 11. Special Forms
+# ----------------
+
+# Generic container
+(_ ^prop "value"
+   child1
+   child2)
+
+#<
+  This example demonstrates the major features of Gene:
+  - Lisp-like syntax with infix operators
+  - Rich data types and structures
+  - Object-oriented programming
+  - Functional programming
+  - Namespace system
+  - Property system
+  - Pattern matching
+  - Metaprogramming capabilities
+>#
