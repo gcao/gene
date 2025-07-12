@@ -156,10 +156,11 @@ z/a                   # Map/object property
 # Error handling
 (try
   (dangerous_operation)
-  (catch error
-    (handle_error error))
-  (finally
-    (cleanup)))
+ catch SomeException
+  (handle_error $ex) # $ex is the exception object
+ finally
+  ...
+)
 
 # 9. Operators
 # -----------

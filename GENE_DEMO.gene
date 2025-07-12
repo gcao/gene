@@ -1,0 +1,374 @@
+#!/usr/bin/env gene run
+
+# Gene Language Feature Demo
+# This file demonstrates the working features of the Gene programming language
+# based on actual test cases and implementation status.
+
+#################################
+# 1. BASIC DATA TYPES
+#################################
+
+# Nil value (represents absence of value)
+nil
+
+# Booleans
+true
+false
+
+# Numbers
+42                 # Integer
+3.14159            # Float
+-17                # Negative number
+
+# Characters (Unicode supported)
+'n'                # Newline
+'t'                # Tab
+'\s'               # Space
+
+# Strings
+"Hello, World!"
+"String with \"quotes\""
+
+# Symbols (interned strings, used as identifiers)
+username           # evaluated to value represented by the symbol
+`username          # evaluated to symbol value
+
+# Placeholder
+_                  # Special placeholder value
+
+#################################
+# 2. COMPOSITE DATA STRUCTURES
+#################################
+
+# Arrays (dynamic, heterogeneous)
+[]                              # Empty array
+[1 2 3 4 5]                    # Array of numbers
+[1 "two" `three true]          # Mixed types
+[[1 2] [3 4]]                  # Nested arrays
+
+# Maps (hash tables)
+{}                             # Empty map
+{^name "Alice" ^age 30}        # Map with properties
+{^a 1 ^b 2}                   # Property shorthand with ^
+
+#################################
+# 3. VARIABLES AND ASSIGNMENT
+#################################
+
+# Variable declaration
+(var x 10)                     # Declare and initialize
+(var y)                        # Declare without init (nil)
+
+# Assignment
+(x = 15)                       # Change value
+
+# Using variables in expressions
+(var a 5)
+(var b 3)
+(var sum (a + b))              # sum = 8
+
+#################################
+# 4. OPERATORS AND EXPRESSIONS
+#################################
+
+# Arithmetic operators (must be in parentheses)
+(1 + 2)                        # 3
+(10 - 4)                       # 6
+(6 * 7)                        # 42
+(15 / 3)                       # 5
+
+# Comparison operators
+(5 > 3)                        # true
+(2 < 7)                        # true
+(4 == 4)                       # true
+(3 != 5)                       # true
+(5 >= 5)                       # true
+(3 <= 4)                       # true
+
+# Logical operators
+(true && true)                 # true
+(true || false)                # true
+
+# Chained operations require nesting
+((2 + 3) * 4)                  # 20
+
+#################################
+# 5. CONTROL FLOW
+#################################
+
+# If statements
+(var score 85)
+(if (score > 90)
+  "Excellent"
+else
+  "Good")
+
+# If without else
+(if (score > 80)
+  "Passed")
+
+# If...elif...else
+(if (score > 90)
+  "Excellent"
+elif (score > 80)
+  "Good"
+else
+  "Ok")
+
+# If-not (inverted condition)
+(if_not false
+  "This will execute")
+
+# Do blocks (sequential execution)
+(do
+  (var temp 1)
+  (temp = temp + 1)
+  temp)                        # Returns 2
+
+#################################
+# 6. FUNCTIONS
+#################################
+
+# Function definition
+(fn greet [name]
+  #"Hello, #{name}!")          # String interpolation
+
+# Function with multiple parameters
+(fn add [x y]
+  (x + y))
+
+# Function with default parameters
+(fn multiply [x y = 2]
+  (x * y))
+
+# Anonymous functions
+(fnx [x] (x * x))              # Square function
+
+# Function calls
+(greet "Gene")                 # "Hello, Gene!"
+(add 3 4)                      # 7
+(multiply 5)                   # 10 (uses default)
+(multiply 5 3)                 # 15
+
+# Functions can access outer scope
+(var global_var 10)
+(fn use_global []
+  (global_var + 5))
+(use_global)                   # 15
+
+# Functions with rest parameters
+(fn sum_all numbers
+  (var total 0)
+  # ... implementation would go here
+  total)
+
+#################################
+# 7. PROPERTY ACCESS
+#################################
+
+# The / operator for unified access
+(var person {^name "Bob" ^age 25})
+person/name                    # "Bob"
+person/age                     # 25
+
+(var numbers [10 20 30])
+numbers/0                      # 10
+numbers/1                      # 20
+
+# Complex property access
+(var data {^users [{^name "Alice"} {^name "Bob"}]})
+data/users/0/name              # "Alice"
+
+#################################
+# 8. NAMESPACES
+#################################
+
+# Define a namespace
+(ns math
+  (fn square [x] (x * x))
+  (fn cube [x] (x * x * x))
+  (var PI 3.14159))
+
+# Access namespace members
+(math/square 4)                # 16
+(math/cube 3)                  # 27
+math/PI                        # 3.14159
+
+# Nested namespaces work
+(ns company
+  (ns employees
+    (var count 50)))
+
+company/employees/count        # 50
+
+#################################
+# 9. OBJECT-ORIENTED PROGRAMMING
+#################################
+
+# Define a class
+(class Animal
+  # Constructor
+  (.ctor [name species]
+    (self/name = name)
+    (self/species = species))
+  
+  # Instance method
+  (.fn speak []
+    #"The #{self/species} named #{self/name} makes a sound"))
+
+# Create instances
+(var dog (new Animal "Buddy" "dog"))
+(var cat (new Animal "Whiskers" "cat"))
+
+# Call methods
+(dog .speak)                   # "The dog named Buddy makes a sound"
+
+# Inheritance
+(class Dog < Animal
+  (.ctor [name]
+    # Parent constructor would be called here
+    (self/name = name)
+    (self/species = "dog"))
+  
+  # Override method
+  (.fn speak []
+    #"#{self/name} barks!"))
+
+(var my_dog (new Dog "Rex"))
+(my_dog .speak)                # "Rex barks!"
+
+#################################
+# 10. MACROS
+#################################
+
+# Macros receive unevaluated arguments
+(macro when [condition body]
+  (if %condition %body))       # %condition, %body runs in the caller's context and %body is only executed if %condition is true
+
+# Use the macro
+(var x 10)
+(when (x > 5)
+  (println "x is big"))        # "x is big"
+
+#################################
+# 11. BLOCKS (LAMBDAS)
+#################################
+
+# Simple block
+(->)                           # Empty block
+
+# Block with body
+(-> 42)                        # Block that returns 42
+
+# Block with parameters
+(x -> (x + 1))                 # Increment function
+
+# Using blocks
+(fn apply [f x]
+  (f x))
+
+(apply (x -> (x * 2)) 5)       # 10
+
+(fn first_positive [items]
+  (items .each
+    (item -> (if (item > 0)
+      (return item) # return from where the block is defined
+    ))
+  )
+)
+
+#################################
+# 12. SCOPE DEMONSTRATION
+#################################
+
+# Variables have lexical scope
+(var outer 1)
+(if true
+  (var inner 2)                # Only visible in if block
+  (outer + inner))             # 3
+
+# outer is still 1 here
+# inner is not accessible here
+
+# Functions create new scopes
+(fn scoped []
+  (var local 100)
+  local)
+
+(scoped)                       # 100
+# local is not accessible here
+
+#################################
+# 13. QUOTE AND UNQUOTE
+#################################
+
+# Quote prevents evaluation
+`(x + y)                       # Returns the expression itself
+
+# Unquote evaluates within quote
+(var z 10)
+`(x + %z)                      # Returns: (x + 10)
+
+#################################
+# 14. PRACTICAL EXAMPLE
+#################################
+
+# A simple counter class
+(class Counter
+  (.ctor [initial = 0]
+    (self/count = initial))
+  
+  (.fn increment []
+    (self/count = self/count + 1)
+    self/count)
+  
+  (.fn decrement []
+    (self/count = self/count - 1)
+    self/count)
+  
+  (.fn get []
+    self/count))
+
+# Use the counter
+(var c (new Counter 10))
+(c .increment)                 # 11
+(c .increment)                 # 12
+(c .decrement)                 # 11
+(c .get)                       # 11
+
+#################################
+# 15. WORKING WITH DATA
+#################################
+
+# Process an array
+(var nums [1 2 3 4 5])
+(var doubled [])
+(var i 0)
+(loop
+  (if (i >= 5) (break))
+  (doubled = doubled + [(nums/i * 2)])
+  (i = i + 1))
+# doubled is now [2 4 6 8 10]
+
+# Build a data structure
+(var person {
+  ^name "John Doe"
+  ^age 30
+  ^address {
+    ^street "123 Main St"
+    ^city "Springfield"
+  }
+})
+
+# Access nested data
+person/name                    # "John Doe"
+person/address/city            # "Springfield"
+
+#################################
+# END OF DEMO
+#################################
+
+# This demo shows the currently working features of Gene.
+# The language is under active development, and more features
+# are planned including advanced pattern matching, error handling,
+# and a complete module system.
