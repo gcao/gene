@@ -5,7 +5,13 @@ import ./parser
 import ./compiler
 
 proc exec*(self: VirtualMachine): Value =
+  if self.cu.is_nil:
+    return NIL
+  if self.cu.instructions.len == 0:
+    return NIL
   var pc = 0
+  if pc >= self.cu.instructions.len:
+    return NIL
   var inst = self.cu.instructions[pc].addr
 
   when not defined(release):
@@ -167,7 +173,10 @@ proc exec*(self: VirtualMachine): Value =
         let obj = self.frame.get_register(0)  # Use register 0 for target object
         case obj.kind:
           of VkMap:
-            self.frame.set_register(0, obj.ref.map[name])  # Store result in register 0
+            if obj.ref.map.has_key(name):
+              self.frame.set_register(0, obj.ref.map[name])  # Store result in register 0
+            else:
+              self.frame.set_register(0, NIL)  # Key not found
           of VkGene:
             self.frame.set_register(0, obj.gene.props[name])  # Store result in register 0
           of VkNamespace:
@@ -184,7 +193,10 @@ proc exec*(self: VirtualMachine): Value =
         let obj = self.frame.get_register(0)  # Use register 0 for target object
         case obj.kind:
           of VkArray:
-            self.frame.set_register(0, obj.ref.arr[i])  # Store result in register 0
+            if i >= 0 and i < obj.ref.arr.len:
+              self.frame.set_register(0, obj.ref.arr[i])  # Store result in register 0
+            else:
+              self.frame.set_register(0, NIL)  # Index out of bounds
           of VkGene:
             self.frame.set_register(0, obj.gene.children[i])  # Store result in register 0
           else:
@@ -203,7 +215,12 @@ proc exec*(self: VirtualMachine): Value =
             todo($obj.kind)
 
       of IkPushValue:
-        self.frame.set_register(0, inst.push_value)  # Use register 0 for pushed value
+        # Check if register 0 already has a gene or frame value, if so, use register 1
+        let reg0 = self.frame.get_register(0)
+        if reg0.kind == VkGene or reg0.kind == VkFrame:
+          self.frame.set_register(1, inst.push_value)  # Use register 1 when gene/frame is in register 0
+        else:
+          self.frame.set_register(0, inst.push_value)  # Use register 0 for pushed value
       of IkPushNil:
         self.frame.set_register(0, NIL)  # Use register 0 for nil value
       of IkPop:
@@ -237,7 +254,8 @@ proc exec*(self: VirtualMachine): Value =
         discard
 
       of IkGeneStart:
-        self.frame.set_register(0, new_gene_value())  # Use register 0 for new gene
+        let new_gene = new_gene_value()
+        self.frame.set_register(1, new_gene)  # Use register 1 for new gene (register 0 will have type)
 
       of IkGeneStartDefault:
         {.push checks: off}
@@ -338,8 +356,11 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkGeneSetType:
         {.push checks: off}
-        let value = self.frame.get_register(1)  # Use register 1 for type value
-        self.frame.get_register(0).gene.type = value  # Use register 0 for target gene
+        let type_value = self.frame.get_register(0)  # Type value is in register 0
+        let gene_value = self.frame.get_register(1)  # Gene value is in register 1
+        gene_value.gene.type = type_value
+        # Move gene to register 0 for subsequent operations
+        self.frame.set_register(0, gene_value)
         {.pop.}
       of IkGeneSetProp:
         {.push checks: off}
@@ -713,7 +734,10 @@ proc exec*(self: VirtualMachine): Value =
         f.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
-        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        if pc < self.cu.instructions.len:
+          inst = self.cu.instructions[pc].addr
+        else:
+          return NIL  # End of instructions
         f.parent_scope.update(self.frame.scope)
         f.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
 
@@ -733,7 +757,10 @@ proc exec*(self: VirtualMachine): Value =
         m.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
-        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        if pc < self.cu.instructions.len:
+          inst = self.cu.instructions[pc].addr
+        else:
+          return NIL  # End of instructions
         m.parent_scope.update(self.frame.scope)
         m.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
         let r = new_ref(VkMacro)
@@ -749,7 +776,10 @@ proc exec*(self: VirtualMachine): Value =
         b.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
-        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        if pc < self.cu.instructions.len:
+          inst = self.cu.instructions[pc].addr
+        else:
+          return NIL  # End of instructions
         b.frame.update(self.frame)
         b.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
 
@@ -760,7 +790,12 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkBlock)
         r.block = b
         let v = r.to_ref_value()
-        self.frame.set_register(0, v)  # Store result in register 0
+        # Check if register 0 already has a gene or frame value, if so, use register 1
+        let reg0 = self.frame.get_register(0)
+        if reg0.kind == VkGene or reg0.kind == VkFrame:
+          self.frame.set_register(1, v)  # Use register 1 when gene/frame is in register 0
+        else:
+          self.frame.set_register(0, v)  # Use register 0 for block value
         {.pop.}
 
       of IkCompileFn:
@@ -769,7 +804,10 @@ proc exec*(self: VirtualMachine): Value =
         f.ns = self.frame.ns
         # More data are stored in the next instruction slot
         pc.inc()
-        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        if pc < self.cu.instructions.len:
+          inst = self.cu.instructions[pc].addr
+        else:
+          return NIL  # End of instructions
         f.parent_scope.update(self.frame.scope)
         f.scope_tracker = new_scope_tracker(inst.push_value.ref.scope_tracker)
 
@@ -992,16 +1030,35 @@ proc exec*(self: VirtualMachine): Value =
           else:
             todo("Less than or equal not supported for " & $first.kind)
 
+      of IkJumpIfMatchSuccess:
+        {.push checks: off}
+        let arg_index = inst.jump_arg0.int
+        let jump_target = inst.jump_arg1.int
+        # Check if argument at index exists in the current frame's scope members
+        if arg_index >= 0 and arg_index < self.frame.scope.members.len:
+          pc = jump_target
+          inst = self.cu.instructions[pc].addr
+          continue
+        # If argument doesn't exist, continue to next instruction (for default value handling)
+        {.pop.}
+
       else:
         todo($inst.kind)
 
     {.push checks: off}
     pc.inc()
-    inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+    if pc < self.cu.instructions.len:
+      inst = self.cu.instructions[pc].addr
+    else:
+      return NIL  # End of instructions
     {.pop}
 
 proc exec*(self: VirtualMachine, code: string, module_name: string = "main"): Value =
   let compiled = compile(read_all(code))
+  if compiled.is_nil:
+    return NIL
+  if compiled.instructions.len == 0:
+    return NIL
   let ns = new_namespace(module_name)
   var frame = new_frame(ns)
   self.frame.update(frame)

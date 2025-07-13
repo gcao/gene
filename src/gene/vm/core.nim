@@ -128,5 +128,5 @@ VMCreatedCallbacks.add proc() =
   let vm_ns = new_namespace("vm")
   App.app.gene_ns.ns["vm".to_key()] = vm_ns.to_value()
   vm_ns["compile".to_key()] = NativeFn(vm_compile)
-  vm_ns["PUSH".to_key()] = vm_push
-  vm_ns["ADD" .to_key()] = vm_add
+  vm_ns["PUSH".to_key()] = NativeFn(vm_push)
+  vm_ns["ADD".to_key()] = NativeFn(vm_add)

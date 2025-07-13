@@ -89,3 +89,8 @@ Gene uses S-expression syntax with extensions:
 - Some tests are currently commented out in gene.nimble (parser, types, OOP, FFI)
 - The VM is undergoing significant architectural changes
 - When modifying the VM, ensure register allocation doesn't exceed MAX_REGISTERS (32)
+- Global state corruption was fixed by clearing SCOPES and FRAMES pools in init_app_and_vm()
+
+## Debugging
+
+Create temporary files in `tmp/` directory (automatically ignored by git) for debugging and testing.

@@ -885,8 +885,12 @@ proc not_allowed*() =
 proc to_binstr*(v: int64): string =
   re.replacef(fmt"{v: 065b}", re.re"([01]{8})", "$1 ")
 
+var id_counter {.threadvar.}: int
+
 proc new_id*(): Id =
-  cast[Id](rand(BIGGEST_INT))
+  # Use a simple counter to avoid SIGSEGV with rand()
+  id_counter.inc()
+  cast[Id](id_counter)
 
 template destroy(self: Value) =
   {.push checks: off, optimization: speed.}
@@ -2255,9 +2259,10 @@ proc to_value*(self: ScopeTracker): Value =
   result = r.to_ref_value()
 
 proc new_compilation_unit*(): CompilationUnit =
-  CompilationUnit(
-    id: new_id(),
-  )
+  result = CompilationUnit()
+  result.id = new_id()
+  result.instructions = @[]
+  result.labels = Table[Label, int]()
 
 ################### INSTRUCTION ####################
 
@@ -2429,6 +2434,10 @@ proc scope_tracker*(self: Compiler): ScopeTracker =
 #################### VM ##########################
 
 proc init_app_and_vm*() =
+  # Clear global pools to prevent state corruption between test runs
+  SCOPES.setLen(0)
+  FRAMES.setLen(0)
+  
   VM = VirtualMachine(
   )
   let r = new_ref(VkApplication)

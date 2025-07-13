@@ -1,6 +1,7 @@
-import parseopt, times
+import parseopt, times, os
 
 import ../types
+import ../vm
 import ./base
 
 const DEFAULT_COMMAND = "run"
@@ -66,11 +67,15 @@ proc handle*(cmd: string, args: seq[string]): string =
   let file = options.file
   let start = cpu_time()
   var value: Value
-  todo()
-  # if file.ends_with(".gar"):
-  #   value = run_archive_file(file)
-  # else:
-  #   value = run_file(file)
+  
+  # Read the file content and execute it
+  if file_exists(file):
+    let content = read_file(file)
+    value = VM.exec(content, file)
+  else:
+    echo "Error: File not found: " & file
+    quit(1)
+  
   # if options.print_result:
   #   echo value.to_s
   if options.benchmark:

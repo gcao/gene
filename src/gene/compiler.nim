@@ -90,17 +90,15 @@ proc compile_array(self: Compiler, input: Value) =
 proc compile_map(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkMapStart))
   for k, v in input.ref.map:
-    # Move map to register 1 temporarily
-    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
-    # Compile and push value to register 0
+    # Save map to register 3 (avoid conflict with array compilation which uses register 2)
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 3.Value, move_src: 0.Value))
+    # Compile value (result goes to register 0)
     self.compile(v)
-    # Move value to register 2
-    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 2.Value, move_src: 0.Value))
-    # Move map back to register 0
-    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 1.Value))
-    # Move value to register 1
-    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 2.Value))
-    # Set property
+    # Move value to register 1 (IkMapSetProp expects value in register 1)
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+    # Restore map to register 0 (IkMapSetProp expects map in register 0)
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 3.Value))
+    # Set property: map in register 0, value in register 1
     self.output.instructions.add(Instruction(kind: IkMapSetProp, prop_arg0: k))
   self.output.instructions.add(Instruction(kind: IkMapEnd))
 
@@ -324,9 +322,14 @@ proc compile_compile(self: Compiler, input: Value) =
 proc compile_ns(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkNamespace, var_arg0: gene.children[0]))
   if gene.children.len > 1:
+    # Save namespace to register 2
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 2.Value, move_src: 0.Value))
     let body = new_stream_value(gene.children[1..^1])
     self.output.instructions.add(Instruction(kind: IkPushValue, push_value: body))
     self.output.instructions.add(Instruction(kind: IkCompileInit))
+    # Move compiled unit to register 1, restore namespace to register 0
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 2.Value))
     self.output.instructions.add(Instruction(kind: IkCallInit))
 
 proc compile_class(self: Compiler, gene: ptr Gene) =
@@ -339,9 +342,14 @@ proc compile_class(self: Compiler, gene: ptr Gene) =
     self.output.instructions.add(Instruction(kind: IkClass, var_arg0: gene.children[0]))
 
   if gene.children.len > body_start:
+    # Save class to register 2  
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 2.Value, move_src: 0.Value))
     let body = new_stream_value(gene.children[body_start..^1])
     self.output.instructions.add(Instruction(kind: IkPushValue, push_value: body))
     self.output.instructions.add(Instruction(kind: IkCompileInit))
+    # Move compiled unit to register 1, restore class to register 0
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 1.Value, move_src: 0.Value))
+    self.output.instructions.add(Instruction(kind: IkMove, move_dest: 0.Value, move_src: 2.Value))
     self.output.instructions.add(Instruction(kind: IkCallInit))
 
 # Construct a Gene object whose type is the class
