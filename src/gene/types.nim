@@ -1402,7 +1402,7 @@ proc to_gene_value*(v: ptr Gene): Value {.inline.} =
 proc `$`*(self: ptr Gene): string =
   result = "(" & $self.type
   for k, v in self.props:
-    result &= " ^" & get_symbol(k.int64) & " " & $v
+    result &= " ^" & get_symbol((k.int64 and 0xFFFFFFFFFFFF).int) & " " & $v
   for child in self.children:
     result &= " " & $child
   result &= ")"

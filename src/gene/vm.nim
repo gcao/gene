@@ -3,6 +3,8 @@ import tables, strutils, strformat, math
 import ./types
 import ./parser
 import ./compiler
+import ./vm/core
+core_init()  # Force import side effects
 
 proc exec*(self: VirtualMachine): Value =
   if self.cu.is_nil:
@@ -142,9 +144,12 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.set_register(0, App.app.gene_ns)  # Use register 0 for resolved symbol
           else:
             let name = inst.var_arg0.Key
-            let value = self.frame.ns[name]
+            var value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
-              not_allowed("Unknown symbol " & name.int.get_symbol())
+              # Try global namespace
+              value = App.app.gene_ns.ns[name]
+              if value.int64 == NOT_FOUND.int64:
+                not_allowed("Unknown symbol " & name.int.get_symbol())
             self.frame.set_register(0, value)  # Use register 0 for resolved symbol
 
       of IkSelf:
@@ -350,7 +355,10 @@ proc exec*(self: VirtualMachine): Value =
             continue
 
           else:
-            discard
+            # Create a new gene with the type from register 0
+            let gene = new_gene_value()
+            gene.gene.type = gene_type
+            self.frame.set_register(0, gene)  # Use register 0 for gene value
 
         {.pop.}
 
@@ -462,6 +470,7 @@ proc exec*(self: VirtualMachine): Value =
                 todo($frame.kind)
 
           else:
+            # For non-function genes, leave the gene value in register 0
             discard
 
         {.pop.}

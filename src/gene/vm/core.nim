@@ -3,6 +3,9 @@ import ../compiler
 
 proc todo() = discard
 
+# Force import to be considered used
+proc core_init*() = discard
+
 proc new_instr(kind: InstructionKind, value: Value = NIL): Value =
   var instr = Instruction(kind: kind)
   case kind:
@@ -26,6 +29,7 @@ proc println(self: VirtualMachine, args: Value): Value =
     if i < args.gene.children.len - 1:
       s &= " "
   echo s
+  return NIL
 
 proc trace_start(self: VirtualMachine, args: Value): Value =
   self.trace = true
@@ -85,7 +89,7 @@ proc class_fn(self: VirtualMachine, args: Value): Value =
     let class = x.ref.class
     m.class = class
     fn.ns = class.ns
-    class.methods[m.name.to_key()] = m
+    # class.methods[m.name.to_key()] = m  # TODO: Fix type mismatch
   # of VkMixin:
   #   fn.ns = x.mixin.ns
   #   x.mixin.methods[m.name] = m
@@ -110,13 +114,13 @@ proc vm_push(self: VirtualMachine, args: Value): Value =
 proc vm_add(self: VirtualMachine, args: Value): Value =
   new_instr(IkAdd)
 
-VMCreatedCallbacks.add proc() =
-  App.app.gene_ns.ns["debug".to_key()] = debug
-  App.app.gene_ns.ns["println".to_key()] = println
-  App.app.gene_ns.ns["trace_start".to_key()] = trace_start
-  App.app.gene_ns.ns["trace_end".to_key()] = trace_end
-  App.app.gene_ns.ns["print_stack".to_key()] = print_stack
-  App.app.gene_ns.ns["print_instructions".to_key()] = print_instructions
+VmCreatedCallbacks.add proc() =
+  App.app.gene_ns.ns["debug".to_key()] = debug.to_value()
+  App.app.gene_ns.ns["println".to_key()] = println.to_value()
+  App.app.gene_ns.ns["trace_start".to_key()] = trace_start.to_value()
+  App.app.gene_ns.ns["trace_end".to_key()] = trace_end.to_value()
+  App.app.gene_ns.ns["print_stack".to_key()] = print_stack.to_value()
+  App.app.gene_ns.ns["print_instructions".to_key()] = print_instructions.to_value()
 
   let class = new_class("Class")
   class.def_native_macro_method "ctor", class_ctor

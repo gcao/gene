@@ -653,31 +653,46 @@ proc read_map(self: var Parser, mode: MapKind): Table[Key, Value] {.gcsafe.} =
           self.bufPos.inc()
           key = self.read_token(false)
           result[key.to_key()] = TRUE
+          continue
         elif self.buf[self.bufPos] == '!':
           self.bufPos.inc()
           key = self.read_token(false)
           result[key.to_key()] = NIL
+          continue
         else:
           key = self.read_token(false)
           if key.contains('^'):
             let parts = key.to_keys()
-            map = result.addr
-            for part in parts[0..^2]:
-              let key = part.to_key()
-              if map[].has_key(key):
-                let r = map[][key].ref
-                map = r.map.addr
-              else:
-                var m = new_ref(VkMap)
-                map[][key] = m.to_ref_value()
-                map = m.map.addr
-            key = parts[^1]
+            if parts.len == 0:
+              raise new_exception(ParseError, "Empty key in map property")
+            elif parts.len == 1:
+              key = parts[0]
+            else:
+              map = result.addr
+              for part in parts[0..<parts.len-1]:
+                let key = part.to_key()
+                if map[].has_key(key):
+                  let r = map[][key].ref
+                  map = r.map.addr
+                else:
+                  var m = new_ref(VkMap)
+                  map[][key] = m.to_ref_value()
+                  map = m.map.addr
+              key = parts[parts.len-1]
+            if key.len == 0:
+              raise new_exception(ParseError, "Empty key in map property")
             case key[0]:
             of '^':
-              map[][key[1..^1].to_key()] = TRUE
+              if key.len > 1:
+                map[][key[1..^1].to_key()] = TRUE
+              else:
+                map[]["".to_key()] = TRUE
               continue
             of '!':
-              map[][key[1..^1].to_key()] = FALSE
+              if key.len > 1:
+                map[][key[1..^1].to_key()] = FALSE
+              else:
+                map[]["".to_key()] = FALSE
               continue
             else:
               discard
