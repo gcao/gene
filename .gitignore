@@ -23,3 +23,5 @@ tests/test_wip.nim
 callgrind.out*
 scratch*
 .aider*
+
+gene-new/
