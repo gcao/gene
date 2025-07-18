@@ -209,6 +209,27 @@ test_parser "%_foo", proc(r: Value) =
   check r.ref.unquote == to_symbol_value("foo")
   check r.ref.unquote_discard == true
 
+# Additional tests for Gene expressions
+test_parser ":(1 + 2)", proc(r: Value) =
+  check r.ref.kind == VkQuote
+  check r.ref.quote.kind == VkGene
+  check r.ref.quote.gene.type == 1
+  check r.ref.quote.gene.children[0] == to_symbol_value("+")
+  check r.ref.quote.gene.children[1] == 2
+
+test_parser "(_ 1 2)", proc(r: Value) =
+  check r.kind == VkGene
+  check r.gene.type == to_symbol_value("_")
+  check r.gene.children[0] == 1
+  check r.gene.children[1] == 2
+
+test_parser "(:a 1 2)", proc(r: Value) =
+  check r.kind == VkGene
+  check r.gene.type.ref.kind == VkQuote
+  check r.gene.type.ref.quote == to_symbol_value("a")
+  check r.gene.children[0] == 1
+  check r.gene.children[1] == 2
+
 # # TODO: %_ is not allowed on gene type and property value
 # # (%_foo)         should throw error
 # # (a ^name %_foo) should throw error
