@@ -1,86 +1,237 @@
 import math, hashes, tables, sets, re, bitops, unicode, strutils, strformat
 import random
 import dynlib
+import times
+
+# Forward declarations for new types
+type
+  Value* = distinct int64  # Move this first
+  CustomValue* = ref object of RootObj
+  Mixin* = ref object
+  EnumDef* = ref object
+  EnumMember* = ref object
+  ExceptionData* = ref object
+  Interception* = ref object
+  Expression* = ref object
+  GeneProcessor* = ref object
+  Future* = ref object
+  Thread* = ref object
+  ThreadMessage* = ref object
+  NativeFn2* = proc(vm_data: pointer, args: Value): Value {.gcsafe.}
 
 type
   ValueKind* {.size: sizeof(int16) .} = enum
-    # void vs nil vs placeholder:
-    #   void has special meaning in some places (e.g. templates)
-    #   nil is the default/uninitialized value.
-    #   placeholder can be interpreted any way we want
+    # Core types
     VkNil = 0
     VkVoid
     VkPlaceholder
     VkPointer
+    
+    # Any and Custom types for extensibility
+    VkAny
+    VkCustom
+    
+    # Basic data types
     VkBool
     VkInt
+    VkRatio              # Rational numbers
     VkFloat
-    VkChar    # Support ascii and unicode characters
+    VkBin                # Binary data with bit size
+    VkBin64              # 64-bit binary with bit size
+    VkByte               # Single byte with bit size
+    VkBytes              # Byte sequences
+    VkChar               # Unicode characters
     VkString
     VkSymbol
     VkComplexSymbol
-
-    VkArray
+    
+    # Pattern and regex types
+    VkRegex
+    VkRegexMatch
+    VkRange
+    VkSelector
+    
+    # Date and time types
+    VkDate               # Date only
+    VkDateTime           # Date + time + timezone
+    VkTime               # Time only
+    VkTimezone           # Timezone info
+    
+    # Collection types
+    VkArray              # For backward compatibility, will alias to VkVector
+    VkVector             # Main sequence type
     VkSet
     VkMap
     VkGene
+    VkArguments          # Function argument container
     VkStream
     VkDocument
-
+    
+    # File system types
+    VkFile
+    VkArchiveFile
+    VkDirectory
+    
+    # Meta-programming types
     VkQuote
     VkUnquote
-
+    VkReference
+    VkRefTarget
+    VkExplode            # For unpacking operations
+    
+    # Language construct types
     VkApplication
     VkPackage
     VkModule
     VkNamespace
     VkFunction
+    VkBoundFunction      # Function bound to specific scope
     VkCompileFn
     VkMacro
     VkBlock
     VkClass
+    VkMixin              # For mixin support
     VkMethod
     VkBoundMethod
     VkInstance
+    VkCast               # Type casting
+    VkEnum
+    VkEnumMember
     VkNativeFn
-    # VkNativeFn2
-
+    VkNativeFn2
+    VkNativeMethod
+    VkNativeMethod2
+    
+    # Exception handling
+    VkException = 128    # Start exceptions at 128
+    VkInterception       # AOP interception
+    
+    # Expression and evaluation
+    VkExpr               # Abstract syntax tree expressions
+    VkGeneProcessor      # Gene processing context
+    
+    # Concurrency types
+    VkFuture             # Async operations
+    VkThread             # Thread objects
+    VkThreadMessage      # Inter-thread communication
+    
+    # JSON integration
+    VkJson               # JSON values
+    VkNativeFile         # Native file handles
+    
+    # Internal VM types
     VkCompiledUnit
     VkInstruction
     VkScopeTracker
     VkScope
-
     VkFrame
     VkNativeFrame
-    # VkInvocation
 
   Key* = distinct int64
-  Value* = distinct int64
 
-  # Keep the size of Reference to 4*8 = 32 bytes
+  # Extended Reference type supporting all ValueKind variants
   Reference* = object
     case kind*: ValueKind
-      of VkDocument:
-        doc*: Document
+      # Basic string-like types
       of VkString, VkSymbol:
         str*: string
-      of VkArray:
+      of VkComplexSymbol:
+        csymbol*: seq[string]
+      
+      # Numeric and binary types  
+      of VkRatio:
+        ratio_num*: int64
+        ratio_denom*: int64
+      of VkBin:
+        bin_data*: seq[uint8]
+        bin_bit_size*: uint
+      of VkBin64:
+        bin64_data*: uint64
+        bin64_bit_size*: uint
+      of VkByte:
+        byte_data*: uint8
+        byte_bit_size*: uint
+      of VkBytes:
+        bytes_data*: seq[uint8]
+      
+      # Pattern and regex types
+      of VkRegex:
+        regex_pattern*: string
+        regex_flags*: uint8
+      of VkRegexMatch:
+        regex_match_data*: seq[string]  # Simplified match data
+      of VkRange:
+        range_start*: Value
+        range_end*: Value
+        range_step*: Value
+      of VkSelector:
+        selector_pattern*: string
+      
+      # Date and time types
+      of VkDate:
+        date_year*: int16
+        date_month*: int8
+        date_day*: int8
+      of VkDateTime:
+        dt_year*: int16
+        dt_month*: int8
+        dt_day*: int8
+        dt_hour*: int8
+        dt_minute*: int8
+        dt_second*: int8
+        dt_timezone*: int16
+      of VkTime:
+        time_hour*: int8
+        time_minute*: int8
+        time_second*: int8
+        time_microsecond*: int32
+      of VkTimezone:
+        tz_offset*: int16
+        tz_name*: string
+      
+      # Collection types
+      of VkArray, VkVector:
         arr*: seq[Value]
       of VkSet:
         set*: HashSet[Value]
       of VkMap:
         map*: Table[Key, Value]
+      of VkArguments:
+        arg_props*: Table[Key, Value]
+        arg_children*: seq[Value]
       of VkStream:
         stream*: seq[Value]
         stream_index*: int64
-        # stream_ended*: bool
-      of VkComplexSymbol:
-        csymbol*: seq[string]
+        stream_ended*: bool
+      of VkDocument:
+        doc*: Document
+      
+      # File system types
+      of VkFile:
+        file_path*: string
+        file_content*: seq[uint8]
+        file_permissions*: uint16
+      of VkArchiveFile:
+        arc_path*: string
+        arc_members*: Table[string, Value]
+      of VkDirectory:
+        dir_path*: string
+        dir_members*: Table[string, Value]
+      
+      # Meta-programming types
       of VkQuote:
         quote*: Value
       of VkUnquote:
         unquote*: Value
         unquote_discard*: bool
+      of VkReference:
+        ref_target*: Value
+      of VkRefTarget:
+        target_id*: int64
+      of VkExplode:
+        explode_value*: Value
+      
+      # Language constructs
       of VkApplication:
         app*: Application
       of VkPackage:
@@ -89,7 +240,7 @@ type
         module*: Module
       of VkNamespace:
         ns*: Namespace
-      of VkFunction:
+      of VkFunction, VkBoundFunction:
         fn*: Function
       of VkCompileFn:
         `compile_fn`*: CompileFn
@@ -99,17 +250,56 @@ type
         `block`*: Block
       of VkClass:
         class*: Class
+      of VkMixin:
+        `mixin`*: Mixin
       of VkMethod:
         `method`*: Method
       of VkBoundMethod:
         bound_method*: BoundMethod
       of VkInstance:
         instance_class*: Class
-        # instance_props*: Table[Key, Value]
+        instance_props*: Table[Key, Value]
+      of VkCast:
+        cast_value*: Value
+        cast_class*: Class
+      of VkEnum:
+        enum_def*: EnumDef
+      of VkEnumMember:
+        enum_member*: EnumMember
       of VkNativeFn:
         native_fn*: NativeFn
-      # of VkNativeFn2:
-      #   native_fn2*: NativeFn2
+      of VkNativeFn2:
+        native_fn2*: NativeFn2
+      of VkNativeMethod, VkNativeMethod2:
+        native_method*: NativeFn
+      
+      # Exception and interception
+      of VkException:
+        exception_data*: ExceptionData
+      of VkInterception:
+        interception*: Interception
+      
+      # Expression types
+      of VkExpr:
+        expr*: Expression
+      of VkGeneProcessor:
+        processor*: GeneProcessor
+      
+      # Concurrency types
+      of VkFuture:
+        future*: Future
+      of VkThread:
+        thread*: Thread
+      of VkThreadMessage:
+        thread_msg*: ThreadMessage
+      
+      # JSON and file types
+      of VkJson:
+        json_data*: string  # Serialized JSON
+      of VkNativeFile:
+        native_file*: File
+      
+      # Internal VM types
       of VkCompiledUnit:
         cu*: CompilationUnit
       of VkInstruction:
@@ -122,8 +312,15 @@ type
         frame*: Frame
       of VkNativeFrame:
         native_frame*: NativeFrame
-      # of VkInvocation:
-      #   invocation*: Invocation
+      
+      # Any and Custom types
+      of VkAny:
+        any_data*: pointer
+        any_class*: Class
+      of VkCustom:
+        custom_data*: CustomValue
+        custom_class*: Class
+      
       else:
         discard
     ref_count*: int32
@@ -876,7 +1073,6 @@ proc kind*(v: Value): ValueKind =
     let prefix = v1.shr(48)
     case prefix:
       of REF_PREFIX:
-        # echo "kind: REF_PREFIX"
         return v.ref.kind
         {.linearScanEnd.}
       of NIL_PREFIX:
@@ -900,7 +1096,7 @@ proc kind*(v: Value): ValueKind =
           of 0x02, 0x03, 0x04, 0x05:
             return VkChar
           else:
-            todo()
+            todo($v1)
       else:
         if bitand(v1, I64_MASK) == 0:
           return VkInt
@@ -940,38 +1136,70 @@ proc is_literal*(self: Value): bool =
         result = true
 
 proc `$`*(self: Value): string {.gcsafe.} =
-  # echo "Value.$"
   {.cast(gcsafe).}:
     case self.kind:
       of VkNil:
         result = "nil"
+      of VkVoid:
+        result = "void"
+      of VkPlaceholder:
+        result = "_"
       of VkBool:
         result = $(self == TRUE)
       of VkInt:
         result = $(cast[int64](self))
       of VkFloat:
         result = $(cast[float64](self))
+      of VkChar:
+        result = "'" & $cast[char](cast[int64](self) and 0xFF) & "'"
       of VkString:
         result = "\"" & $self.str & "\""
       of VkSymbol:
         result = $self.str
       of VkComplexSymbol:
         result = self.ref.csymbol.join("/")
-      of VkArray:
+      of VkRatio:
+        result = $self.ref.ratio_num & "/" & $self.ref.ratio_denom
+      of VkArray, VkVector:
         result = "["
         for i, v in self.ref.arr:
           if i > 0:
             result &= " "
           result &= $v
         result &= "]"
+      of VkSet:
+        result = "#{"
+        var first = true
+        for v in self.ref.set:
+          if not first:
+            result &= " "
+          result &= $v
+          first = false
+        result &= "}"
       of VkMap:
-        result = ""
+        result = "{"
+        var first = true
         for k, v in self.ref.map:
-          result &= "^" & $k & " " & $v & " "
-        result = "{" & strutils.strip(result) & "}"
-        result = $self.ref.map
+          if not first:
+            result &= " "
+          result &= "^" & get_symbol(k.int64) & " " & $v
+          first = false
+        result &= "}"
       of VkGene:
         result = $self.gene
+      of VkRange:
+        result = $self.ref.range_start & ".." & $self.ref.range_end
+        if self.ref.range_step != NIL:
+          result &= " step " & $self.ref.range_step
+      of VkRegex:
+        result = "/" & self.ref.regex_pattern & "/"
+      of VkDate:
+        result = $self.ref.date_year & "-" & $self.ref.date_month & "-" & $self.ref.date_day
+      of VkDateTime:
+        result = $self.ref.dt_year & "-" & $self.ref.dt_month & "-" & $self.ref.dt_day & 
+                 " " & $self.ref.dt_hour & ":" & $self.ref.dt_minute & ":" & $self.ref.dt_second
+      of VkTime:
+        result = $self.ref.time_hour & ":" & $self.ref.time_minute & ":" & $self.ref.time_second
       else:
         result = $self.kind
 
@@ -1008,7 +1236,7 @@ converter to_value*(v: pointer): Value {.inline.} =
   else:
     cast[Value](bitor(cast[int64](v), 0x7FFB000000000000))
 
-# Applicable to array, string, symbol, gene etc
+# Applicable to array, vector, string, symbol, gene etc
 proc `[]`*(self: Value, i: int): Value =
   let v = cast[uint64](self)
   case v.shr(48):
@@ -1017,56 +1245,77 @@ proc `[]`*(self: Value, i: int): Value =
     of REF_PREFIX:
       let r = self.ref
       case r.kind:
-        of VkArray:
+        of VkArray, VkVector:
           if i >= r.arr.len:
             return NIL
           else:
             return r.arr[i]
         of VkString:
           var j = 0
-          for r in r.str.runes:
+          for rune in r.str.runes:
             if i == j:
-              return r
+              return rune
             j.inc()
+          return NIL
+        of VkBytes:
+          if i >= r.bytes_data.len:
+            return NIL
+          else:
+            return r.bytes_data[i].Value
         else:
           todo($r.kind)
     of GENE_PREFIX:
-      todo("VkGene")
+      let g = self.gene
+      if i >= g.children.len:
+        return NIL
+      else:
+        return g.children[i]
     of SHORT_STR_PREFIX, LONG_STR_PREFIX:
       var j = 0
-      # TODO: optimize
-      for r in self.str().runes:
+      for rune in self.str().runes:
         if i == j:
-          return r
+          return rune
         j.inc()
+      return NIL
     of SYMBOL_PREFIX:
-      todo("VkSymbol")
+      var j = 0
+      for rune in self.str().runes:
+        if i == j:
+          return rune
+        j.inc()
+      return NIL
     else:
-      todo()
+      todo($v)
 
-# Applicable to array, string, symbol, gene etc
+# Applicable to array, vector, string, symbol, gene etc
 proc size*(self: Value): int =
   let v = cast[uint64](self)
   case v.shr(48):
     of NIL_PREFIX:
       return 0
     of REF_PREFIX:
-      # It may not be a bad idea to store the reference kind in the value itself.
-      # However we may later support changing reference in place, so it may not be a good idea.
       let r = self.ref
       case r.kind:
-        of VkArray:
+        of VkArray, VkVector:
           return r.arr.len
+        of VkSet:
+          return r.set.len
+        of VkMap:
+          return r.map.len
+        of VkString:
+          return r.str.to_runes().len
+        of VkBytes:
+          return r.bytes_data.len
         else:
           todo($r.kind)
     of GENE_PREFIX:
-      todo("VkGene")
-    of SHORT_STR_PREFIX:
+      return self.gene.children.len
+    of SHORT_STR_PREFIX, LONG_STR_PREFIX:
       return self.str().to_runes().len
     of SYMBOL_PREFIX:
-      todo("VkSymbol")
+      return self.str().to_runes().len
     else:
-      todo()
+      return 0
 
 #################### Int ########################
 
