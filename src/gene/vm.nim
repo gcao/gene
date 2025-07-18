@@ -519,7 +519,19 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkMul:
-        self.frame.push(self.frame.pop().int * self.frame.pop().int)
+        {.push checks: off}
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.push(first.int * second.int)
+              else:
+                todo("Unsupported second operand for multiplication: " & $second)
+          else:
+            todo("Unsupported first operand for multiplication: " & $first)
+        {.pop.}
 
       of IkDiv:
         let second = self.frame.pop().int
