@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## General Guidance
 
 - Don't prematurely stop the work unless you have run the command to validate the work (e.g. run unit tests or gene code).
+- Don't pause or stop in the middle, unless there are questions to be answered. If there are questions, add them to project/tmp/name.md file with context and the question and prompt the user to answer them.
 
 ## Project Overview
 
