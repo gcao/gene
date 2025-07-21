@@ -1,4 +1,4 @@
-import tables, strutils
+import tables, strutils, strformat
 
 import ./types
 import "./compiler/if"
@@ -587,6 +587,13 @@ proc compile_gene(self: Compiler, input: Value) =
           self.compile(gene.children[0])
           self.output.instructions.add(Instruction(kind: IkNot))
           return
+        of "...":
+          # Spread operator - compile the argument and emit IkSpread
+          if gene.children.len != 1:
+            not_allowed("... expects exactly 1 argument")
+          self.compile(gene.children[0])
+          self.output.instructions.add(Instruction(kind: IkSpread))
+          return
         of "..":
           self.compile_range_operator(gene)
           return
@@ -641,6 +648,13 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "range":
         self.compile_range(gene)
+        return
+      of "...":
+        # Spread operator - compile the argument and emit IkSpread
+        if gene.children.len != 1:
+          not_allowed("... expects exactly 1 argument")
+        self.compile(gene.children[0])
+        self.output.instructions.add(Instruction(kind: IkSpread))
         return
       else:
         let s = `type`.str

@@ -464,7 +464,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkNativeFrame:
             v.ref.native_frame.args.gene.children.add(child)
           of VkGene:
-            v.gene.children.add(child)
+            case child.kind:
+              of VkExplode:
+                # Expand the exploded array into individual elements
+                case child.ref.explode_value.kind:
+                  of VkArray:
+                    for item in child.ref.explode_value.ref.arr:
+                      v.gene.children.add(item)
+                  else:
+                    not_allowed("Can only explode arrays")
+              else:
+                v.gene.children.add(child)
           of VkNil:
             # Skip adding to nil - this might happen in conditional contexts
             discard
@@ -665,6 +675,17 @@ proc exec*(self: VirtualMachine): Value =
           self.frame.push(FALSE)
         else:
           self.frame.push(TRUE)
+
+      of IkSpread:
+        # Spread operator - pop array and create explode marker
+        let value = self.frame.pop()
+        case value.kind:
+          of VkArray:
+            let r = new_ref(VkExplode)
+            r.explode_value = value
+            self.frame.push(r.to_ref_value())
+          else:
+            not_allowed("... can only spread arrays")
 
       of IkCreateRange:
         let step = self.frame.pop()

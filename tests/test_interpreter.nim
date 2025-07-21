@@ -292,10 +292,17 @@ test_vm """
   check r.gene.props["a".to_key()] == 1.to_value()
   check r.gene.children[0] == 2.to_value()
 
+# Test simple spread operator first
+test_vm """
+  (... [2 3])
+""", proc(r: Value) =
+  check r.kind == VkExplode
+
 # Gene spread test
 test_vm """
   (_ (... [2 3]) 4)
 """, proc(r: Value) =
+  check r.gene.children.len == 3
   check r.gene.children[0] == 2.to_value()
   check r.gene.children[1] == 3.to_value()
   check r.gene.children[2] == 4.to_value()

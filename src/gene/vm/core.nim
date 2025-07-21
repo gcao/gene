@@ -108,19 +108,7 @@ proc current_ns(self: VirtualMachine, args: Value): Value =
 
 # vm_not function removed - now handled by IkNot instruction at compile time
 
-proc vm_spread(self: VirtualMachine, args: Value): Value =
-  # Spread operator - returns a special marker value that array construction recognizes
-  if args.gene.children.len != 1:
-    not_allowed("... expects exactly 1 argument")
-  let arg = args.gene.children[0]
-  case arg.kind:
-    of VkArray:
-      # Create a special explode marker
-      let r = new_ref(VkExplode)
-      r.explode_value = arg
-      result = r.to_ref_value()
-    else:
-      not_allowed("... can only spread arrays")
+# vm_spread function removed - ... is now handled as compile-time keyword
 
 proc vm_parse(self: VirtualMachine, args: Value): Value =
   # Parse Gene code from string
@@ -156,7 +144,7 @@ proc vm_parse(self: VirtualMachine, args: Value): Value =
 
 # TODO: Implement while loop properly - needs compiler-level support like loop/if
 
-VMCreatedCallbacks.add proc() =
+VmCreatedCallbacks.add proc() =
   # Initialize basic classes needed by get_class
   var r: ptr Reference
   
@@ -257,12 +245,10 @@ VMCreatedCallbacks.add proc() =
   App.app.gene_ns.ns["print_stack".to_key()] = print_stack
   App.app.gene_ns.ns["print_instructions".to_key()] = print_instructions
   App.app.gene_ns.ns["ns".to_key()] = current_ns
-  # not is now handled by IkNot instruction at compile time, no need to register
-  App.app.gene_ns.ns["...".to_key()] = vm_spread
+  # not and ... are now handled by compile-time instructions, no need to register
   App.app.gene_ns.ns["parse".to_key()] = vm_parse  # $parse translates to gene/parse
   
   # Also add to global namespace
-  App.app.global_ns.ns["...".to_key()] = vm_spread
   App.app.global_ns.ns["parse".to_key()] = vm_parse
   
 

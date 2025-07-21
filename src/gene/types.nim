@@ -623,6 +623,7 @@ type
     IkOr
     IkNot
 
+    IkSpread      # Spread operator (...)
     IkCreateRange
 
     IkCompileInit
