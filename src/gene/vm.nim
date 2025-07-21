@@ -87,8 +87,23 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.scope.members.add(self.frame.current())
         {.pop.}
 
+      of IkVarValue:
+        {.push checks: off}
+        let index = inst.arg1.int
+        let value = inst.arg0
+        # Ensure the scope has enough space for the index
+        while self.frame.scope.members.len <= index:
+          self.frame.scope.members.add(NIL)
+        self.frame.scope.members[index] = value
+        # Also push the value to the stack (like IkVar)
+        self.frame.push(value)
+        {.pop.}
+
       of IkVarResolve:
         {.push checks: off}
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkVarResolve: arg0={inst.arg0}, arg0.int={inst.arg0.int}, scope.members.len={self.frame.scope.members.len}"
         self.frame.push(self.frame.scope.members[inst.arg0.int])
         {.pop.}
 
@@ -134,11 +149,22 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(self.frame.self)
           of SYM_GENE:
             self.frame.push(App.app.gene_ns)
+          of SYM_NS:
+            # Return current namespace
+            let r = new_ref(VkNamespace)
+            r.ns = self.frame.ns
+            self.frame.push(r.to_ref_value())
           else:
-            let name = inst.arg0.Key
-            let value = self.frame.ns[name]
+            let name = cast[Key](inst.arg0)
+            var value = self.frame.ns[name]
             if value.int64 == NOT_FOUND.int64:
-              not_allowed("Unknown symbol " & name.int.get_symbol())
+              # Try global namespace
+              value = App.app.global_ns.ns[name]
+              if value.int64 == NOT_FOUND.int64:
+                # Try gene namespace
+                value = App.app.gene_ns.ns[name]
+                if value.int64 == NOT_FOUND.int64:
+                  not_allowed("Unknown symbol")
             self.frame.push(value)
 
       of IkSelf:
@@ -162,6 +188,9 @@ proc exec*(self: VirtualMachine): Value =
           of VkInstance:
             todo()
             # target.ref.instance_props[name] = value
+          of VkArray:
+            # Arrays don't support named members, this is likely an error
+            not_allowed("Cannot set named member '" & name.int.get_symbol() & "' on array")
           else:
             todo($target.kind)
         self.frame.push(value)
@@ -186,6 +215,24 @@ proc exec*(self: VirtualMachine): Value =
           else:
             todo($value.kind)
 
+      of IkSetChild:
+        let i = inst.arg0.int
+        var new_value: Value
+        self.frame.pop2(new_value)
+        var target: Value
+        self.frame.pop2(target)
+        case target.kind:
+          of VkArray:
+            target.ref.arr[i] = new_value
+          of VkGene:
+            target.gene.children[i] = new_value
+          else:
+            when not defined(release):
+              if self.trace:
+                echo fmt"IkSetChild unsupported kind: {target.kind}"
+            todo($target.kind)
+        self.frame.push(new_value)
+
       of IkGetChild:
         let i = inst.arg0.int
         var value: Value
@@ -196,6 +243,9 @@ proc exec*(self: VirtualMachine): Value =
           of VkGene:
             self.frame.push(value.gene.children[i])
           else:
+            when not defined(release):
+              if self.trace:
+                echo fmt"IkGetChild unsupported kind: {value.kind}"
             todo($value.kind)
 
       of IkJump:
@@ -246,13 +296,25 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(NIL)
       of IkPop:
         discard self.frame.pop()
+      of IkDup:
+        self.frame.push(self.frame.current())
 
       of IkArrayStart:
         self.frame.push(new_array_value())
       of IkArrayAddChild:
         var child: Value
         self.frame.pop2(child)
-        self.frame.current().ref.arr.add(child)
+        case child.kind:
+          of VkExplode:
+            # Expand the exploded array into individual elements
+            case child.ref.explode_value.kind:
+              of VkArray:
+                for item in child.ref.explode_value.ref.arr:
+                  self.frame.current().ref.arr.add(item)
+              else:
+                not_allowed("Can only explode arrays")
+          else:
+            self.frame.current().ref.arr.add(child)
       of IkArrayEnd:
         discard
 
@@ -403,6 +465,13 @@ proc exec*(self: VirtualMachine): Value =
             v.ref.native_frame.args.gene.children.add(child)
           of VkGene:
             v.gene.children.add(child)
+          of VkNil:
+            # Skip adding to nil - this might happen in conditional contexts
+            discard
+          of VkBoundMethod:
+            # For bound methods, we might need to handle arguments
+            # For now, treat similar to nil and skip
+            discard
           else:
             todo("GeneAddChild: " & $v.kind)
         {.pop.}
@@ -577,12 +646,32 @@ proc exec*(self: VirtualMachine): Value =
       of IkAnd:
         let second = self.frame.pop()
         let first = self.frame.pop()
-        self.frame.push(first.to_bool and second.to_bool)
+        if first.to_bool:
+          self.frame.push(second)
+        else:
+          self.frame.push(first)
 
       of IkOr:
         let second = self.frame.pop()
         let first = self.frame.pop()
-        self.frame.push(first.to_bool or second.to_bool)
+        if first.to_bool:
+          self.frame.push(first)
+        else:
+          self.frame.push(second)
+
+      of IkNot:
+        let value = self.frame.pop()
+        if value.to_bool:
+          self.frame.push(FALSE)
+        else:
+          self.frame.push(TRUE)
+
+      of IkCreateRange:
+        let step = self.frame.pop()
+        let `end` = self.frame.pop()
+        let start = self.frame.pop()
+        let range_value = new_range_value(start, `end`, step)
+        self.frame.push(range_value)
 
       of IkCompileInit:
         let input = self.frame.pop()
@@ -785,6 +874,7 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let ns = new_namespace(module_name)
   self.frame.update(new_frame(ns))
   self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+  self.frame.self = NIL  # Set default self to nil
   self.cu = compiled
 
   self.exec()

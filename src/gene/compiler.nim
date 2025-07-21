@@ -21,7 +21,11 @@ proc translate_symbol(input: Value): Value =
     of VkSymbol:
       let s = input.str
       if s.starts_with("$"):
-        result = @["gene", s[1..^1]].to_complex_symbol()
+        # Special case for $ns - translate to special symbol
+        if s == "$ns":
+          result = SYM_NS.to_value()
+        else:
+          result = @["gene", s[1..^1]].to_complex_symbol()
       else:
         result = input
     of VkComplexSymbol:
@@ -30,8 +34,12 @@ proc translate_symbol(input: Value): Value =
       if r.csymbol[0] == "":
         r.csymbol[0] = "self"
       elif r.csymbol[0].starts_with("$"):
-        r.csymbol.insert("gene", 0)
-        r.csymbol[1] = r.csymbol[1][1..^1]
+        # Special case for $ns - translate first part to special symbol  
+        if r.csymbol[0] == "$ns":
+          r.csymbol[0] = "SPECIAL_NS"
+        else:
+          r.csymbol.insert("gene", 0)
+          r.csymbol[1] = r.csymbol[1][1..^1]
     else:
       not_allowed($input)
 
@@ -41,7 +49,10 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
   else:
     let r = translate_symbol(input).ref
     let key = r.csymbol[0].to_key()
-    if self.scope_tracker.mappings.has_key(key):
+    if r.csymbol[0] == "SPECIAL_NS":
+      # Handle $ns/... specially
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: SYM_NS.to_value()))
+    elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
@@ -114,18 +125,43 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
   self.start_scope()
 
+  # Compile main condition
   self.compile(gene.props[COND_KEY.to_key()])
-  let else_label = new_label()
+  var next_label = new_label()
   let end_label = new_label()
-  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: else_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.Value))
 
+  # Compile then branch
   self.start_scope()
   self.compile(gene.props[THEN_KEY.to_key()])
   self.end_scope()
-
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
 
-  self.output.instructions.add(Instruction(kind: IkNoop, label: else_label))
+  # Handle elif branches if they exist
+  if gene.props.has_key(ELIF_KEY.to_key()):
+    let elifs = gene.props[ELIF_KEY.to_key()]
+    case elifs.kind:
+      of VkArray:
+        # Process elif conditions and bodies in pairs
+        for i in countup(0, elifs.ref.arr.len - 1, 2):
+          self.output.instructions.add(Instruction(kind: IkNoop, label: next_label))
+          
+          if i < elifs.ref.arr.len - 1:
+            # Compile elif condition
+            self.compile(elifs.ref.arr[i])
+            next_label = new_label()
+            self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.Value))
+            
+            # Compile elif body
+            self.start_scope()
+            self.compile(elifs.ref.arr[i + 1])
+            self.end_scope()
+            self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+      else:
+        discard
+
+  # Compile else branch
+  self.output.instructions.add(Instruction(kind: IkNoop, label: next_label))
   self.start_scope()
   self.compile(gene.props[ELSE_KEY.to_key()])
   self.end_scope()
@@ -150,8 +186,37 @@ proc compile_var(self: Compiler, gene: ptr Gene) =
 
 proc compile_assignment(self: Compiler, gene: ptr Gene) =
   let `type` = gene.type
+  let operator = gene.children[0].str
+  
   if `type`.kind == VkSymbol:
-    self.compile(gene.children[1])
+    # For compound assignment, we need to load the current value first
+    if operator != "=":
+      let key = `type`.str.to_key()
+      let found = self.scope_tracker.locate(key)
+      if found.local_index >= 0:
+        if found.parent_index == 0:
+          self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
+        else:
+          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index))
+      else:
+        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`))
+      
+      # Compile the right-hand side value
+      self.compile(gene.children[1])
+      
+      # Apply the operation
+      case operator:
+        of "+=":
+          self.output.instructions.add(Instruction(kind: IkAdd))
+        of "-=":
+          self.output.instructions.add(Instruction(kind: IkSub))
+        else:
+          not_allowed("Unsupported compound assignment operator: " & operator)
+    else:
+      # Regular assignment - compile the value
+      self.compile(gene.children[1])
+    
+    # Store the result
     let key = `type`.str.to_key()
     let found = self.scope_tracker.locate(key)
     if found.local_index >= 0:
@@ -164,10 +229,16 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
   elif `type`.kind == VkComplexSymbol:
     let r = translate_symbol(`type`).ref
     let key = r.csymbol[0].to_key()
-    if self.scope_tracker.mappings.has_key(key):
+    
+    # Load the target object first (for both regular and compound assignment)
+    if r.csymbol[0] == "SPECIAL_NS":
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: SYM_NS.to_value()))
+    elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+      
+    # Navigate to parent object (if nested property access)
     if r.csymbol.len > 2:
       for s in r.csymbol[1..^2]:
         let (is_int, i) = to_int(s)
@@ -177,8 +248,50 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
           self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
         else:
           self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
-    self.compile(gene.children[1])
-    self.output.instructions.add(Instruction(kind: IkSetMember, arg0: r.csymbol[^1].to_key()))
+    
+    if operator != "=":
+      # For compound assignment, duplicate the target object on the stack
+      # Stack: [target] -> [target, target]
+      self.output.instructions.add(Instruction(kind: IkDup))
+      
+      # Get current value
+      let last_segment = r.csymbol[^1]
+      let (is_int, i) = to_int(last_segment)
+      if is_int:
+        self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
+      else:
+        self.output.instructions.add(Instruction(kind: IkGetMember, arg0: last_segment.to_key()))
+      
+      # Compile the right-hand side value
+      self.compile(gene.children[1])
+      
+      # Apply the operation
+      case operator:
+        of "+=":
+          self.output.instructions.add(Instruction(kind: IkAdd))
+        of "-=":
+          self.output.instructions.add(Instruction(kind: IkSub))
+        else:
+          not_allowed("Unsupported compound assignment operator: " & operator)
+      
+      # Now stack should be: [target, new_value]
+      # Set the property
+      let last_segment2 = r.csymbol[^1]
+      let (is_int2, i2) = to_int(last_segment2)
+      if is_int2:
+        self.output.instructions.add(Instruction(kind: IkSetChild, arg0: i2))
+      else:
+        self.output.instructions.add(Instruction(kind: IkSetMember, arg0: last_segment2.to_key()))
+    else:
+      # Regular assignment
+      self.compile(gene.children[1])
+      
+      let last_segment = r.csymbol[^1]
+      let (is_int, i) = to_int(last_segment)
+      if is_int:
+        self.output.instructions.add(Instruction(kind: IkSetChild, arg0: i))
+      else:
+        self.output.instructions.add(Instruction(kind: IkSetMember, arg0: last_segment.to_key()))
   else:
     not_allowed($`type`)
 
@@ -260,6 +373,31 @@ proc compile_new(self: Compiler, gene: ptr Gene) =
   # IKGeneEnd is replaced by IkNew here
   # self.output.instructions.add(Instruction(kind: IkGeneEnd))
   self.output.instructions.add(Instruction(kind: IkNew))
+
+proc compile_range(self: Compiler, gene: ptr Gene) =
+  # (range start end) or (range start end step)
+  if gene.children.len < 2:
+    not_allowed("range requires at least 2 arguments")
+  
+  self.compile(gene.children[0])  # start
+  self.compile(gene.children[1])  # end
+  
+  if gene.children.len >= 3:
+    self.compile(gene.children[2])  # step
+  else:
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: NIL))  # default step
+  
+  self.output.instructions.add(Instruction(kind: IkCreateRange))
+
+proc compile_range_operator(self: Compiler, gene: ptr Gene) =
+  # (a .. b) -> (range a b)
+  if gene.children.len != 2:
+    not_allowed(".. operator requires exactly 2 arguments")
+  
+  self.compile(gene.children[0])  # start
+  self.compile(gene.children[1])  # end
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: NIL))  # default step
+  self.output.instructions.add(Instruction(kind: IkCreateRange))
 
 proc compile_gene_default(self: Compiler, gene: ptr Gene) {.inline.} =
   self.output.instructions.add(Instruction(kind: IkGeneStart))
@@ -375,7 +513,7 @@ proc compile_gene(self: Compiler, input: Value) =
     let first = gene.children[0]
     if first.kind == VkSymbol:
       case first.str:
-        of "=":
+        of "=", "+=", "-=":
           self.compile_assignment(gene)
           return
         of "+":
@@ -444,6 +582,14 @@ proc compile_gene(self: Compiler, input: Value) =
           self.compile(gene.children[1])
           self.output.instructions.add(Instruction(kind: IkOr))
           return
+        of "not":
+          # not is a unary operator, so only compile the first argument
+          self.compile(gene.children[0])
+          self.output.instructions.add(Instruction(kind: IkNot))
+          return
+        of "..":
+          self.compile_range_operator(gene)
+          return
         of "->":
           self.compile_block(input)
           return
@@ -492,6 +638,9 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "new":
         self.compile_new(gene)
+        return
+      of "range":
+        self.compile_range(gene)
         return
       else:
         let s = `type`.str

@@ -582,6 +582,7 @@ type
     IkPushValue   # push value to the next slot
     IkPushNil
     IkPop
+    IkDup         # duplicate top stack element
 
     IkVar
     IkVarValue
@@ -620,6 +621,9 @@ type
 
     IkAnd
     IkOr
+    IkNot
+
+    IkCreateRange
 
     IkCompileInit
 
@@ -1489,6 +1493,15 @@ proc new_map_value*(): Value =
 proc new_map_value*(map: Table[Key, Value]): Value =
   let r = new_ref(VkMap)
   r.map = map
+  result = r.to_ref_value()
+
+#################### Range ######################
+
+proc new_range_value*(start: Value, `end`: Value, step: Value): Value =
+  let r = new_ref(VkRange)
+  r.range_start = start
+  r.range_end = `end`
+  r.range_step = step
   result = r.to_ref_value()
 
 #################### Gene ########################
@@ -2484,6 +2497,7 @@ proc init_app_and_vm*() =
 const SYM_UNDERSCORE* = 0x7FF9_0000_0000_0000
 const SYM_SELF* = 0x7FF9_0000_0000_0001
 const SYM_GENE* = 0x7FF9_0000_0000_0002
+const SYM_NS* = 0x7FF9_0000_0000_0003
 
 proc init_values*() =
   SYMBOLS = ManagedSymbols()

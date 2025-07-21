@@ -53,16 +53,24 @@ test_vm "{^a 1}", new_map_value({"a".to_key(): 1.to_value()}.to_table())
 #   check r.gene.children[0] == 1
 #   check r.gene.children[1] == 2
 
+# TODO: Fix range implementation
 # test_vm "(range 0 100)", proc(r: Value) =
-#   check r.range.start == 0
-#   check r.range.end == 100
+#   check r.ref.range_start == 0.to_value()
+#   check r.ref.range_end == 100.to_value()
 
 # test_vm "(0 .. 100)", proc(r: Value) =
-#   check r.range.start == 0
-#   check r.range.end == 100
+#   check r.ref.range_start == 0.to_value()
+#   check r.ref.range_end == 100.to_value()
 
 test_vm "(1 + 2)", 3
 test_vm "(1 - 2)", -1
+
+# Additional arithmetic tests
+test_vm "(2 * 3)", 6
+test_vm "(6 / 2)", 3.0
+test_vm "(2 > 1)", true
+test_vm "(2 >= 2)", true
+test_vm "(1 != 2)", true
 
 # Variable tests
 test_vm """
@@ -128,6 +136,10 @@ test_vm """
   )
 """, 2
 
+# Additional conditional tests
+test_vm "(if true 1)", 1
+test_vm "(if false 1 else 2)", 2
+
 test_vm """
   (do 1 2 3)
 """, 3
@@ -153,67 +165,77 @@ test_vm """
   )
 """, 1
 
-# test_vm """
-#   (var i 1)
-#   (i += 2)
-#   i
-# """, 3
+# Loop with variable modification
+test_vm """
+  (var i 0)
+  (loop
+    (i = (i + 1))
+    (break)
+  )
+  i
+""", 1
 
-# test_vm """
-#   (var i 3)
-#   (i -= 2)
-#   i
-# """, 1
+test_vm """
+  (var i 1)
+  (i += 2)
+  i
+""", 3
 
-# test_vm """
-#   (var i 1)
-# """, 1
+test_vm """
+  (var i 3)
+  (i -= 2)
+  i
+""", 1
 
-# test_vm """
-#   ($ns/a = 1)
-#   a
-# """, 1
+test_vm """
+  (var i 1)
+""", 1
 
-# test_vm """
-#   (var a [0])
-#   (a/0 = 1)
-#   a/0
-# """, 1
+test_vm """
+  ($ns/a = 1)
+  a
+""", 1
 
-# test_vm """
-#   (var a (_ 0))
-#   (a/0 = 1)
-#   a/0
-# """, 1
+test_vm """
+  (var a [0])
+  (a/0 = 1)
+  a/0
+""", 1
 
-# test_vm """
-#   (var a [1])
-#   (a/0 += 1)
-#   a/0
-# """, 2
+test_vm """
+  (var a (_ 0))
+  (a/0 = 1)
+  a/0
+""", 1
 
-# test_vm """
-#   ($ns/a = 1)
-#   ($ns/a += 1)
-#   a
-# """, 2
+test_vm """
+  (var a [1])
+  (a/0 += 1)
+  a/0
+""", 2
 
-# test_vm """
-#   (ns n
-#     (ns m)
-#   )
-#   (n/m/a = 1)
-#   n/m/a
-# """, 1
+test_vm """
+  ($ns/a = 1)
+  ($ns/a += 1)
+  a
+""", 2
 
-# test_vm """
-#   (ns n
-#     (ns m)
-#   )
-#   (n/m/a = 1)
-#   (n/m/a += 1)
-#   n/m/a
-# """, 2
+test_vm """
+  (ns n
+    (ns m)
+  )
+  (n/m/a = 1)
+  n/m/a
+""", 1
+
+test_vm """
+  (ns n
+    (ns m)
+  )
+  (n/m/a = 1)
+  (n/m/a += 1)
+  n/m/a
+""", 2
 
 test_vm "(1 == 1)", true
 test_vm "(1 == 2)", false
@@ -231,51 +253,181 @@ test_vm "(true || true)", true
 test_vm "(true || false)", true
 test_vm "(false || false)", false
 
-# test_vm "(nil || 1)", 1
+test_vm "(nil || 1)", 1
 
-# test_vm "(var a 1) a", 1
-# test_vm "(var a 1) (a = 2) a", 2
-# test_vm "(var a) (a = 2) a", 2
+# Additional variable tests - single line expressions
+test_vm "(var a 1) a", 1
+test_vm "(var a 1) (a = 2) a", 2
+test_vm "(var a) (a = 2) a", 2
 
-# test_vm """
-#   (var a 1)
-#   (var b 2)
-#   [a b]
-# """, proc(r: Value) =
-#   check r.ref.arr[0] == 1
-#   check r.ref.arr[1] == 2
+# Simple do block test
+test_vm "(do 1 2)", 2
 
-# test_vm """
-#   (var a (if false 1))
-#   a
-# """, NIL
+# Test self keyword - returns nil in reference implementation
+test_vm "self", NIL
 
-# test_vm """
-#   (var a 1)
-#   (var b 2)
-#   {^a a ^b b}
-# """, proc(r: Value) =
-#   check r.ref.map["a".to_key()] == 1
-#   check r.ref.map["b".to_key()] == 2
+# Array and map validation tests
+test_vm """
+  (var a 1)
+  (var b 2)
+  [a b]
+""", proc(r: Value) =
+  check r.ref.arr[0] == 1.to_value()
+  check r.ref.arr[1] == 2.to_value()
 
-# test_vm """
-#   (var a 1)
-#   (var b 2)
-#   (:test ^a a b)
-# """, proc(r: Value) =
-#   check r.gene.props["a".to_key()] == 1
-#   check r.gene.children[0] == 2
+test_vm """
+  (var a 1)
+  (var b 2)
+  {^a a ^b b}
+""", proc(r: Value) =
+  check r.ref.map["a".to_key()] == 1.to_value()
+  check r.ref.map["b".to_key()] == 2.to_value()
+
+# Gene expression tests
+test_vm """
+  (var a 1)
+  (var b 2)
+  (:test ^a a b)
+""", proc(r: Value) =
+  check r.gene.props["a".to_key()] == 1.to_value()
+  check r.gene.children[0] == 2.to_value()
+
+# Gene spread test
+test_vm """
+  (_ (... [2 3]) 4)
+""", proc(r: Value) =
+  check r.gene.children[0] == 2.to_value()
+  check r.gene.children[1] == 3.to_value()
+  check r.gene.children[2] == 4.to_value()
 
 # test_vm "(if true 1)", 1
 # test_vm "(if true then 1)", 1
 # test_vm "(if not false 1)", 1
 # test_vm "(if false 1 else 2)", 2
-# test_vm """
-#   (if false
-#     1
-#   elif true
-#     2
-#   else
-#     3
-#   )
-# """, 2
+# Advanced conditional tests
+test_vm "(if true then 1)", 1
+# TODO: Fix if statement with not condition - currently returns true instead of 1
+# test_vm "(if not false 1)", 1
+test_vm """
+  (if false
+    1
+  elif true
+    2
+  else
+    3
+  )
+""", 2
+
+test_vm """
+  (if false
+    1
+  elif false
+    2
+  else
+    3
+  )
+""", 3
+
+# void operation test
+test_vm """
+  (void 1 2)
+""", NIL
+
+# $with context test
+test_vm """
+  ($with 1
+    self
+  )
+""", 1
+
+# $tap operations
+test_vm """
+  ($tap 1
+    (assert (self == 1))
+    2
+  )
+""", 1
+
+test_vm """
+  ($tap 1 :i
+    (assert (i == 1))
+    2
+  )
+""", 1
+
+test_vm """
+  (var a 1)
+  ($tap a :i
+    (assert (i == 1))
+    2
+  )
+""", 1
+
+# Advanced loop control
+test_vm """
+  (var i 0)
+  (loop
+    (i += 1)
+    (if (i < 5)
+      (continue)
+    else
+      (break)
+    )
+    (i = 10000)  # should not reach here
+  )
+  i
+""", 5
+
+# while loop tests
+test_vm """
+  (var i 0)
+  (while (i < 3)
+    (i += 1)
+  )
+  i
+""", 3
+
+test_vm """
+  (var i 0)
+  (while true
+    (i += 1)
+    (if (i < 3)
+      (continue)
+    else
+      (break)
+    )
+    (i = 10000)  # should not reach here
+  )
+  i
+""", 3
+
+# eval operations
+test_vm """
+  (var a 1)
+  (eval :a)
+""", 1
+
+test_vm """
+  (var a 1)
+  (var b 2)
+  (eval :a :b)
+""", 2
+
+# spread operator tests
+test_vm """
+  (var a [2 3])
+  [1 a... 4]
+""", new_array_value(1, 2, 3, 4)
+
+test_vm """
+  [1 (... [2 3]) 4]
+""", new_array_value(1, 2, 3, 4)
+
+# $parse operation
+test_vm """
+  ($parse "true")
+""", true
+
+test_vm """
+  (eval ($parse "(1 + 2)"))
+""", 3
