@@ -193,7 +193,7 @@ proc vm_eval(self: VirtualMachine, args: Value): Value {.gcsafe.} =
     if args.gene.children.len == 0:
       return NIL
     
-    var result = NIL
+    result = NIL
     for arg in args.gene.children:
       case arg.kind:
         of VkSymbol:

@@ -247,6 +247,33 @@ proc exec*(self: VirtualMachine): Value =
               if self.trace:
                 echo fmt"IkGetChild unsupported kind: {value.kind}"
             todo($value.kind)
+      of IkGetChildDynamic:
+        # Get child using index from stack
+        # Stack order: [... collection index]
+        var index: Value
+        self.frame.pop2(index)
+        var collection: Value  
+        self.frame.pop2(collection)
+        let i = index.int
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkGetChildDynamic: collection={collection}, index={index}"
+        case collection.kind:
+          of VkArray:
+            self.frame.push(collection.ref.arr[i])
+          of VkGene:
+            self.frame.push(collection.gene.children[i])
+          of VkRange:
+            # Calculate the i-th element in the range
+            let start = collection.ref.range_start.int
+            let step = if collection.ref.range_step == NIL: 1 else: collection.ref.range_step.int
+            let value = start + (i * step)
+            self.frame.push(value.Value)
+          else:
+            when not defined(release):
+              if self.trace:
+                echo fmt"IkGetChildDynamic unsupported kind: {collection.kind}"
+            todo($collection.kind)
 
       of IkJump:
         {.push checks: off}
@@ -258,6 +285,9 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var value: Value
         self.frame.pop2(value)
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkJumpIfFalse: value={value}, to_bool={value.to_bool()}, jumping={not value.to_bool()}"
         if not value.to_bool():
           pc = inst.arg0.int
           inst = self.cu.instructions[pc].addr
@@ -292,12 +322,22 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkPushValue:
         self.frame.push(inst.arg0)
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkPushValue: pushed {inst.arg0}"
       of IkPushNil:
         self.frame.push(NIL)
       of IkPop:
-        discard self.frame.pop()
+        let value = self.frame.pop()
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkPop: popped {value}"
       of IkDup:
-        self.frame.push(self.frame.current())
+        let value = self.frame.current()
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkDup: duplicating {value}"
+        self.frame.push(value)
       of IkDup2:
         # Duplicate top two stack elements
         let top = self.frame.pop()
@@ -306,12 +346,40 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(top)
         self.frame.push(second)
         self.frame.push(top)
+      of IkDupSecond:
+        # Duplicate second element from stack
+        # Stack: [... second top] -> [... second top second]
+        let top = self.frame.pop()
+        let second = self.frame.pop()
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkDupSecond: top={top}, second={second}"
+        self.frame.push(second)  # Put second back
+        self.frame.push(top)     # Put top back
+        self.frame.push(second)  # Push duplicate of second
       of IkSwap:
         # Swap top two stack elements
         let top = self.frame.pop()
         let second = self.frame.pop()
         self.frame.push(top)
         self.frame.push(second)
+      of IkOver:
+        # Copy second element to top: [a b] -> [a b a]
+        let top = self.frame.pop()
+        let second = self.frame.current()
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkOver: top={top}, second={second}"
+        self.frame.push(top)
+        self.frame.push(second)
+      of IkLen:
+        # Get length of collection
+        let value = self.frame.pop()
+        let length = value.size()
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkLen: size({value}) = {length}"
+        self.frame.push(length.Value)
 
       of IkArrayStart:
         self.frame.push(new_array_value())
@@ -330,6 +398,10 @@ proc exec*(self: VirtualMachine): Value =
           else:
             self.frame.current().ref.arr.add(child)
       of IkArrayEnd:
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkArrayEnd: array on stack = {self.frame.current()}"
+            # Let's also check what happens next
         discard
 
       of IkMapStart:
@@ -635,6 +707,10 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var second: Value
         self.frame.pop2(second)
+        let first = self.frame.current()
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkLt: {first} < {second} = {first.int < second.int}"
         self.frame.replace(self.frame.current().int < second.int)
         {.pop.}
       of IkLtValue:

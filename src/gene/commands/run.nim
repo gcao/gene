@@ -1,6 +1,8 @@
 import parseopt, times
 
 import ../types
+import ../parser
+import ../vm
 import ./base
 
 const DEFAULT_COMMAND = "run"
@@ -66,13 +68,16 @@ proc handle*(cmd: string, args: seq[string]): string =
   let file = options.file
   let start = cpu_time()
   var value: Value
-  todo()
-  # if file.ends_with(".gar"):
-  #   value = run_archive_file(file)
-  # else:
-  #   value = run_file(file)
-  # if options.print_result:
-  #   echo value.to_s
+  
+  # Initialize the VM if not already initialized
+  init_app_and_vm()
+  
+  # Read the file and execute it
+  let code = read_file(file)
+  value = VM.exec(code, file)
+  
+  if options.print_result:
+    echo value
   if options.benchmark:
     echo "Time: " & $(cpu_time() - start)
 

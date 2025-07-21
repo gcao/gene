@@ -583,8 +583,11 @@ type
     IkPushNil
     IkPop
     IkDup         # duplicate top stack element
-    IkDup2        # duplicate second stack element (under top)
+    IkDup2        # duplicate top two stack elements
+    IkDupSecond   # duplicate second element (under top)
     IkSwap        # swap top two stack elements
+    IkOver        # copy second element to top: [a b] -> [a b a]
+    IkLen         # get length of collection
 
     IkVar
     IkVarValue
@@ -679,6 +682,7 @@ type
     IkGetMember
     IkSetChild
     IkGetChild
+    IkGetChildDynamic  # Get child using index from stack
 
     IkSelf
 
@@ -1270,6 +1274,25 @@ proc `[]`*(self: Value, i: int): Value =
             return NIL
           else:
             return r.bytes_data[i].Value
+        of VkRange:
+          # Calculate the i-th element in the range
+          let start_int = r.range_start.int64
+          let step_int = if r.range_step == NIL: 1.int64 else: r.range_step.int64
+          let end_int = r.range_end.int64
+          
+          let value = start_int + (i.int64 * step_int)
+          
+          # Check if the value is within the range bounds
+          if step_int > 0:
+            if value >= start_int and value < end_int:
+              return value.Value
+            else:
+              return NIL
+          else:  # step_int < 0
+            if value <= start_int and value > end_int:
+              return value.Value
+            else:
+              return NIL
         else:
           todo($r.kind)
     of GENE_PREFIX:
@@ -1314,6 +1337,23 @@ proc size*(self: Value): int =
           return r.str.to_runes().len
         of VkBytes:
           return r.bytes_data.len
+        of VkRange:
+          # Calculate range size based on start, end, and step
+          let start_int = r.range_start.int64
+          let end_int = r.range_end.int64
+          let step_int = if r.range_step == NIL: 1.int64 else: r.range_step.int64
+          if step_int == 0:
+            return 0
+          elif step_int > 0:
+            if start_int <= end_int:
+              return int((end_int - start_int) div step_int) + 1
+            else:
+              return 0
+          else:  # step_int < 0
+            if start_int >= end_int:
+              return int((start_int - end_int) div (-step_int)) + 1
+            else:
+              return 0
         else:
           todo($r.kind)
     of GENE_PREFIX:
@@ -1474,6 +1514,29 @@ proc new_array_value*(v: varargs[Value]): Value =
   let r = new_ref(VkArray)
   r.arr = @v
   result = r.to_ref_value()
+
+proc len*(self: Value): int =
+  case self.kind
+  of VkString:
+    return self.str.len
+  of VkArray, VkVector:
+    return self.ref.arr.len
+  of VkMap:
+    return self.ref.map.len
+  of VkSet:
+    return self.ref.set.len
+  of VkGene:
+    return self.gene.children.len
+  of VkRange:
+    # Calculate range length: (end - start) / step + 1
+    let start = self.ref.range_start.int
+    let endVal = self.ref.range_end.int
+    let step = if self.ref.range_step == NIL: 1 else: self.ref.range_step.int
+    if step == 0:
+      return 0
+    return ((endVal - start) div step) + 1
+  else:
+    return 0
 
 #################### Stream ######################
 

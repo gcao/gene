@@ -20,7 +20,7 @@ task test, "Runs the test suite":
   exec "nim c -r tests/test_scope.nim"
   exec "nim c -r tests/test_interpreter_symbol.nim"
   exec "nim c -r tests/test_interpreter_repeat.nim"
-  # exec "nim c -r tests/test_interpreter_for.nim"
+  exec "nim c -r tests/test_interpreter_for.nim"
   # exec "nim c -r tests/test_interpreter_case.nim"
   # exec "nim c -r tests/test_enum.nim"
   # exec "nim c -r tests/test_arithmetic.nim"

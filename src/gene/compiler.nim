@@ -410,6 +410,106 @@ proc compile_repeat(self: Compiler, gene: ptr Gene) =
   # Push nil as the result
   self.output.instructions.add(Instruction(kind: IkPushNil))
 
+proc compile_for(self: Compiler, gene: ptr Gene) =
+  # (for var in collection body...)
+  if gene.children.len < 2:
+    not_allowed("for expects at least 2 arguments (variable and collection)")
+  
+  let var_node = gene.children[0]
+  if var_node.kind != VkSymbol:
+    not_allowed("for loop variable must be a symbol")
+  
+  # Check for 'in' keyword
+  if gene.children.len < 3 or gene.children[1].kind != VkSymbol or gene.children[1].str != "in":
+    not_allowed("for loop requires 'in' keyword")
+  
+  let var_name = var_node.str
+  let collection = gene.children[2]
+  
+  # Create a scope for the entire for loop to hold temporary variables
+  self.start_scope()
+  
+  # Store collection in a temporary variable
+  self.compile(collection)
+  let collection_index = self.scope_tracker.next_index
+  self.scope_tracker.mappings["$for_collection".to_key()] = collection_index
+  self.add_scope_start()
+  self.scope_tracker.next_index.inc()
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: collection_index.Value))
+  
+  # Store index in a temporary variable, initialized to 0
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.Value))
+  let index_var = self.scope_tracker.next_index
+  self.scope_tracker.mappings["$for_index".to_key()] = index_var
+  self.scope_tracker.next_index.inc()
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: index_var.Value))
+  
+  let start_label = new_label()
+  let end_label = new_label()
+  
+  # Mark loop start
+  self.output.instructions.add(Instruction(kind: IkLoopStart, label: start_label))
+  
+  # Check if index < collection.length
+  # Load index
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.Value))
+  # Load collection
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: collection_index.Value))
+  # Get length
+  self.output.instructions.add(Instruction(kind: IkLen))
+  # Compare
+  self.output.instructions.add(Instruction(kind: IkLt))
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.Value))
+  
+  # Create scope for loop iteration
+  self.start_scope()
+  
+  # Get current element: collection[index]
+  # Load collection
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: collection_index.Value))
+  # Load index
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.Value))
+  # Get element
+  self.output.instructions.add(Instruction(kind: IkGetChildDynamic))
+  
+  # Store element in loop variable
+  let var_index = self.scope_tracker.next_index
+  self.scope_tracker.mappings[var_name.to_key()] = var_index
+  self.add_scope_start()
+  self.scope_tracker.next_index.inc()
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.Value))
+  
+  # Compile body (remaining children after 'in' and collection)
+  if gene.children.len > 3:
+    for i in 3..<gene.children.len:
+      self.compile(gene.children[i])
+      # Pop the result (we don't need it)
+      self.output.instructions.add(Instruction(kind: IkPop))
+  
+  # End the iteration scope
+  self.end_scope()
+  
+  # Increment index
+  # Load current index
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.Value))
+  # Add 1
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.Value))
+  self.output.instructions.add(Instruction(kind: IkAdd))
+  # Store back
+  self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: index_var.Value))
+  
+  # Jump back to condition check
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.Value))
+  
+  # Mark loop end
+  self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+  
+  # End the for loop scope
+  self.end_scope()
+  
+  # Push nil as the result
+  self.output.instructions.add(Instruction(kind: IkPushNil))
+
 proc compile_break(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
     self.compile(gene.children[0])
@@ -619,6 +719,16 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
 
 proc compile_gene(self: Compiler, input: Value) =
   let gene = input.gene
+  
+  # Special case: handle range expressions like (0 .. 2)
+  if gene.children.len == 2 and gene.children[0].kind == VkSymbol and gene.children[0].str == "..":
+    # This is a range expression: (start .. end)
+    self.compile(gene.type)  # start value
+    self.compile(gene.children[1])  # end value
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: NIL))  # default step
+    self.output.instructions.add(Instruction(kind: IkCreateRange))
+    return
+  
   if self.quote_level > 0 or gene.type == "_".to_symbol_value() or gene.type.kind == VkQuote:
     self.compile_gene_default(gene)
     return
@@ -739,6 +849,12 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "repeat":
         self.compile_repeat(gene)
+        return
+      of "for":
+        self.compile_for(gene)
+        return
+      of "..":
+        self.compile_range_operator(gene)
         return
       of "break":
         self.compile_break(gene)
