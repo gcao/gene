@@ -209,6 +209,13 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(value.ref.ns[name])
           of VkClass:
             self.frame.push(value.ref.class.ns[name])
+          of VkEnum:
+            # Access enum member
+            let member_name = $name
+            if member_name in value.ref.enum_def.members:
+              self.frame.push(value.ref.enum_def.members[member_name].to_value())
+            else:
+              not_allowed("enum " & value.ref.enum_def.name & " has no member " & member_name)
           of VkInstance:
             todo()
             # self.frame.push(value.ref.instance_props[name])
@@ -783,6 +790,25 @@ proc exec*(self: VirtualMachine): Value =
         let start = self.frame.pop()
         let range_value = new_range_value(start, `end`, step)
         self.frame.push(range_value)
+
+      of IkCreateEnum:
+        let name = self.frame.pop()
+        if name.kind != VkString:
+          not_allowed("enum name must be a string")
+        let enum_def = new_enum(name.str)
+        self.frame.push(enum_def.to_value())
+
+      of IkEnumAddMember:
+        let value = self.frame.pop()
+        let name = self.frame.pop()
+        let enum_val = self.frame.current()
+        if name.kind != VkString:
+          not_allowed("enum member name must be a string")
+        if value.kind != VkInt:
+          not_allowed("enum member value must be an integer")
+        if enum_val.kind != VkEnum:
+          not_allowed("can only add members to enums")
+        enum_val.add_member(name.str, value.int)
 
       of IkCompileInit:
         let input = self.frame.pop()

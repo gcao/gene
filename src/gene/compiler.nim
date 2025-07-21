@@ -510,6 +510,73 @@ proc compile_for(self: Compiler, gene: ptr Gene) =
   # Push nil as the result
   self.output.instructions.add(Instruction(kind: IkPushNil))
 
+proc compile_enum(self: Compiler, gene: ptr Gene) =
+  # (enum Color red green blue)
+  # (enum Status ^values [ok error pending])
+  if gene.children.len < 1:
+    not_allowed("enum expects at least a name")
+  
+  let name_node = gene.children[0]
+  if name_node.kind != VkSymbol:
+    not_allowed("enum name must be a symbol")
+  
+  let enum_name = name_node.str
+  
+  # Create the enum
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: enum_name.to_value()))
+  self.output.instructions.add(Instruction(kind: IkCreateEnum))
+  
+  # Check if ^values prop is used
+  var start_idx = 1
+  if gene.props.has_key("values".to_key()):
+    # Values are provided in the ^values property
+    let values_array = gene.props["values".to_key()]
+    if values_array.kind != VkArray:
+      not_allowed("enum ^values must be an array")
+    
+    var value = 0
+    for member in values_array.ref.arr:
+      if member.kind != VkSymbol:
+        not_allowed("enum member must be a symbol")
+      # Push member name and value
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: member.str.to_value()))
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: value.Value))
+      self.output.instructions.add(Instruction(kind: IkEnumAddMember))
+      value.inc()
+  else:
+    # Members are provided as children
+    var value = 0
+    var i = start_idx
+    while i < gene.children.len:
+      let member = gene.children[i]
+      if member.kind != VkSymbol:
+        not_allowed("enum member must be a symbol")
+      
+      # Check if next child is '=' for custom value
+      if i + 2 < gene.children.len and 
+         gene.children[i + 1].kind == VkSymbol and 
+         gene.children[i + 1].str == "=":
+        # Custom value provided
+        i += 2
+        if gene.children[i].kind != VkInt:
+          not_allowed("enum member value must be an integer")
+        value = gene.children[i].int
+      
+      # Push member name and value
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: member.str.to_value()))
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: value.Value))
+      self.output.instructions.add(Instruction(kind: IkEnumAddMember))
+      
+      value.inc()
+      i.inc()
+  
+  # Store the enum in the namespace  
+  let index = self.scope_tracker.next_index
+  self.scope_tracker.mappings[enum_name.to_key()] = index
+  self.add_scope_start()
+  self.scope_tracker.next_index.inc()
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
+
 proc compile_break(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
     self.compile(gene.children[0])
@@ -852,6 +919,9 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "for":
         self.compile_for(gene)
+        return
+      of "enum":
+        self.compile_enum(gene)
         return
       of "..":
         self.compile_range_operator(gene)
