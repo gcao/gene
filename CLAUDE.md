@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## General Guidance
+
+- Don't prematurely stop the work unless you have run the command to validate the work (e.g. run unit tests or gene code).
+
 ## Project Overview
 
 Gene is a general-purpose programming language written in Nim. This project is extending the current stack-based VM to support the comprehensive feature set found in the reference implementation.

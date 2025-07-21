@@ -117,28 +117,35 @@ proc vm_parse(self: VirtualMachine, args: Value): Value =
   let arg = args.gene.children[0]
   case arg.kind:
     of VkString:
-      # TODO: Use the actual Gene parser here
-      # For now, implement basic parsing for common cases
       let code = arg.str
-      case code:
-        of "true": 
-          return TRUE
-        of "false": 
-          return FALSE
-        of "nil": 
-          return NIL
+      # Use the actual Gene parser to parse the code
+      try:
+        let parsed = read_all(code)
+        if parsed.len > 0:
+          return parsed[0]
         else:
-          # Try to parse as number
-          try:
-            let int_val = parseInt(code)
-            return int_val.to_value()
-          except ValueError:
+          return NIL
+      except:
+        # Fallback to simple parsing for basic literals
+        case code:
+          of "true": 
+            return TRUE
+          of "false": 
+            return FALSE
+          of "nil": 
+            return NIL
+          else:
+            # Try to parse as number
             try:
-              let float_val = parseFloat(code)
-              return float_val.to_value()
+              let int_val = parseInt(code)
+              return int_val.to_value()
             except ValueError:
-              # Return as symbol for now
-              return code.to_symbol_value()
+              try:
+                let float_val = parseFloat(code)
+                return float_val.to_value()
+              except ValueError:
+                # Return as symbol for now
+                return code.to_symbol_value()
     else:
       not_allowed("$parse expects a string argument")
 
@@ -183,7 +190,7 @@ proc vm_tap(self: VirtualMachine, args: Value): Value =
   return original_value
 
 proc vm_eval(self: VirtualMachine, args: Value): Value =
-  # eval evaluates symbols and returns the last value
+  # eval evaluates symbols and expressions, returns the last value
   if args.gene.children.len == 0:
     return NIL
   
@@ -195,17 +202,30 @@ proc vm_eval(self: VirtualMachine, args: Value): Value =
         let key = arg.str.to_key()
         
         # Check if it's a local variable first
-        let found = self.frame.scope.tracker.locate(key)
-        if found.local_index >= 0:
-          # Variable found in scope
-          var scope = self.frame.scope
-          var parent_index = found.parent_index
-          while parent_index > 0:
-            parent_index.dec()
-            scope = scope.parent
-          result = scope.members[found.local_index]
+        if self.frame.scope != nil and self.frame.scope.tracker != nil:
+          let found = self.frame.scope.tracker.locate(key)
+          if found.local_index >= 0:
+            # Variable found in scope
+            var scope = self.frame.scope
+            var parent_index = found.parent_index
+            while parent_index > 0:
+              parent_index.dec()
+              scope = scope.parent
+            result = scope.members[found.local_index]
+          else:
+            # Not a local variable, look in namespaces
+            var value = self.frame.ns[key]
+            if value.int64 == NOT_FOUND.int64:
+              # Try global namespace
+              value = App.app.global_ns.ns[key]
+              if value.int64 == NOT_FOUND.int64:
+                # Try gene namespace
+                value = App.app.gene_ns.ns[key]
+                if value.int64 == NOT_FOUND.int64:
+                  not_allowed("Unknown symbol: " & arg.str)
+            result = value
         else:
-          # Not a local variable, look in namespaces
+          # No scope available, just look in namespaces
           var value = self.frame.ns[key]
           if value.int64 == NOT_FOUND.int64:
             # Try global namespace
@@ -216,8 +236,18 @@ proc vm_eval(self: VirtualMachine, args: Value): Value =
               if value.int64 == NOT_FOUND.int64:
                 not_allowed("Unknown symbol: " & arg.str)
           result = value
+      of VkGene:
+        # For Gene expressions, compile and execute them
+        let compiled = compile(@[arg])
+        let vm = VirtualMachine()
+        let ns = new_namespace("eval")
+        vm.frame.update(new_frame(ns))
+        vm.frame.ref_count.dec()
+        vm.frame.self = NIL
+        vm.cu = compiled
+        result = vm.exec()
       else:
-        # For non-symbols, just return the value as-is
+        # For other types, just return the value as-is
         result = arg
   
   return result
