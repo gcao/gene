@@ -583,6 +583,8 @@ type
     IkPushNil
     IkPop
     IkDup         # duplicate top stack element
+    IkDup2        # duplicate second stack element (under top)
+    IkSwap        # swap top two stack elements
 
     IkVar
     IkVarValue
@@ -724,6 +726,7 @@ type
     parent_index_max*: int16
     next_index*: int16      # If next_index is 0, the scope is empty
     mappings*: Table[Key, int16]
+    scope_started*: bool    # Track if we've added a ScopeStart instruction
 
   Address* = object
     cu*: CompilationUnit
@@ -1726,7 +1729,11 @@ proc locate*(self: ScopeTracker, key: Key): VarIndex =
   elif self.parent.is_nil():
     return VarIndex(parent_index: 0, local_index: -1)
   else:
-    result = self.locate(key, self.parent_index_max.int)
+    result = self.parent.locate(key, self.parent_index_max.int)
+    # Only increment parent_index if we actually created a runtime scope
+    # (indicated by scope_started flag or having variables)
+    if self.next_index > 0 or self.scope_started:
+      result.parent_index.inc()
 
 #################### ScopeTracker ################
 
@@ -2379,7 +2386,7 @@ proc new_compilation_unit*(): CompilationUnit =
 proc `$`*(self: Instruction): string =
   case self.kind
     of IkPushValue,
-      IkVar, IkVarResolve,
+      IkVar, IkVarResolve, IkVarAssign,
       IkAddValue, IkLtValue,
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
@@ -2400,7 +2407,7 @@ proc `$`*(self: Instruction): string =
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
       else:
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
-    of IkVarResolveInherited:
+    of IkVarResolveInherited, IkVarAssignInherited:
       result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1}"
     else:
       if self.label.int > 0:

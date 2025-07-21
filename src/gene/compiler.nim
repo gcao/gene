@@ -1,4 +1,4 @@
-import tables, strutils, strformat
+import tables, strutils
 
 import ./types
 import "./compiler/if"
@@ -132,9 +132,13 @@ proc start_scope(self: Compiler) =
 proc add_scope_start(self: Compiler) =
   if self.scope_tracker.next_index == 0:
     self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: self.scope_tracker.to_value()))
+    # Mark that we added a scope start, even for empty scopes
+    self.scope_tracker.scope_started = true
 
 proc end_scope(self: Compiler) =
-  if self.scope_tracker.next_index > 0:
+  # If we added a ScopeStart (either because we have variables or we explicitly marked it),
+  # we need to add the corresponding ScopeEnd
+  if self.scope_tracker.next_index > 0 or self.scope_tracker.scope_started:
     self.output.instructions.add(Instruction(kind: IkScopeEnd))
   discard self.scope_trackers.pop()
 
@@ -344,6 +348,67 @@ proc compile_while(self: Compiler, gene: ptr Gene) =
   
   # Mark loop end
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+
+proc compile_repeat(self: Compiler, gene: ptr Gene) =
+  if gene.children.len < 1:
+    not_allowed("repeat expects at least 1 argument (count)")
+  
+  # For now, implement a simple version without index/total variables
+  if gene.props.has_key(INDEX_KEY.to_key()) or gene.props.has_key(TOTAL_KEY.to_key()):
+    not_allowed("repeat with index/total variables not yet implemented in VM")
+  
+  let start_label = new_label()
+  let end_label = new_label()
+  
+  # Compile count expression
+  self.compile(gene.children[0])
+  
+  # Initialize loop counter to 0
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.Value))
+  
+  # Don't create a scope for the loop body - let each iteration handle its own scoping
+  
+  # Mark loop start
+  self.output.instructions.add(Instruction(kind: IkLoopStart, label: start_label))
+  
+  # Stack: [count, counter]
+  # Check if counter < count
+  self.output.instructions.add(Instruction(kind: IkDup2))   # [count, counter, count, counter]
+  self.output.instructions.add(Instruction(kind: IkSwap))   # [count, counter, counter, count]
+  self.output.instructions.add(Instruction(kind: IkLt))     # [count, counter, bool]
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.Value))
+  
+  # Compile body - wrap in a scope to isolate each iteration
+  if gene.children.len > 1:
+    # Start a new scope for this iteration
+    self.start_scope()
+    
+    for i in 1..<gene.children.len:
+      self.compile(gene.children[i])
+      # Pop the result (we don't need it)
+      self.output.instructions.add(Instruction(kind: IkPop))
+    
+    # End the iteration scope
+    self.end_scope()
+  
+  # Increment counter: Stack is [count, counter]
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.Value))  # [count, counter, 1]
+  self.output.instructions.add(Instruction(kind: IkAdd))  # [count, counter+1]
+  
+  # Jump back to condition check
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.Value))
+  
+  # Mark loop end
+  self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+  
+  # Clean up stack (pop counter and count)
+  self.output.instructions.add(Instruction(kind: IkPop))  # Remove counter
+  self.output.instructions.add(Instruction(kind: IkPop))  # Remove count
+  
+  # No scope to end - each iteration handles its own scoping
+  
+  # Push nil as the result
+  self.output.instructions.add(Instruction(kind: IkPushNil))
 
 proc compile_break(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
@@ -671,6 +736,9 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "while":
         self.compile_while(gene)
+        return
+      of "repeat":
+        self.compile_repeat(gene)
         return
       of "break":
         self.compile_break(gene)

@@ -1,5 +1,3 @@
-import strutils
-
 # Show the code
 # JIT the code (create a temporary block, reuse the frame)
 # Execute the code

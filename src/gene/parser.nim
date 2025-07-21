@@ -1249,21 +1249,21 @@ proc read_number(self: var Parser): Value =
     of '-':
       var s = self.str & self.read_token(false, [':'])
       if s.contains(':'):
-        var date = parse(s, DATETIME_FORMAT, utc())
-        todo("datetime")
+        # var date = parse(s, DATETIME_FORMAT, utc())
         # result = new_gene_datetime(date)
+        todo("datetime")
       else:
-        var date = parse(s, DATE_FORMAT, utc())
-        todo("date")
+        # var date = parse(s, DATE_FORMAT, utc())
         # result = new_gene_date(date)
+        todo("date")
     of ':':
-      var s = self.str & self.read_token(false, [':'])
-      var parts = s.split(":")
-      var hour = parts[0].parse_int()
-      var min = parts[1].parse_int()
-      var sec = parts[2].parse_int()
-      todo("time")
+      # var s = self.str & self.read_token(false, [':'])
+      # var parts = s.split(":")
+      # var hour = parts[0].parse_int()
+      # var min = parts[1].parse_int()
+      # var sec = parts[2].parse_int()
       # result = new_gene_time(hour, min, sec)
+      todo("time")
     of '/':
       if not isDigit(self.buf[self.bufpos+1]):
         let e = err_info(self)
@@ -1273,9 +1273,9 @@ proc read_number(self: var Parser): Value =
       self.str = ""
       var denom_tok = parse_number(self)
       if denom_tok == TkInt:
-        var denom = parse_biggest_int(self.str)
-        todo("ratio")
+        # var denom = parse_biggest_int(self.str)
         # result = new_gene_ratio(numerator.int, denom.int)
+        todo("ratio")
       else:
         raise new_exception(ParseError, "Error reading a ratio: " & self.str)
     else:
@@ -1335,22 +1335,21 @@ proc read*(self: var Parser): Value =
       if result == PARSER_IGNORE:
         result = self.read()
       return result
+  else:
+    token = self.read_token(true)
+    result = interpret_token(token)
+    if result == PARSER_IGNORE:
+      result = self.read()
 
-  token = self.read_token(true)
-  result = interpret_token(token)
-  if result == PARSER_IGNORE:
-    result = self.read()
-
-proc read_document_properties(self: var Parser) =
-  todo()
-  # if self.document_props_done:
-  #   return
-  # else:
-  #   self.document_props_done = true
-  # self.skip_ws()
-  # var ch = self.buf[self.bufpos]
-  # if ch == '^':
-  #   self.document.props = self.read_map(MkDocument)
+# proc read_document_properties(self: var Parser) =
+#   if self.document_props_done:
+#     return
+#   else:
+#     self.document_props_done = true
+#   self.skip_ws()
+#   var ch = self.buf[self.bufpos]
+#   if ch == '^':
+#     self.document.props = self.read_map(MkDocument)
 
 proc read*(self: var Parser, s: Stream, filename: string): Value =
   self.open(s, filename)

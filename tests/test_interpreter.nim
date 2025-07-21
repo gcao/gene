@@ -371,6 +371,7 @@ test_vm """
 """, 1
 
 # Advanced loop control
+echo "Running advanced loop control test..."
 test_vm """
   (var i 0)
   (loop

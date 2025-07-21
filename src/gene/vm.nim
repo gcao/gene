@@ -298,6 +298,20 @@ proc exec*(self: VirtualMachine): Value =
         discard self.frame.pop()
       of IkDup:
         self.frame.push(self.frame.current())
+      of IkDup2:
+        # Duplicate top two stack elements
+        let top = self.frame.pop()
+        let second = self.frame.pop()
+        self.frame.push(second)
+        self.frame.push(top)
+        self.frame.push(second)
+        self.frame.push(top)
+      of IkSwap:
+        # Swap top two stack elements
+        let top = self.frame.pop()
+        let second = self.frame.pop()
+        self.frame.push(top)
+        self.frame.push(second)
 
       of IkArrayStart:
         self.frame.push(new_array_value())

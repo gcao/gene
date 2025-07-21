@@ -6,22 +6,23 @@ import ./helpers
 # Most repeat functionality is not yet implemented in our VM
 # These tests are commented out until those features are available:
 
-# test_vm """
-#   (var sum 0)
-#   (repeat 3
-#     (sum = (sum + 1))
-#   )
-#   sum
-# """, 3
+test_vm """
+  (var sum 0)
+  (repeat 3
+    (sum = (sum + 1))
+  )
+  sum
+""", 3
 
-# test_vm """
-#   (var i 0)
-#   (repeat 3
-#     (var i 1)
-#   )
-#   i
-# """, 0
+test_vm """
+  (var i 0)
+  (repeat 3
+    (var i 1)
+  )
+  i
+""", 0
 
+# TODO: index/total variables not yet implemented
 # test_vm """
 #   (var sum 0)
 #   (repeat 4 ^index i
@@ -38,6 +39,7 @@ import ./helpers
 #   sum
 # """, 9
 
+# TODO: $once is not implemented yet
 # test_vm """
 #   (var sum 0)
 #   (repeat 3
@@ -46,6 +48,3 @@ import ./helpers
 #   )
 #   sum
 # """, 1
-
-# Placeholder test for now
-test_vm "1", 1

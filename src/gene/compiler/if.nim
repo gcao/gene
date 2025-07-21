@@ -6,6 +6,8 @@ const COND_KEY* = "cond"
 const THEN_KEY* = "then"
 const ELIF_KEY* = "elif"
 const ELSE_KEY* = "else"
+const INDEX_KEY* = "index"
+const TOTAL_KEY* = "total"
 
 type
   IfState = enum
