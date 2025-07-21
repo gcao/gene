@@ -74,6 +74,21 @@ proc compile_symbol(self: Compiler, input: Value) =
   else:
     let input = translate_symbol(input)
     if input.kind == VkSymbol:
+      let symbol_str = input.str
+      if symbol_str.endsWith("..."):
+        # Handle variable spread like "a..." - strip the ... and add spread
+        let base_symbol = symbol_str[0..^4].to_symbol_value()  # Remove "..."
+        let key = cast[Key](base_symbol)
+        let found = self.scope_tracker.locate(key)
+        if found.local_index >= 0:
+          if found.parent_index == 0:
+            self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
+          else:
+            self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index))
+        else:
+          self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: base_symbol))
+        self.output.instructions.add(Instruction(kind: IkSpread))
+        return
       let key = cast[Key](input)
       let found = self.scope_tracker.locate(key)
       if found.local_index >= 0:
@@ -305,12 +320,44 @@ proc compile_loop(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.Value))
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: label))
 
+proc compile_while(self: Compiler, gene: ptr Gene) =
+  if gene.children.len < 1:
+    not_allowed("while expects at least 1 argument (condition)")
+  
+  let label = new_label()
+  let end_label = new_label()
+  
+  # Mark loop start
+  self.output.instructions.add(Instruction(kind: IkLoopStart, label: label))
+  
+  # Compile and test condition
+  self.compile(gene.children[0])
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.Value))
+  
+  # Compile body (remaining children)
+  if gene.children.len > 1:
+    for i in 1..<gene.children.len:
+      self.compile(gene.children[i])
+  
+  # Jump back to condition
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.Value))
+  
+  # Mark loop end
+  self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+
 proc compile_break(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   self.output.instructions.add(Instruction(kind: IkBreak))
+
+proc compile_continue(self: Compiler, gene: ptr Gene) =
+  if gene.children.len > 0:
+    self.compile(gene.children[0])
+  else:
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  self.output.instructions.add(Instruction(kind: IkContinue))
 
 proc compile_fn(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
@@ -622,8 +669,14 @@ proc compile_gene(self: Compiler, input: Value) =
       of "loop":
         self.compile_loop(gene)
         return
+      of "while":
+        self.compile_while(gene)
+        return
       of "break":
         self.compile_break(gene)
+        return
+      of "continue":
+        self.compile_continue(gene)
         return
       of "fn", "fnx":
         self.compile_fn(input)
