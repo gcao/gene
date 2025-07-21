@@ -1743,6 +1743,15 @@ proc new_scope_tracker*(parent: ScopeTracker): ScopeTracker =
       return
     p = p.parent
 
+proc copy_scope_tracker*(source: ScopeTracker): ScopeTracker =
+  result = ScopeTracker()
+  result.next_index = source.next_index
+  result.parent_index_max = source.parent_index_max
+  result.parent = source.parent
+  # Copy the mappings table
+  for key, value in source.mappings:
+    result.mappings[key] = value
+
 proc add*(self: var ScopeTracker, name: Key) =
   self.mappings[name] = self.next_index
   self.next_index.inc()

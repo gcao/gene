@@ -64,12 +64,12 @@ test_vm """
   (f)
 """, 12
 
-# Function closure test - not yet working in our VM
-# test_vm """
-#   (var i 0)
-#   (fn f _
-#     i
-#   )
-#   (var i 1)
-#   (f)
-# """, 0
+# Function closure test
+test_vm("""
+  (var i 0)
+  (fn f _
+    i
+  )
+  (var i 1)
+  (f)
+""", 0)

@@ -732,6 +732,7 @@ proc exec*(self: VirtualMachine): Value =
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
         f.parent_scope.update(self.frame.scope)
+        
         f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
 
         if not f.matcher.is_empty():
@@ -753,6 +754,7 @@ proc exec*(self: VirtualMachine): Value =
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
         m.parent_scope.update(self.frame.scope)
         m.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
+        
         let r = new_ref(VkMacro)
         r.macro = m
         let v = r.to_ref_value()

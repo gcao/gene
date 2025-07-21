@@ -362,7 +362,7 @@ proc compile_continue(self: Compiler, gene: ptr Gene) =
 proc compile_fn(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
   var r = new_ref(VkScopeTracker)
-  r.scope_tracker = self.scope_tracker
+  r.scope_tracker = copy_scope_tracker(self.scope_tracker)  # Create a copy, not a reference
   self.output.instructions.add(Instruction(kind: IkNoop, arg0: r.to_ref_value()))
 
 proc compile_return(self: Compiler, gene: ptr Gene) =
