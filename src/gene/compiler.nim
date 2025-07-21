@@ -62,6 +62,9 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
         self.output.instructions.add(Instruction(kind: IkGetChild, arg0: i))
       elif s.starts_with("."):
         self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
+      elif s == "...":
+        # Handle spread operator for variables like "a..."
+        self.output.instructions.add(Instruction(kind: IkSpread))
       else:
         self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
 

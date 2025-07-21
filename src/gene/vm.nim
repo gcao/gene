@@ -893,6 +893,8 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))
 
   let ns = new_namespace(module_name)
+  # Add eval function to the module namespace
+  ns["eval".to_key()] = App.app.global_ns.ns["eval".to_key()]
   self.frame.update(new_frame(ns))
   self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
   self.frame.self = NIL  # Set default self to nil

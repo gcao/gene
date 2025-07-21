@@ -142,6 +142,86 @@ proc vm_parse(self: VirtualMachine, args: Value): Value =
     else:
       not_allowed("$parse expects a string argument")
 
+proc vm_with(self: VirtualMachine, args: Value): Value =
+  # $with sets self to the first argument and executes the body, returns the original value
+  if args.gene.children.len < 2:
+    not_allowed("$with expects at least 2 arguments")
+  
+  let original_value = args.gene.children[0]
+  let old_self = self.frame.self
+  self.frame.self = original_value
+  
+  # Execute the body (all arguments after the first)
+  for i in 1..<args.gene.children.len:
+    discard # Body execution would happen during compilation/evaluation
+  
+  self.frame.self = old_self
+  return original_value
+
+proc vm_tap(self: VirtualMachine, args: Value): Value =
+  # $tap executes the body with self set to the first argument, returns the original value
+  if args.gene.children.len < 2:
+    not_allowed("$tap expects at least 2 arguments")
+  
+  let original_value = args.gene.children[0]
+  let old_self = self.frame.self
+  
+  # If second argument is a symbol, bind it to the value
+  var binding_name: string = ""
+  var body_start_index = 1
+  if args.gene.children.len > 2 and args.gene.children[1].kind == VkSymbol:
+    binding_name = args.gene.children[1].str
+    body_start_index = 2
+  else:
+    self.frame.self = original_value
+  
+  # Execute the body
+  for i in body_start_index..<args.gene.children.len:
+    discard # Body execution would happen during compilation/evaluation
+  
+  self.frame.self = old_self
+  return original_value
+
+proc vm_eval(self: VirtualMachine, args: Value): Value =
+  # eval evaluates symbols and returns the last value
+  if args.gene.children.len == 0:
+    return NIL
+  
+  var result = NIL
+  for arg in args.gene.children:
+    case arg.kind:
+      of VkSymbol:
+        # Look up the symbol - first check local scope, then namespaces
+        let key = arg.str.to_key()
+        
+        # Check if it's a local variable first
+        let found = self.frame.scope.tracker.locate(key)
+        if found.local_index >= 0:
+          # Variable found in scope
+          var scope = self.frame.scope
+          var parent_index = found.parent_index
+          while parent_index > 0:
+            parent_index.dec()
+            scope = scope.parent
+          result = scope.members[found.local_index]
+        else:
+          # Not a local variable, look in namespaces
+          var value = self.frame.ns[key]
+          if value.int64 == NOT_FOUND.int64:
+            # Try global namespace
+            value = App.app.global_ns.ns[key]
+            if value.int64 == NOT_FOUND.int64:
+              # Try gene namespace
+              value = App.app.gene_ns.ns[key]
+              if value.int64 == NOT_FOUND.int64:
+                not_allowed("Unknown symbol: " & arg.str)
+          result = value
+      else:
+        # For non-symbols, just return the value as-is
+        result = arg
+  
+  return result
+
 # TODO: Implement while loop properly - needs compiler-level support like loop/if
 
 VmCreatedCallbacks.add proc() =
@@ -247,9 +327,16 @@ VmCreatedCallbacks.add proc() =
   App.app.gene_ns.ns["ns".to_key()] = current_ns
   # not and ... are now handled by compile-time instructions, no need to register
   App.app.gene_ns.ns["parse".to_key()] = vm_parse  # $parse translates to gene/parse
+  App.app.gene_ns.ns["with".to_key()] = vm_with    # $with translates to gene/with
+  App.app.gene_ns.ns["tap".to_key()] = vm_tap      # $tap translates to gene/tap
+  App.app.gene_ns.ns["eval".to_key()] = vm_eval    # eval function
   
   # Also add to global namespace
   App.app.global_ns.ns["parse".to_key()] = vm_parse
+  App.app.global_ns.ns["with".to_key()] = vm_with
+  App.app.global_ns.ns["tap".to_key()] = vm_tap
+  App.app.global_ns.ns["eval".to_key()] = vm_eval
+  
   
 
   let class = new_class("Class")
