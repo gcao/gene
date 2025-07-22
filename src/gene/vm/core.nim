@@ -13,6 +13,15 @@ proc println(self: VirtualMachine, args: Value): Value =
       s &= " "
   echo s
 
+proc gene_assert(self: VirtualMachine, args: Value): Value =
+  if args.gene.children.len > 0:
+    let condition = args.gene.children[0]
+    if not condition.to_bool():
+      var msg = "Assertion failed"
+      if args.gene.children.len > 1:
+        msg = args.gene.children[1].str
+      raise new_exception(types.Exception, msg)
+
 proc trace_start(self: VirtualMachine, args: Value): Value =
   self.trace = true
   self.frame.push(NIL)
@@ -349,6 +358,7 @@ VmCreatedCallbacks.add proc() =
 
   App.app.gene_ns.ns["debug".to_key()] = debug
   App.app.gene_ns.ns["println".to_key()] = println
+  App.app.gene_ns.ns["assert".to_key()] = gene_assert
   App.app.gene_ns.ns["trace_start".to_key()] = trace_start
   App.app.gene_ns.ns["trace_end".to_key()] = trace_end
   App.app.gene_ns.ns["print_stack".to_key()] = print_stack

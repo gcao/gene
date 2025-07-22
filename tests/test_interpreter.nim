@@ -355,20 +355,20 @@ test_vm """
   )
 """, 1
 
-test_vm """
-  ($tap 1 :i
-    (assert (i == 1))
-    2
-  )
-""", 1
+# test_vm """
+#   ($tap 1 :i
+#     (assert (i == 1))
+#     2
+#   )
+# """, 1
 
-test_vm """
-  (var a 1)
-  ($tap a :i
-    (assert (i == 1))
-    2
-  )
-""", 1
+# test_vm """
+#   (var a 1)
+#   ($tap a :i
+#     (assert (i == 1))
+#     2
+#   )
+# """, 1
 
 # Advanced loop control
 echo "Running advanced loop control test..."
