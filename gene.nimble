@@ -63,4 +63,5 @@ task test, "Runs the test suite":
   exec "nim c -r tests/test_vm_block.nim"
   # exec "nim c -r tests/test_vm_oop.nim"
   exec "nim c -r tests/test_vm_custom_compiler.nim"
+  exec "nim c -r tests/test_vm_exception.nim"
   # exec "nim c -r tests/test_vm_ffi.nim"

@@ -1075,6 +1075,34 @@ proc exec*(self: VirtualMachine): Value =
         )
         self.frame.push(r.to_ref_value())
 
+      of IkThrow:
+        {.push checks: off}
+        let value = self.frame.pop()
+        # TODO: Implement proper exception handling
+        # For now, just raise a Nim exception
+        raise new_exception(types.Exception, "Gene exception: " & $value)
+        {.pop.}
+        
+      of IkTryStart:
+        # TODO: Push exception handler info onto a stack
+        discard
+        
+      of IkTryEnd:
+        # TODO: Pop exception handler info from stack
+        discard
+        
+      of IkCatchStart:
+        # TODO: Set up catch block context
+        discard
+        
+      of IkCatchEnd:
+        # TODO: Clean up catch block context
+        discard
+        
+      of IkFinally:
+        # TODO: Implement finally block
+        discard
+
       else:
         todo($inst.kind)
 

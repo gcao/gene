@@ -642,6 +642,11 @@ type
     IkCompileInit
 
     IkThrow
+    IkTryStart    # mark start of try block
+    IkTryEnd      # mark end of try block
+    IkCatchStart  # mark start of catch block
+    IkCatchEnd    # mark end of catch block
+    IkFinally     # mark start of finally block
 
     # IkApplication
     # IkPackage

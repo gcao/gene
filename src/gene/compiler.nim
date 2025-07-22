@@ -591,6 +591,67 @@ proc compile_continue(self: Compiler, gene: ptr Gene) =
     self.output.instructions.add(Instruction(kind: IkPushNil))
   self.output.instructions.add(Instruction(kind: IkContinue))
 
+proc compile_throw(self: Compiler, gene: ptr Gene) =
+  if gene.children.len > 0:
+    # Throw with a value
+    self.compile(gene.children[0])
+  else:
+    # Throw without a value (re-throw current exception)
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  self.output.instructions.add(Instruction(kind: IkThrow))
+
+proc compile_try(self: Compiler, gene: ptr Gene) =
+  let try_end_label = new_label()
+  let catch_end_label = new_label()
+  let finally_label = new_label()
+  let end_label = new_label()
+  
+  # Mark start of try block
+  self.output.instructions.add(Instruction(kind: IkTryStart, arg0: catch_end_label.Value))
+  
+  # Compile try body
+  var i = 0
+  while i < gene.children.len:
+    let child = gene.children[i]
+    if child.kind == VkSymbol and (child.str == "catch" or child.str == "finally"):
+      break
+    self.compile(child)
+    inc i
+  
+  # Mark end of try block
+  self.output.instructions.add(Instruction(kind: IkTryEnd))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  
+  # Handle catch blocks
+  self.output.instructions.add(Instruction(kind: IkNoop, label: catch_end_label))
+  while i < gene.children.len:
+    let child = gene.children[i]
+    if child.kind == VkSymbol and child.str == "catch":
+      inc i
+      if i < gene.children.len:
+        # TODO: Handle catch patterns (exception types)
+        self.output.instructions.add(Instruction(kind: IkCatchStart))
+        
+        # Skip pattern for now, just compile body
+        inc i
+        while i < gene.children.len:
+          let body_child = gene.children[i]
+          if body_child.kind == VkSymbol and (body_child.str == "catch" or body_child.str == "finally"):
+            break
+          self.compile(body_child)
+          inc i
+        
+        self.output.instructions.add(Instruction(kind: IkCatchEnd))
+        self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+    elif child.kind == VkSymbol and child.str == "finally":
+      inc i
+      # TODO: Implement finally block
+      break
+    else:
+      inc i
+  
+  self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
+
 proc compile_fn(self: Compiler, input: Value) =
   self.output.instructions.add(Instruction(kind: IkFunction, arg0: input))
   var r = new_ref(VkScopeTracker)
@@ -951,6 +1012,12 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "return":
         self.compile_return(gene)
+        return
+      of "try":
+        self.compile_try(gene)
+        return
+      of "throw":
+        self.compile_throw(gene)
         return
       of "ns":
         self.compile_ns(gene)
