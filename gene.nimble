@@ -25,7 +25,7 @@ task test, "Runs the test suite":
   exec "nim c -r tests/test_enum.nim"
   exec "nim c -r tests/test_arithmetic.nim"
   exec "nim c -r tests/test_exception.nim"
-  # exec "nim c -r tests/test_fp.nim"
+  exec "nim c -r tests/test_fp.nim"
   # exec "nim c -r tests/test_namespace.nim"
   # exec "nim c -r tests/test_oop.nim"
   # exec "nim c -r tests/test_cast.nim"

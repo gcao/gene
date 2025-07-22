@@ -5,6 +5,9 @@ import "./compiler/if"
 
 #################### Definitions #################
 proc compile*(self: Compiler, input: Value)
+proc compile_with(self: Compiler, gene: ptr Gene)
+proc compile_tap(self: Compiler, gene: ptr Gene)
+proc compile_parse(self: Compiler, gene: ptr Gene)
 
 proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:
@@ -1038,11 +1041,43 @@ proc compile_gene(self: Compiler, input: Value) =
         self.compile(gene.children[0])
         self.output.instructions.add(Instruction(kind: IkSpread))
         return
+      of "void":
+        # Compile all arguments but return nil
+        for child in gene.children:
+          self.compile(child)
+          self.output.instructions.add(Instruction(kind: IkPop))
+        self.output.instructions.add(Instruction(kind: IkPushNil))
+        return
+      of "eval":
+        # Evaluate expressions
+        if gene.children.len == 0:
+          self.output.instructions.add(Instruction(kind: IkPushNil))
+        else:
+          # Compile each argument and evaluate
+          for i, child in gene.children:
+            self.compile(child)
+            # Add eval instruction to evaluate the value
+            self.output.instructions.add(Instruction(kind: IkEval))
+            if i < gene.children.len - 1:
+              self.output.instructions.add(Instruction(kind: IkPop))
+        return
       else:
         let s = `type`.str
         if s.starts_with("."):
           self.compile_method_call(gene)
           return
+        elif s.starts_with("$"):
+          # Handle $ prefixed operations
+          case s:
+            of "$with":
+              self.compile_with(gene)
+              return
+            of "$tap":
+              self.compile_tap(gene)
+              return
+            of "$parse":
+              self.compile_parse(gene)
+              return
 
   self.compile_gene_unknown(gene)
 
@@ -1236,6 +1271,102 @@ proc compile*(f: CompileFn) =
   f.body_compiled = self.output
   f.body_compiled.kind = CkCompileFn
   f.body_compiled.matcher = f.matcher
+
+proc compile_with(self: Compiler, gene: ptr Gene) =
+  # ($with value body...)
+  if gene.children.len < 1:
+    not_allowed("$with expects at least 1 argument")
+  
+  # Compile the value that will become the new self
+  self.compile(gene.children[0])
+  
+  # Duplicate it and save current self
+  self.output.instructions.add(Instruction(kind: IkDup))
+  self.output.instructions.add(Instruction(kind: IkSelf))
+  self.output.instructions.add(Instruction(kind: IkSwap))
+  
+  # Set as new self
+  self.output.instructions.add(Instruction(kind: IkSetSelf))
+  
+  # Compile body - return last value
+  if gene.children.len > 1:
+    for i in 1..<gene.children.len:
+      self.compile(gene.children[i])
+      if i < gene.children.len - 1:
+        self.output.instructions.add(Instruction(kind: IkPop))
+  else:
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  
+  # Restore original self (which is on stack under the result)
+  self.output.instructions.add(Instruction(kind: IkSwap))
+  self.output.instructions.add(Instruction(kind: IkSetSelf))
+
+proc compile_tap(self: Compiler, gene: ptr Gene) =
+  # ($tap value body...) or ($tap value :name body...)
+  if gene.children.len < 1:
+    not_allowed("$tap expects at least 1 argument")
+  
+  # Compile the value
+  self.compile(gene.children[0])
+  
+  # Duplicate it (one to return, one to use)
+  self.output.instructions.add(Instruction(kind: IkDup))
+  
+  # Check if there's a binding name
+  var start_idx = 1
+  var has_binding = false
+  var binding_name: string
+  
+  if gene.children.len > 1 and gene.children[1].kind == VkSymbol and gene.children[1].str.starts_with(":"):
+    has_binding = true
+    binding_name = gene.children[1].str[1..^1]
+    start_idx = 2
+  
+  # Save current self
+  self.output.instructions.add(Instruction(kind: IkSelf))
+  
+  # Set as new self
+  self.output.instructions.add(Instruction(kind: IkRot))  # Rotate: original_self, dup_value, value -> value, original_self, dup_value
+  self.output.instructions.add(Instruction(kind: IkSetSelf))
+  
+  # If has binding, create a new scope and bind the value
+  if has_binding:
+    self.start_scope()
+    let var_index = self.scope_tracker.next_index
+    self.scope_tracker.mappings[binding_name.to_key()] = var_index
+    self.add_scope_start()
+    self.scope_tracker.next_index.inc()
+    
+    # Duplicate the value again for binding
+    self.output.instructions.add(Instruction(kind: IkSelf))
+    self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.Value))
+  
+  # Compile body
+  if gene.children.len > start_idx:
+    for i in start_idx..<gene.children.len:
+      self.compile(gene.children[i])
+      # Pop all but last result
+      self.output.instructions.add(Instruction(kind: IkPop))
+  
+  # End scope if we created one
+  if has_binding:
+    self.end_scope()
+  
+  # Restore original self
+  self.output.instructions.add(Instruction(kind: IkSwap))  # dup_value, original_self -> original_self, dup_value
+  self.output.instructions.add(Instruction(kind: IkSetSelf))
+  # The dup_value remains on stack as the return value
+
+proc compile_parse(self: Compiler, gene: ptr Gene) =
+  # ($parse string)
+  if gene.children.len != 1:
+    not_allowed("$parse expects exactly 1 argument")
+  
+  # Compile the string argument
+  self.compile(gene.children[0])
+  
+  # Parse it
+  self.output.instructions.add(Instruction(kind: IkParse))
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

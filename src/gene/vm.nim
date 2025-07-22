@@ -157,18 +157,71 @@ proc exec*(self: VirtualMachine): Value =
           else:
             let name = cast[Key](inst.arg0)
             var value = self.frame.ns[name]
-            if value.int64 == NOT_FOUND.int64:
+            if value == NIL:
               # Try global namespace
               value = App.app.global_ns.ns[name]
-              if value.int64 == NOT_FOUND.int64:
+              if value == NIL:
                 # Try gene namespace
                 value = App.app.gene_ns.ns[name]
-                if value.int64 == NOT_FOUND.int64:
+                if value == NIL:
                   not_allowed("Unknown symbol")
             self.frame.push(value)
 
       of IkSelf:
         self.frame.push(self.frame.self)
+      
+      of IkSetSelf:
+        self.frame.self = self.frame.pop()
+      
+      of IkRot:
+        # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
+        let c = self.frame.pop()
+        let b = self.frame.pop()
+        let a = self.frame.pop()
+        self.frame.push(c)
+        self.frame.push(a)
+        self.frame.push(b)
+      
+      of IkParse:
+        let str_value = self.frame.pop()
+        if str_value.kind != VkString:
+          raise new_exception(types.Exception, "$parse expects a string")
+        let parsed = read(str_value.str)
+        self.frame.push(parsed)
+      
+      of IkEval:
+        let value = self.frame.pop()
+        case value.kind:
+          of VkSymbol:
+            # For eval, we need to compile and execute the symbol
+            # This is similar to what happens when compiling a symbol normally
+            # For now, just do namespace lookup (variables would need special handling)
+            let key = value.str.to_key()
+            var result = self.frame.ns[key]
+            if result == NIL:
+              result = App.app.global_ns.ns[key]
+              if result == NIL:
+                result = App.app.gene_ns.ns[key]
+                if result == NIL:
+                  not_allowed("Unknown symbol: " & value.str)
+            self.frame.push(result)
+          of VkGene:
+            # Evaluate a gene expression - compile and execute it
+            let compiled = compile_init(value)
+            # Save current state
+            let saved_cu = self.cu
+            let saved_pc = pc
+            # Execute the compiled code
+            self.cu = compiled
+            let eval_result = self.exec()
+            # Restore state
+            self.cu = saved_cu
+            pc = saved_pc
+            inst = self.cu.instructions[pc].addr
+            self.frame.push(eval_result)
+          else:
+            # For other types, just push them back (already evaluated)
+            self.frame.push(value)
 
       of IkSetMember:
         let name = inst.arg0.Key
@@ -223,7 +276,7 @@ proc exec*(self: VirtualMachine): Value =
             todo($value.kind)
 
       of IkSetChild:
-        let i = inst.arg0.int
+        let i = inst.arg0.int64
         var new_value: Value
         self.frame.pop2(new_value)
         var target: Value
@@ -241,7 +294,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(new_value)
 
       of IkGetChild:
-        let i = inst.arg0.int
+        let i = inst.arg0.int64
         var value: Value
         self.frame.pop2(value)
         case value.kind:
@@ -329,9 +382,6 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkPushValue:
         self.frame.push(inst.arg0)
-        when not defined(release):
-          if self.trace:
-            echo fmt"IkPushValue: pushed {inst.arg0}"
       of IkPushNil:
         self.frame.push(NIL)
       of IkPop:

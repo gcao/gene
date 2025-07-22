@@ -698,6 +698,10 @@ type
     IkGetChildDynamic  # Get child using index from stack
 
     IkSelf
+    IkSetSelf      # Set new self value
+    IkRot          # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
+    IkParse        # Parse string to Gene value
+    IkEval         # Evaluate a value
 
     IkYield
     IkResume
@@ -1285,7 +1289,10 @@ proc `$`*(self: Value): string {.gcsafe.} =
         for k, v in self.ref.map:
           if not first:
             result &= " "
-          result &= "^" & get_symbol(k.int64) & " " & $v
+          # Key is a symbol value cast to int64, need to extract the symbol index
+          let symbol_value = cast[Value](k)
+          let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
+          result &= "^" & get_symbol(symbol_index.int) & " " & $v
           first = false
         result &= "}"
       of VkGene:
