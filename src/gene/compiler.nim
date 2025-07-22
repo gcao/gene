@@ -23,7 +23,7 @@ proc translate_symbol(input: Value): Value =
       if s.starts_with("$"):
         # Special case for $ns - translate to special symbol
         if s == "$ns":
-          result = SYM_NS.to_value()
+          result = cast[Value](SYM_NS)
         else:
           result = @["gene", s[1..^1]].to_complex_symbol()
       else:
@@ -51,7 +51,7 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
     let key = r.csymbol[0].to_key()
     if r.csymbol[0] == "SPECIAL_NS":
       # Handle $ns/... specially
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: SYM_NS.to_value()))
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](SYM_NS)))
     elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
     else:
@@ -254,7 +254,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
     
     # Load the target object first (for both regular and compound assignment)
     if r.csymbol[0] == "SPECIAL_NS":
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: SYM_NS.to_value()))
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](SYM_NS)))
     elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
     else:

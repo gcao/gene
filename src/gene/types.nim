@@ -858,51 +858,73 @@ type
 
 const INST_SIZE* = sizeof(Instruction)
 
-const I64_MASK* = 0xC000_0000_0000_0000u64
-const F64_ZERO = 0x2000_0000_0000_0000u64
+# NaN Boxing implementation
+# We use the negative quiet NaN space (0xFFF0-0xFFFF prefix) for non-float values
+# This allows all valid IEEE 754 floats to work correctly
 
-const AND_MASK = 0x0000_FFFF_FFFF_FFFFu64
+const NAN_MASK* = 0xFFF0_0000_0000_0000u64
+const PAYLOAD_MASK* = 0x0000_FFFF_FFFF_FFFFu64
+const TAG_SHIFT* = 48
+
+# Size limits for immediate integers (48-bit)
+const SMALL_INT_MIN* = -(1'i64 shl 47)
+const SMALL_INT_MAX* = (1'i64 shl 47) - 1
+
+# Legacy constants for compatibility
+const I64_MASK* = 0xC000_0000_0000_0000u64  # Will be removed
+const F64_ZERO = 0x0000_0000_0000_0000u64   # Actual 0.0 in IEEE 754
+const AND_MASK = PAYLOAD_MASK
 
 
-const NIL_PREFIX = 0x7FFA
-const NIL* = cast[Value](0x7FFA_A000_0000_0000u64)
+# Primary type tags in NaN space
+# We use non-canonical quiet NaN values (0xFFF8-0xFFFF prefix with non-zero payload)
+const SMALL_INT_TAG* = 0xFFF8_0000_0000_0000u64   # 48-bit integers
+const POINTER_TAG* = 0xFFFC_0000_0000_0000u64     # Regular pointers
+const REF_TAG* = 0xFFFD_0000_0000_0000u64         # Reference objects
+const GENE_TAG* = 0xFFFA_0000_0000_0000u64        # Gene S-expressions
+const SYMBOL_TAG* = 0xFFF9_0000_0000_0000u64      # Symbols
+const SHORT_STR_TAG* = 0xFFFB_0000_0000_0000u64   # Short strings
+const LONG_STR_TAG* = 0xFFFE_0000_0000_0000u64    # Long string pointers
+const SPECIAL_TAG* = 0xFFF1_0000_0000_0000u64     # Special values (changed from 0xFFF0)
 
-const BOOL_PREFIX = 0x7FFC
-const TRUE*  = cast[Value](0x7FFC_A000_0000_0000u64)
-const FALSE* = cast[Value](0x7FFC_0000_0000_0000u64)
+# Special values (using SPECIAL_TAG)
+const NIL* = cast[Value](SPECIAL_TAG or 0)
+const TRUE* = cast[Value](SPECIAL_TAG or 1)
+const FALSE* = cast[Value](SPECIAL_TAG or 2)
 
-const POINTER_PREFIX = 0x7FFB
+# Legacy prefix constants for compatibility
+const NIL_PREFIX = 0xFFF1
+const BOOL_PREFIX = 0xFFF1
+const POINTER_PREFIX = 0xFFFC
+const REF_PREFIX = 0xFFFD
+const REF_MASK = REF_TAG
+const GENE_PREFIX = 0xFFFA
+const GENE_MASK = GENE_TAG
+const OTHER_PREFIX = 0xFFF1
 
-const REF_PREFIX = 0x7FFD
-const REF_MASK = 0x7FFD_0000_0000_0000u64
-
-const GENE_PREFIX = 0x7FF8
-const GENE_MASK = 0x7FF8_0000_0000_0000u64
-
-const OTHER_PREFIX = 0x7FFE
-
-const VOID* = cast[Value](0x7FFE_0000_0000_0000u64)
-const PLACEHOLDER* = cast[Value](0x7FFE_0100_0000_0000u64)
+const VOID* = cast[Value](SPECIAL_TAG or 3)
+const PLACEHOLDER* = cast[Value](SPECIAL_TAG or 4)
 # Used when a key does not exist in a map
-const NOT_FOUND* = cast[Value](0x7FFE_0200_0000_0000u64)
+const NOT_FOUND* = cast[Value](SPECIAL_TAG or 5)
 
 # Special variable used by the parser
-const PARSER_IGNORE* = cast[Value](0x7FFE_0200_0000_0000u64)
+const PARSER_IGNORE* = cast[Value](SPECIAL_TAG or 6)
 
-const CHAR_MASK = 0x7FFE_0200_0000_0000u64
-const CHAR2_MASK = 0x7FFE_0300_0000_0000u64
-const CHAR3_MASK = 0x7FFE_0400_0000_0000u64
-const CHAR4_MASK = 0x7FFE_0500_0000_0000u64
+# Character encoding in special values (using SPECIAL_TAG prefix)
+const CHAR_MASK = 0xFFF1_0000_0001_0000u64
+const CHAR2_MASK = 0xFFF1_0000_0002_0000u64
+const CHAR3_MASK = 0xFFF1_0000_0003_0000u64
+const CHAR4_MASK = 0xFFF1_0000_0004_0000u64
 
-const SHORT_STR_PREFIX  = 0xFFF8
-const SHORT_STR_MASK = 0xFFF8_0000_0000_0000u64
-const LONG_STR_PREFIX  = 0xFFF9
-const LONG_STR_MASK = 0xFFF9_0000_0000_0000u64
+const SHORT_STR_PREFIX = 0xFFFB
+const SHORT_STR_MASK = SHORT_STR_TAG
+const LONG_STR_PREFIX = 0xFFFE  
+const LONG_STR_MASK = LONG_STR_TAG
 
-const EMPTY_STRING = 0xFFF8_0000_0000_0000u64
+const EMPTY_STRING = SHORT_STR_TAG
 
-const SYMBOL_PREFIX  = 0x7FF9
-const EMPTY_SYMBOL = 0x7FF9_0000_0000_0000u64
+const SYMBOL_PREFIX = 0xFFF9
+const EMPTY_SYMBOL = SYMBOL_TAG
 
 const BIGGEST_INT = 2^61 - 1
 
@@ -924,7 +946,10 @@ proc `$`*(self: ptr Reference): string
 proc `$`*(self: ptr Gene): string
 
 template gene*(v: Value): ptr Gene =
-  cast[ptr Gene](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
+  if (cast[uint64](v) and 0xFFFF_0000_0000_0000u64) == GENE_TAG:
+    cast[ptr Gene](cast[uint64](v) and PAYLOAD_MASK)
+  else:
+    raise newException(ValueError, "Value is not a gene")
 
 proc new_str*(s: string): ptr String
 proc new_str_value*(s: string): Value
@@ -977,33 +1002,37 @@ proc new_id*(): Id =
 
 template destroy(self: Value) =
   {.push checks: off, optimization: speed.}
-  let v1 = cast[uint64](self)
-  let prefix = v1.shr(48)
-  case prefix:
-    of REF_PREFIX:
-      let x = cast[ptr Reference](bitand(v1, AND_MASK))
-      if x.ref_count == 1:
-        # echo "destroy " & $x.kind
-        dealloc(x)
+  let u = cast[uint64](self)
+  
+  # Only need to destroy heap-allocated values
+  if (u and NAN_MASK) == NAN_MASK:  # In NaN space
+    case u and 0xFFFF_0000_0000_0000u64:
+      of REF_TAG:
+        let x = cast[ptr Reference](u and PAYLOAD_MASK)
+        if x.ref_count == 1:
+          # echo "destroy " & $x.kind
+          dealloc(x)
+        else:
+          x.ref_count.dec()
+        {.linearScanEnd.}
+      of GENE_TAG:
+        let x = cast[ptr Gene](u and PAYLOAD_MASK)
+        if x.ref_count == 1:
+          # echo "destroy gene"
+          dealloc(x)
+        else:
+          x.ref_count.dec()
+      of LONG_STR_TAG:
+        let x = cast[ptr String](u and PAYLOAD_MASK)
+        if x.ref_count == 1:
+          # echo "destroy long string"
+          dealloc(x)
+        else:
+          x.ref_count.dec()
       else:
-        x.ref_count.dec()
-      {.linearScanEnd.}
-    of GENE_PREFIX:
-      let x = cast[ptr Gene](bitand(v1, AND_MASK))
-      if x.ref_count == 1:
-        # echo "destroy gene"
-        dealloc(x)
-      else:
-        x.ref_count.dec()
-    of LONG_STR_PREFIX:
-      let x = cast[ptr String](bitand(v1, AND_MASK))
-      if x.ref_count == 1:
-        # echo "destroy long string"
-        dealloc(x)
-      else:
-        x.ref_count.dec()
-    else:
-      discard
+        # Small ints, symbols, short strings, special values - no deallocation needed
+        discard
+  # else: regular float - no deallocation needed
   {.pop.}
 
 proc `=destroy`*(self: Value) =
@@ -1015,23 +1044,31 @@ proc `=copy`*(a: var Value, b: Value) =
     return
   if cast[int64](a) != 0:
     destroy(a)
-  let v1 = cast[uint64](b)
-  let prefix = v1.shr(48)
-  case prefix:
-    of REF_PREFIX:
-      let x = cast[ptr Reference](bitand(v1, AND_MASK))
-      x.ref_count.inc()
-      `=sink`(a, b)
-      {.linearScanEnd.}
-    of GENE_PREFIX:
-      let x = cast[ptr Gene](bitand(v1, AND_MASK))
-      x.ref_count.inc()
-      `=sink`(a, b)
-    of LONG_STR_PREFIX:
-      let x = cast[ptr String](bitand(v1, AND_MASK))
-      a = new_str_value(x.str)
-    else:
-      `=sink`(a, b)
+  
+  let u = cast[uint64](b)
+  
+  # Only need to increment ref count for heap-allocated values
+  if (u and NAN_MASK) == NAN_MASK:  # In NaN space
+    case u and 0xFFFF_0000_0000_0000u64:
+      of REF_TAG:
+        let x = cast[ptr Reference](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+        `=sink`(a, b)
+        {.linearScanEnd.}
+      of GENE_TAG:
+        let x = cast[ptr Gene](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+        `=sink`(a, b)
+      of LONG_STR_TAG:
+        let x = cast[ptr String](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+        `=sink`(a, b)
+      else:
+        # Small ints, symbols, short strings, special values - just copy
+        `=sink`(a, b)
+  else:
+    # Regular float - just copy
+    `=sink`(a, b)
   {.pop.}
 
 converter to_value*(k: Key): Value {.inline.} =
@@ -1070,11 +1107,17 @@ proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
   result.ref_count = 1
 
 template `ref`*(v: Value): ptr Reference =
-  cast[ptr Reference](bitand(AND_MASK, v.uint64))
+  if (cast[uint64](v) and 0xFFFF_0000_0000_0000u64) == REF_TAG:
+    cast[ptr Reference](cast[uint64](v) and PAYLOAD_MASK)
+  else:
+    raise newException(ValueError, "Value is not a reference")
 
 proc to_ref_value*(v: ptr Reference): Value {.inline.} =
   v.ref_count.inc()
-  cast[Value](bitor(REF_MASK, cast[uint64](v)))
+  # Ensure pointer fits in 48 bits
+  let ptr_addr = cast[uint64](v)
+  assert (ptr_addr and 0xFFFF_0000_0000_0000u64) == 0, "Reference pointer too large for NaN boxing"
+  result = cast[Value](REF_TAG or ptr_addr)
 
 #################### Value ######################
 
@@ -1082,66 +1125,100 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
   if cast[uint64](a) == cast[uint64](b):
     return true
 
-  let v1 = cast[uint64](a)
-  let v2 = cast[uint64](b)
-  case v1.shr(48):
-    of REF_PREFIX:
-      if cast[int64](v2.shr(48)) == REF_PREFIX:
-        return a.ref == b.ref
-    else:
-      discard
-
+  let u1 = cast[uint64](a)
+  let u2 = cast[uint64](b)
+  
+  # Only references can be equal with different bit patterns
+  if (u1 and 0xFFFF_0000_0000_0000u64) == REF_TAG and
+     (u2 and 0xFFFF_0000_0000_0000u64) == REF_TAG:
+    return a.ref == b.ref
+  
   # Default to false
+
+proc is_float*(v: Value): bool {.inline.} =
+  let u = cast[uint64](v)
+  # A value is a float if it's NOT in our NaN boxing space (0xFFF0-0xFFFF prefix)
+  # The only exceptions are actual float NaN/infinity values
+  if (u and NAN_MASK) != NAN_MASK:
+    return true  # Regular float
+  # Check for positive/negative infinity which are valid floats
+  if (u and 0x7FFF_FFFF_FFFF_FFFF'u64) == 0x7FF0_0000_0000_0000'u64:
+    return true  # ±infinity (0x7FF0000000000000 or 0xFFF0000000000000)
+  # Everything else in NaN space is not a float
+  return false
+
+proc is_small_int*(v: Value): bool {.inline.} =
+  (cast[uint64](v) and 0xFFFF_0000_0000_0000u64) == SMALL_INT_TAG
+
+# Forward declaration
+converter to_int*(v: Value): int64 {.inline.}
 
 proc kind*(v: Value): ValueKind =
   {.cast(gcsafe).}:
-    let v1 = cast[uint64](v)
-    let prefix = v1.shr(48)
-    case prefix:
-      of REF_PREFIX:
-        return v.ref.kind
-        {.linearScanEnd.}
-      of NIL_PREFIX:
-        return VkNil
-      of SYMBOL_PREFIX:
-        return VkSymbol
-      of SHORT_STR_PREFIX, LONG_STR_PREFIX:
-        return VkString
-      of GENE_PREFIX:
-        return VkGene
-      of BOOL_PREFIX:
-        return VkBool
-      of POINTER_PREFIX:
+    let u = cast[uint64](v)
+    
+    # First check if it's a float (most common case)
+    if is_float(v):
+      return VkFloat
+    
+    # It's in NaN space, check the tag
+    case u and 0xFFFF_0000_0000_0000u64:
+      of SMALL_INT_TAG:
+        return VkInt
+      of POINTER_TAG:
         return VkPointer
-      of OTHER_PREFIX:
-        case v1.shl(16).shr(56):
-          of 0x00:
+      of REF_TAG:
+        return v.ref.kind
+      of GENE_TAG:
+        return VkGene
+      of SYMBOL_TAG:
+        return VkSymbol
+      of SHORT_STR_TAG, LONG_STR_TAG:
+        return VkString
+      of SPECIAL_TAG:
+        # Special values
+        case u:
+          of cast[uint64](NIL):
+            return VkNil
+          of cast[uint64](TRUE), cast[uint64](FALSE):
+            return VkBool
+          of cast[uint64](VOID):
             return VkVoid
-          of 0x01:
+          of cast[uint64](PLACEHOLDER):
             return VkPlaceholder
-          of 0x02, 0x03, 0x04, 0x05:
-            return VkChar
           else:
-            todo($v1)
+            # Check for character values - check the high 32 bits for the character type
+            let char_type = u and 0xFFFF_FFFF_0000_0000u64
+            if char_type == (CHAR_MASK and 0xFFFF_FFFF_0000_0000u64) or
+               char_type == (CHAR2_MASK and 0xFFFF_FFFF_0000_0000u64) or
+               char_type == (CHAR3_MASK and 0xFFFF_FFFF_0000_0000u64) or
+               char_type == (CHAR4_MASK and 0xFFFF_FFFF_0000_0000u64):
+              return VkChar
+            else:
+              todo($u)
       else:
-        if bitand(v1, I64_MASK) == 0:
-          return VkInt
-        else:
-          return VkFloat
+        todo($u)
 
 proc is_literal*(self: Value): bool =
   {.cast(gcsafe).}:
-    let v1 = cast[uint64](self)
-    case v1.shr(48):
-      of NIL_PREFIX, BOOL_PREFIX, SHORT_STR_PREFIX, LONG_STR_PREFIX:
+    let u = cast[uint64](self)
+    
+    # Floats and integers are literals
+    if not ((u and NAN_MASK) == NAN_MASK):
+      return true  # Regular float
+    
+    # Check NaN-boxed values
+    case u and 0xFFFF_0000_0000_0000u64:
+      of SMALL_INT_TAG, SHORT_STR_TAG, LONG_STR_TAG:
         result = true
-      of OTHER_PREFIX:
+      of SPECIAL_TAG:
+        # nil, true, false, void, etc. are literals
         result = true
-      of SYMBOL_PREFIX:
+      of SYMBOL_TAG:
         result = false
-      of POINTER_PREFIX:
+      of POINTER_TAG:
         result = false
-      of REF_PREFIX:
+      of REF_TAG:
         let r = self.ref
         case r.kind:
           of VkArray:
@@ -1156,10 +1233,10 @@ proc is_literal*(self: Value): bool =
             return true
           else:
             result = false
-      of GENE_PREFIX:
+      of GENE_TAG:
         result = false
       else:
-        result = true
+        result = false
 
 proc `$`*(self: Value): string {.gcsafe.} =
   {.cast(gcsafe).}:
@@ -1233,19 +1310,24 @@ proc is_nil*(v: Value): bool {.inline.} =
   v == NIL
 
 proc to_float*(v: Value): float64 {.inline.} =
-  if cast[uint64](v) == F64_ZERO:
-    return 0.0
-  else:
+  if is_float(v):
     return cast[float64](v)
+  elif is_small_int(v):
+    # Convert integer to float
+    return to_int(v).float64
+  else:
+    raise newException(ValueError, "Value is not a number")
 
 template float*(v: Value): float64 =
   to_float(v)
 
+template float64*(v: Value): float64 =
+  to_float(v)
+
 converter to_value*(v: float64): Value {.inline.} =
-  if v == 0.0:
-    return cast[Value](F64_ZERO)
-  else:
-    return cast[Value](v)
+  # In NaN boxing, floats are stored directly
+  # Only NaN-boxed values (0xFFF0-0xFFFF prefix) are non-floats
+  result = cast[Value](v)
 
 converter to_bool*(v: Value): bool {.inline.} =
   not (v == FALSE or v == NIL)
@@ -1257,146 +1339,189 @@ converter to_value*(v: bool): Value {.inline.} =
     return FALSE
 
 proc to_pointer*(v: Value): pointer {.inline.} =
-  cast[pointer](bitand(cast[int64](v), 0x0000FFFFFFFFFFFF))
+  if (cast[uint64](v) and 0xFFFF_0000_0000_0000u64) == POINTER_TAG:
+    result = cast[pointer](cast[uint64](v) and PAYLOAD_MASK)
+  else:
+    raise newException(ValueError, "Value is not a pointer")
 
 converter to_value*(v: pointer): Value {.inline.} =
   if v.is_nil:
     return NIL
   else:
-    cast[Value](bitor(cast[int64](v), 0x7FFB000000000000))
+    # Ensure pointer fits in 48 bits (true on x86-64, ARM64)
+    let ptr_addr = cast[uint64](v)
+    assert (ptr_addr and 0xFFFF_0000_0000_0000u64) == 0, "Pointer too large for NaN boxing"
+    result = cast[Value](POINTER_TAG or ptr_addr)
 
 # Applicable to array, vector, string, symbol, gene etc
 proc `[]`*(self: Value, i: int): Value =
-  let v = cast[uint64](self)
-  case v.shr(48):
-    of NIL_PREFIX:
-      return NIL
-    of REF_PREFIX:
-      let r = self.ref
-      case r.kind:
-        of VkArray, VkVector:
-          if i >= r.arr.len:
+  let u = cast[uint64](self)
+  
+  # Check for special values first
+  if u == cast[uint64](NIL):
+    return NIL
+  
+  # Check if it's in NaN space
+  if (u and NAN_MASK) == NAN_MASK:
+    case u and 0xFFFF_0000_0000_0000u64:
+      of REF_TAG:
+        let r = self.ref
+        case r.kind:
+          of VkArray, VkVector:
+            if i >= r.arr.len:
+              return NIL
+            else:
+              return r.arr[i]
+          of VkString:
+            var j = 0
+            for rune in r.str.runes:
+              if i == j:
+                return rune
+              j.inc()
             return NIL
+          of VkBytes:
+            if i >= r.bytes_data.len:
+              return NIL
+            else:
+              return r.bytes_data[i].Value
+          of VkRange:
+            # Calculate the i-th element in the range
+            let start_int = r.range_start.int64
+            let step_int = if r.range_step == NIL: 1.int64 else: r.range_step.int64
+            let end_int = r.range_end.int64
+            
+            let value = start_int + (i.int64 * step_int)
+            
+            # Check if the value is within the range bounds
+            if step_int > 0:
+              if value >= start_int and value < end_int:
+                return value.Value
+              else:
+                return NIL
+            else:  # step_int < 0
+              if value <= start_int and value > end_int:
+                return value.Value
+              else:
+                return NIL
           else:
-            return r.arr[i]
-        of VkString:
-          var j = 0
-          for rune in r.str.runes:
-            if i == j:
-              return rune
-            j.inc()
+            todo($r.kind)
+      of GENE_TAG:
+        let g = self.gene
+        if i >= g.children.len:
           return NIL
-        of VkBytes:
-          if i >= r.bytes_data.len:
-            return NIL
-          else:
-            return r.bytes_data[i].Value
-        of VkRange:
-          # Calculate the i-th element in the range
-          let start_int = r.range_start.int64
-          let step_int = if r.range_step == NIL: 1.int64 else: r.range_step.int64
-          let end_int = r.range_end.int64
-          
-          let value = start_int + (i.int64 * step_int)
-          
-          # Check if the value is within the range bounds
-          if step_int > 0:
-            if value >= start_int and value < end_int:
-              return value.Value
-            else:
-              return NIL
-          else:  # step_int < 0
-            if value <= start_int and value > end_int:
-              return value.Value
-            else:
-              return NIL
         else:
-          todo($r.kind)
-    of GENE_PREFIX:
-      let g = self.gene
-      if i >= g.children.len:
+          return g.children[i]
+      of SHORT_STR_TAG, LONG_STR_TAG:
+        var j = 0
+        for rune in self.str().runes:
+          if i == j:
+            return rune
+          j.inc()
+        return NIL
+      of SYMBOL_TAG:
+        var j = 0
+        for rune in self.str().runes:
+          if i == j:
+            return rune
+          j.inc()
         return NIL
       else:
-        return g.children[i]
-    of SHORT_STR_PREFIX, LONG_STR_PREFIX:
-      var j = 0
-      for rune in self.str().runes:
-        if i == j:
-          return rune
-        j.inc()
-      return NIL
-    of SYMBOL_PREFIX:
-      var j = 0
-      for rune in self.str().runes:
-        if i == j:
-          return rune
-        j.inc()
-      return NIL
-    else:
-      todo($v)
+        todo($u)
+  else:
+    # Not in NaN space - must be a float
+    todo($u)
 
 # Applicable to array, vector, string, symbol, gene etc
 proc size*(self: Value): int =
-  let v = cast[uint64](self)
-  case v.shr(48):
-    of NIL_PREFIX:
-      return 0
-    of REF_PREFIX:
-      let r = self.ref
-      case r.kind:
-        of VkArray, VkVector:
-          return r.arr.len
-        of VkSet:
-          return r.set.len
-        of VkMap:
-          return r.map.len
-        of VkString:
-          return r.str.to_runes().len
-        of VkBytes:
-          return r.bytes_data.len
-        of VkRange:
-          # Calculate range size based on start, end, and step
-          let start_int = r.range_start.int64
-          let end_int = r.range_end.int64
-          let step_int = if r.range_step == NIL: 1.int64 else: r.range_step.int64
-          if step_int == 0:
-            return 0
-          elif step_int > 0:
-            if start_int <= end_int:
-              return int((end_int - start_int) div step_int) + 1
-            else:
+  let u = cast[uint64](self)
+  
+  # Check for special values first
+  if u == cast[uint64](NIL):
+    return 0
+  
+  # Check if it's in NaN space
+  if (u and NAN_MASK) == NAN_MASK:
+    case u and 0xFFFF_0000_0000_0000u64:
+      of REF_TAG:
+        let r = self.ref
+        case r.kind:
+          of VkArray, VkVector:
+            return r.arr.len
+          of VkSet:
+            return r.set.len
+          of VkMap:
+            return r.map.len
+          of VkString:
+            return r.str.to_runes().len
+          of VkBytes:
+            return r.bytes_data.len
+          of VkRange:
+            # Calculate range size based on start, end, and step
+            let start_int = r.range_start.int64
+            let end_int = r.range_end.int64
+            let step_int = if r.range_step == NIL: 1.int64 else: r.range_step.int64
+            if step_int == 0:
               return 0
-          else:  # step_int < 0
-            if start_int >= end_int:
-              return int((start_int - end_int) div (-step_int)) + 1
-            else:
-              return 0
-        else:
-          todo($r.kind)
-    of GENE_PREFIX:
-      return self.gene.children.len
-    of SHORT_STR_PREFIX, LONG_STR_PREFIX:
-      return self.str().to_runes().len
-    of SYMBOL_PREFIX:
-      return self.str().to_runes().len
-    else:
-      return 0
+            elif step_int > 0:
+              if start_int <= end_int:
+                return int((end_int - start_int) div step_int) + 1
+              else:
+                return 0
+            else:  # step_int < 0
+              if start_int >= end_int:
+                return int((start_int - end_int) div (-step_int)) + 1
+              else:
+                return 0
+          else:
+            todo($r.kind)
+      of GENE_TAG:
+        return self.gene.children.len
+      of SHORT_STR_TAG, LONG_STR_TAG:
+        return self.str().to_runes().len
+      of SYMBOL_TAG:
+        return self.str().to_runes().len
+      else:
+        return 0
+  else:
+    # Not in NaN space - must be a float
+    return 0
 
 #################### Int ########################
 
-# TODO: check range of value is within int61
+# NaN boxing for integers - supports 48-bit immediate values
 
 converter to_value*(v: int): Value {.inline.} =
-  result = cast[Value](v.int64)
+  let i = v.int64
+  if i >= SMALL_INT_MIN and i <= SMALL_INT_MAX:
+    # Fits in 48 bits - use NaN boxing
+    result = cast[Value](SMALL_INT_TAG or (cast[uint64](i) and PAYLOAD_MASK))
+  else:
+    # TODO: Allocate BigInt for values outside 48-bit range
+    raise newException(OverflowDefect, "Integer " & $i & " outside supported range")
 
 converter to_value*(v: int64): Value {.inline.} =
-  result = cast[Value](v)
+  if v >= SMALL_INT_MIN and v <= SMALL_INT_MAX:
+    # Fits in 48 bits - use NaN boxing
+    result = cast[Value](SMALL_INT_TAG or (cast[uint64](v) and PAYLOAD_MASK))
+  else:
+    # TODO: Allocate BigInt for values outside 48-bit range
+    raise newException(OverflowDefect, "Integer " & $v & " outside supported range")
 
 converter to_int*(v: Value): int64 {.inline.} =
-  result = cast[int64](v)
+  if is_small_int(v):
+    # Extract and sign-extend from 48 bits
+    let raw = cast[uint64](v) and PAYLOAD_MASK
+    if (raw and 0x8000_0000_0000u64) != 0:
+      # Negative - sign extend
+      result = cast[int64](raw or 0xFFFF_0000_0000_0000u64)
+    else:
+      result = cast[int64](raw)
+  else:
+    # TODO: Handle BigInt conversion
+    raise newException(ValueError, "Value is not an integer")
 
 template int64*(v: Value): int64 =
-  cast[int64](v)
+  to_int(v)
 
 #################### String #####################
 
@@ -1406,58 +1531,66 @@ proc new_str*(s: string): ptr String =
   result.str = s
 
 proc new_str_value*(s: string): Value =
-  cast[Value](bitor(LONG_STR_MASK, cast[uint64](new_str(s))))
+  let str_ptr = new_str(s)
+  let ptr_addr = cast[uint64](str_ptr)
+  assert (ptr_addr and 0xFFFF_0000_0000_0000u64) == 0, "String pointer too large for NaN boxing"
+  result = cast[Value](LONG_STR_TAG or ptr_addr)
 
 converter to_value*(v: char): Value {.inline.} =
   {.cast(gcsafe).}:
-    cast[Value](bitor(CHAR_MASK, v.ord.uint64))
+    # Encode char in special value space
+    result = cast[Value](CHAR_MASK or v.ord.uint64)
 
 proc str*(v: Value): string =
   {.cast(gcsafe).}:
-    let v1 = cast[uint64](v)
-    # echo v1.shr(48).int64.to_binstr
-    case v1.shr(48):
-      of SHORT_STR_PREFIX:
-        let x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
-        # echo x.to_binstr
-        {.push checks: off}
-        if x > 0xFF_FFFF:
-          if x > 0xFFFF_FFFF:
-            if x > 0xFF_FFFF_FFFF: # 6 chars
-              result = new_string(6)
-              copy_mem(result[0].addr, x.addr, 6)
-            else: # 5 chars
-              result = new_string(5)
-              copy_mem(result[0].addr, x.addr, 5)
-          else: # 4 chars
-            result = new_string(4)
-            copy_mem(result[0].addr, x.addr, 4)
-        else:
-          if x > 0xFF:
-            if x > 0xFFFF: # 3 chars
-              result = new_string(3)
-              copy_mem(result[0].addr, x.addr, 3)
-            else: # 2 chars
-              result = new_string(2)
-              copy_mem(result[0].addr, x.addr, 2)
+    let u = cast[uint64](v)
+    
+    # Check if it's in NaN space
+    if (u and NAN_MASK) == NAN_MASK:
+      case u and 0xFFFF_0000_0000_0000u64:
+        of SHORT_STR_TAG:
+          let x = cast[int64](u and PAYLOAD_MASK)
+          # echo x.to_binstr
+          {.push checks: off}
+          if x > 0xFF_FFFF:
+            if x > 0xFFFF_FFFF:
+              if x > 0xFF_FFFF_FFFF: # 6 chars
+                result = new_string(6)
+                copy_mem(result[0].addr, x.addr, 6)
+              else: # 5 chars
+                result = new_string(5)
+                copy_mem(result[0].addr, x.addr, 5)
+            else: # 4 chars
+              result = new_string(4)
+              copy_mem(result[0].addr, x.addr, 4)
           else:
-            if x > 0: # 1 chars
-              result = new_string(1)
-              copy_mem(result[0].addr, x.addr, 1)
-            else: # 0 char
-              result = ""
-        {.pop.}
+            if x > 0xFF:
+              if x > 0xFFFF: # 3 chars
+                result = new_string(3)
+                copy_mem(result[0].addr, x.addr, 3)
+              else: # 2 chars
+                result = new_string(2)
+                copy_mem(result[0].addr, x.addr, 2)
+            else:
+              if x > 0: # 1 chars
+                result = new_string(1)
+                copy_mem(result[0].addr, x.addr, 1)
+              else: # 0 char
+                result = ""
+          {.pop.}
 
-      of LONG_STR_PREFIX:
-        let x = cast[ptr String](bitand(cast[uint64](v1), AND_MASK))
-        result = x.str
+        of LONG_STR_TAG:
+          let x = cast[ptr String](u and PAYLOAD_MASK)
+          result = x.str
 
-      of SYMBOL_PREFIX:
-        let x = cast[int64](bitand(cast[uint64](v1), AND_MASK))
-        result = get_symbol(x)
+        of SYMBOL_TAG:
+          let x = cast[int64](u and PAYLOAD_MASK)
+          result = get_symbol(x)
 
-      else:
-        not_allowed(fmt"{v} is not a string.")
+        else:
+          not_allowed(fmt"{v} is not a string.")
+    else:
+      not_allowed(fmt"{v} is not a string.")
 
 converter to_value*(v: string): Value =
   {.push checks: off}
@@ -1512,9 +1645,12 @@ proc to_symbol_value*(s: string): Value =
     let found = SYMBOLS.map.get_or_default(s, -1)
     if found != -1:
       let i = found.uint64
-      result = cast[Value](bitor(EMPTY_SYMBOL, i))
+      result = cast[Value](SYMBOL_TAG or i)
     else:
-      result = cast[Value](bitor(EMPTY_SYMBOL, SYMBOLS.store.len.uint64))
+      let new_id = SYMBOLS.store.len.uint64
+      # Ensure symbol ID fits in 48 bits
+      assert new_id <= PAYLOAD_MASK, "Too many symbols for NaN boxing"
+      result = cast[Value](SYMBOL_TAG or new_id)
       SYMBOLS.map[s] = SYMBOLS.store.len
       SYMBOLS.store.add(s)
 
@@ -1595,7 +1731,10 @@ proc new_range_value*(start: Value, `end`: Value, step: Value): Value =
 
 proc to_gene_value*(v: ptr Gene): Value {.inline.} =
   v.ref_count.inc()
-  cast[Value](bitor(cast[uint64](v), GENE_MASK))
+  # Ensure pointer fits in 48 bits
+  let ptr_addr = cast[uint64](v)
+  assert (ptr_addr and 0xFFFF_0000_0000_0000u64) == 0, "Gene pointer too large for NaN boxing"
+  result = cast[Value](GENE_TAG or ptr_addr)
 
 proc `$`*(self: ptr Gene): string =
   result = "(" & $self.type
@@ -2633,10 +2772,10 @@ proc init_app_and_vm*() =
 
 #################### Helpers #####################
 
-const SYM_UNDERSCORE* = 0x7FF9_0000_0000_0000
-const SYM_SELF* = 0x7FF9_0000_0000_0001
-const SYM_GENE* = 0x7FF9_0000_0000_0002
-const SYM_NS* = 0x7FF9_0000_0000_0003
+const SYM_UNDERSCORE* = SYMBOL_TAG or 0
+const SYM_SELF* = SYMBOL_TAG or 1
+const SYM_GENE* = SYMBOL_TAG or 2
+const SYM_NS* = SYMBOL_TAG or 3
 
 proc init_values*() =
   SYMBOLS = ManagedSymbols()

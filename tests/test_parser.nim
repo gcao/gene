@@ -41,7 +41,7 @@ test_parser "true", TRUE
 test_parser "false", FALSE
 
 test_parser "10", 10
-test_parser "-1", -1.0
+test_parser "-1", -1  # With NaN boxing, negative integers are properly supported
 test_parser "10e10", 10e10
 test_parser "+5.0E5", +5.0E5
 

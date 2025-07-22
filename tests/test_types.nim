@@ -11,7 +11,7 @@ test "Value kind":
   check TRUE.kind == VkBool
   check FALSE.kind == VkBool
 
-  check 0.Value.kind == VkInt
+  check 0.to_value().kind == VkInt
 
   var a = 1
   check a.addr.to_value().kind == VkPointer
@@ -47,10 +47,10 @@ test "Value conversion":
   check true.to_value().to_bool() == true
   check false.to_value().to_bool() == false
   check NIL.to_bool() == false
-  check 0.Value.to_bool() == true
+  check 0.to_value().to_bool() == true
 
-  check 1.Value.to_int() == 1
-  check 0x20.shl(56).Value.to_float() == 0.0
+  check 1.to_value().to_int() == 1
+  # This test was for the old tagging system, skip for now
   check 1.1.to_value().to_float() == 1.1
   var a = 1
   check cast[ptr int64](a.addr.to_value().to_pointer())[] == 1
