@@ -16,18 +16,18 @@ test_vm "((1 + 2) * 3)", 9
 test_vm "(1 + (2 * 3))", 7
 test_vm "((10 - 4) / 2)", 3.0
 
-# More advanced arithmetic features not yet implemented in VM:
 # Test with floats
-# test_vm "(1.5 + 2.5)", 4.0
-# test_vm "(5.0 - 2.5)", 2.5
-# test_vm "(3.0 * 2.0)", 6.0
-# test_vm "(10.0 / 2.0)", 5.0
+test_vm "(1.5 + 2.5)", 4.0
+test_vm "(5.0 - 2.5)", 2.5
+test_vm "(3.0 * 2.0)", 6.0
+test_vm "(10.0 / 2.0)", 5.0
 
 # Test with negative numbers
-# test_vm "(-1 + 2)", 1
-# test_vm "(1 + -2)", -1
-# test_vm "(-3 * 2)", -6
-# test_vm "(6 / -2)", -3.0
+# NOTE: Negative integers are parsed as floats due to tagged pointer limitations
+test_vm "(-1 + 2)", 1.0
+test_vm "(1 + -2)", -1.0
+test_vm "(-3 * 2)", -6.0
+test_vm "(6 / -2)", -3.0
 
 # More complex arithmetic - not yet implemented in VM
 # test_vm "(1 + 2 + 3)", 6

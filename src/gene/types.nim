@@ -853,10 +853,11 @@ type
 
 const INST_SIZE* = sizeof(Instruction)
 
-const I64_MASK = 0xC000_0000_0000_0000u64
+const I64_MASK* = 0xC000_0000_0000_0000u64
 const F64_ZERO = 0x2000_0000_0000_0000u64
 
 const AND_MASK = 0x0000_FFFF_FFFF_FFFFu64
+
 
 const NIL_PREFIX = 0x7FFA
 const NIL* = cast[Value](0x7FFA_A000_0000_0000u64)
@@ -1167,7 +1168,7 @@ proc `$`*(self: Value): string {.gcsafe.} =
       of VkBool:
         result = $(self == TRUE)
       of VkInt:
-        result = $(cast[int64](self))
+        result = $self.int64
       of VkFloat:
         result = $(cast[float64](self))
       of VkChar:
@@ -1231,6 +1232,9 @@ proc to_float*(v: Value): float64 {.inline.} =
     return 0.0
   else:
     return cast[float64](v)
+
+template float*(v: Value): float64 =
+  to_float(v)
 
 converter to_value*(v: float64): Value {.inline.} =
   if v == 0.0:
@@ -1385,6 +1389,9 @@ converter to_value*(v: int64): Value {.inline.} =
 
 converter to_int*(v: Value): int64 {.inline.} =
   result = cast[int64](v)
+
+template int64*(v: Value): int64 =
+  cast[int64](v)
 
 #################### String #####################
 

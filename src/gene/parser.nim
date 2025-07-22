@@ -1279,7 +1279,17 @@ proc read_number(self: var Parser): Value =
       else:
         raise new_exception(ParseError, "Error reading a ratio: " & self.str)
     else:
-      result = parse_biggest_int(self.str)
+      let parsed_int = parse_biggest_int(self.str)
+      # IMPORTANT: The current tagged pointer system cannot represent negative integers
+      # because negative numbers in two's complement have their top bits set to 11,
+      # which conflicts with the float tag. Additionally, some float values like 1.0
+      # have bit patterns that would be misinterpreted as integers.
+      # This is a fundamental limitation of using only 2 bits for type tagging.
+      # A proper fix requires redesigning the value representation system.
+      if parsed_int < 0:
+        result = parsed_int.float64.to_value()
+      else:
+        result = parsed_int
   of TkFloat:
     result = parse_float(self.str)
   of TkError:

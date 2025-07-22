@@ -672,7 +672,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(first.int + second.int)
+                self.frame.push(first.int64 + second.int64)
+              of VkFloat:
+                self.frame.push(first.int64.float + second.float)
+              else:
+                todo("Unsupported second operand for addition: " & $second)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.push(first.float + second.int64.float)
+              of VkFloat:
+                self.frame.push(first.float + second.float)
               else:
                 todo("Unsupported second operand for addition: " & $second)
           else:
@@ -683,11 +693,49 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var second: Value
         self.frame.pop2(second)
-        self.frame.replace(self.frame.current().int - second.int)
+        let first = self.frame.current()
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.replace(first.int64 - second.int64)
+              of VkFloat:
+                self.frame.replace(first.int64.float - second.float)
+              else:
+                todo("Unsupported second operand for subtraction: " & $second)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.replace(first.float - second.int64.float)
+              of VkFloat:
+                self.frame.replace(first.float - second.float)
+              else:
+                todo("Unsupported second operand for subtraction: " & $second)
+          else:
+            todo("Unsupported first operand for subtraction: " & $first)
         {.pop.}
       of IkSubValue:
         {.push checks: off}
-        self.frame.replace(self.frame.current().int - inst.arg0.int)
+        let first = self.frame.current()
+        case first.kind:
+          of VkInt:
+            case inst.arg0.kind:
+              of VkInt:
+                self.frame.replace(first.int64 - inst.arg0.int64)
+              of VkFloat:
+                self.frame.replace(first.int64.float - inst.arg0.float)
+              else:
+                todo("Unsupported arg0 type for IkSubValue: " & $inst.arg0.kind)
+          of VkFloat:
+            case inst.arg0.kind:
+              of VkInt:
+                self.frame.replace(first.float - inst.arg0.int64.float)
+              of VkFloat:
+                self.frame.replace(first.float - inst.arg0.float)
+              else:
+                todo("Unsupported arg0 type for IkSubValue: " & $inst.arg0.kind)
+          else:
+            todo("Unsupported operand type for IkSubValue: " & $first.kind)
         {.pop.}
 
       of IkMul:
@@ -698,7 +746,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(first.int * second.int)
+                self.frame.push(first.int64 * second.int64)
+              of VkFloat:
+                self.frame.push(first.int64.float * second.float)
+              else:
+                todo("Unsupported second operand for multiplication: " & $second)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.push(first.float * second.int64.float)
+              of VkFloat:
+                self.frame.push(first.float * second.float)
               else:
                 todo("Unsupported second operand for multiplication: " & $second)
           else:
@@ -706,9 +764,27 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkDiv:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first / second)
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.push(first.int64.float / second.int64.float)
+              of VkFloat:
+                self.frame.push(first.int64.float / second.float)
+              else:
+                todo("Unsupported second operand for division: " & $second)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.push(first.float / second.int64.float)
+              of VkFloat:
+                self.frame.push(first.float / second.float)
+              else:
+                todo("Unsupported second operand for division: " & $second)
+          else:
+            todo("Unsupported first operand for division: " & $first)
 
       of IkLt:
         {.push checks: off}
@@ -718,7 +794,7 @@ proc exec*(self: VirtualMachine): Value =
         when not defined(release):
           if self.trace:
             echo fmt"IkLt: {first} < {second} = {first.int < second.int}"
-        self.frame.replace(self.frame.current().int < second.int)
+        self.frame.replace(self.frame.current().int64 < second.int64)
         {.pop.}
       of IkLtValue:
         var first: Value

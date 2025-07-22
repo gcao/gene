@@ -796,6 +796,11 @@ proc compile_gene(self: Compiler, input: Value) =
     self.output.instructions.add(Instruction(kind: IkCreateRange))
     return
   
+  # Special case: handle genes with numeric types and no children like (-1)
+  if gene.children.len == 0 and gene.type.kind in {VkInt, VkFloat}:
+    self.compile_literal(gene.type)
+    return
+  
   if self.quote_level > 0 or gene.type == "_".to_symbol_value() or gene.type.kind == VkQuote:
     self.compile_gene_default(gene)
     return
@@ -976,7 +981,7 @@ proc compile_gene(self: Compiler, input: Value) =
 
 proc compile*(self: Compiler, input: Value) =
   case input.kind:
-    of VkInt, VkBool, VkNil:
+    of VkInt, VkBool, VkNil, VkFloat:
       self.compile_literal(input)
     of VkString:
       self.compile_literal(input) # TODO
