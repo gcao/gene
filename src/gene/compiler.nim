@@ -840,6 +840,7 @@ proc compile_match(self: Compiler, gene: ptr Gene) =
     
     let var_index = self.scope_tracker.next_index
     self.scope_tracker.mappings[var_name.to_key()] = var_index
+    self.add_scope_start()
     self.scope_tracker.next_index.inc()
     
     # Store the value in the variable
@@ -865,6 +866,7 @@ proc compile_match(self: Compiler, gene: ptr Gene) =
         let var_name = elem.str
         let var_index = self.scope_tracker.next_index
         self.scope_tracker.mappings[var_name.to_key()] = var_index
+        self.add_scope_start()
         self.scope_tracker.next_index.inc()
         self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.to_value()))
     

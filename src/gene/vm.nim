@@ -97,8 +97,8 @@ proc exec*(self: VirtualMachine): Value =
         while self.frame.scope.members.len <= index:
           self.frame.scope.members.add(NIL)
         self.frame.scope.members[index] = value
-        # Push nil as the result of var
-        self.frame.push(NIL)
+        # Push the value as the result of var
+        self.frame.push(value)
         {.pop.}
 
       of IkVarValue:
@@ -387,7 +387,8 @@ proc exec*(self: VirtualMachine): Value =
       of IkJumpIfMatchSuccess:
         {.push checks: off}
         # if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
-        if self.frame.scope.members.len > inst.arg0.int64.int:
+        let index = inst.arg0.int
+        if self.frame.scope.members.len > index:
           pc = inst.arg1.int32.int
           inst = self.cu.instructions[pc].addr
           continue
@@ -786,6 +787,11 @@ proc exec*(self: VirtualMachine): Value =
                 discard self.frame.pop()
                 self.frame.update(frame)
                 self.cu = b.body_compiled
+                
+                # Process arguments if matcher exists
+                if not b.matcher.is_empty():
+                  process_args(b.matcher, frame.args, frame.scope)
+                
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -803,6 +809,11 @@ proc exec*(self: VirtualMachine): Value =
                 discard self.frame.pop()
                 self.frame.update(frame)
                 self.cu = f.body_compiled
+                
+                # Process arguments if matcher exists
+                if not f.matcher.is_empty():
+                  process_args(f.matcher, frame.args, frame.scope)
+                
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue

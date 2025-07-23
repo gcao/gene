@@ -7,7 +7,15 @@ proc process_args*(matcher: RootMatcher, args: Value, scope: Scope) =
   ## Handles both positional and named arguments
   
   
+  # Ensure scope.members has enough slots for all parameters
+  for i, param in matcher.children:
+    scope.members.add(NIL)
+  
   if args.kind != VkGene:
+    # No arguments provided, use defaults where available
+    for i, param in matcher.children:
+      if param.default_value.kind != VkNil:
+        scope.members[i] = param.default_value
     return
   
   let positional = args.gene.children
@@ -18,11 +26,8 @@ proc process_args*(matcher: RootMatcher, args: Value, scope: Scope) =
   for i, param in matcher.children:
     if param.is_prop and named.hasKey(param.name_key):
       # Named argument provided
-      scope.members.add(named[param.name_key])
+      scope.members[i] = named[param.name_key]
       used_indices.incl(i)
-    else:
-      # Placeholder for positional processing
-      scope.members.add(NIL)
   
   # Second pass: bind positional arguments
   var pos_index = 0
