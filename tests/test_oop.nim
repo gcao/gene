@@ -108,7 +108,7 @@ test_vm """
   ((new B) .test)
 """, "A.test"
 
-# Super calls - TODO: fix super to actually call the parent method
+# Super calls - TODO: implement super properly
 # test_vm """
 #   (class A
 #     (.fn test a
@@ -117,7 +117,7 @@ test_vm """
 #   )
 #   (class B < A
 #     (.fn test a
-#       (super a)
+#       (super .test a)
 #     )
 #   )
 #   ((new B) .test 1)

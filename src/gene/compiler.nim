@@ -810,20 +810,13 @@ proc compile_new(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkNew))
 
 proc compile_super(self: Compiler, gene: ptr Gene) =
-  # Super call: (super arg1 arg2 ...)
-  # Compile it as a regular gene call with super as the type
-  self.output.instructions.add(Instruction(kind: IkGeneStart))
+  # Super: returns the parent class
+  # Usage: (super .method args...)
+  if gene.children.len > 0:
+    not_allowed("super takes no arguments")
   
-  # Push super - this will push the bound method for the parent
+  # Push the parent class
   self.output.instructions.add(Instruction(kind: IkSuper))
-  self.output.instructions.add(Instruction(kind: IkGeneSetType))
-  
-  # Compile arguments
-  for child in gene.children:
-    self.compile(child)
-    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  
-  self.output.instructions.add(Instruction(kind: IkGeneEnd))
 
 proc compile_range(self: Compiler, gene: ptr Gene) =
   # (range start end) or (range start end step)
