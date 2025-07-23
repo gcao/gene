@@ -57,7 +57,7 @@ import ./helpers
 #   )
 # """, 2
 
-# test_interpreter """
+# test_vm """
 #   (class TestException < Exception)
 #   (try
 #     (throw TestException)
@@ -69,7 +69,7 @@ import ./helpers
 #   )
 # """, 2
 
-# test_interpreter """
+# test_vm """
 #   (class TestException < Exception)
 #   (try
 #     (throw)
@@ -81,7 +81,7 @@ import ./helpers
 #   )
 # """, 3
 
-# test_interpreter """
+# test_vm """
 #   (try
 #     (throw "test")
 #   catch *
@@ -90,7 +90,7 @@ import ./helpers
 # """, proc(r: Value) =
 #   check r.exception.msg == "test"
 
-# test_interpreter """
+# test_vm """
 #   (try
 #     (throw)
 #     1
@@ -103,7 +103,7 @@ import ./helpers
 
 # # Try can be omitted on the module level, like function body
 # # This can simplify freeing resources
-# test_interpreter """
+# test_vm """
 #   (throw)
 #   1
 #   catch *
@@ -112,13 +112,13 @@ import ./helpers
 #   3
 # """, 2
 
-# test_interpreter """
+# test_vm """
 #   1
 #   finally
 #   3
 # """, 1
 
-test_interpreter """
+test_vm """
   (try
     (throw)
     1
@@ -129,7 +129,7 @@ test_interpreter """
   )
 """, 2
 
-test_interpreter """
+test_vm """
   (try
     (throw)
     1
@@ -140,7 +140,7 @@ test_interpreter """
   )
 """, 2
 
-test_interpreter """
+test_vm """
   (var a 0)
   (try
     (throw)
@@ -154,7 +154,7 @@ test_interpreter """
 """, 3
 
 
-# test_interpreter """
+# test_vm """
 #   (fn f _
 #     (throw)
 #     1
@@ -166,7 +166,7 @@ test_interpreter """
 #   (f)
 # """, 2
 
-# test_interpreter """
+# test_vm """
 #   (macro m _
 #     (throw)
 #     1
@@ -178,7 +178,7 @@ test_interpreter """
 #   (m)
 # """, 2
 
-# test_interpreter """
+# test_vm """
 #   (fn f blk
 #     (blk)
 #   )
@@ -194,7 +194,7 @@ test_interpreter """
 #   )
 # """, 2
 
-# test_interpreter """
+# test_vm """
 #   (do
 #     (throw)
 #     1

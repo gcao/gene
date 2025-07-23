@@ -571,10 +571,15 @@ type
   Id* = distinct int64
   Label* = int16
 
+  LoopInfo* = object
+    start_label*: Label
+    end_label*: Label
+
   Compiler* = ref object
     output*: CompilationUnit
     quote_level*: int
     scope_trackers*: seq[ScopeTracker]
+    loop_stack*: seq[LoopInfo]
 
   InstructionKind* {.size: sizeof(int16).} = enum
     IkNoop
@@ -794,7 +799,7 @@ type
     target*: Value  # target of the invocation
     self*: Value
     args*: Value
-    stack*: array[20, Value]
+    stack*: array[100, Value]
     stack_index*: uint8
 
   Frame* = ptr FrameObj
@@ -1506,6 +1511,14 @@ converter to_value*(v: int): Value {.inline.} =
     # TODO: Allocate BigInt for values outside 48-bit range
     raise newException(OverflowDefect, "Integer " & $i & " outside supported range")
 
+converter to_value*(v: int16): Value {.inline.} =
+  # int16 always fits in 48 bits
+  result = cast[Value](SMALL_INT_TAG or (cast[uint64](v.int64) and PAYLOAD_MASK))
+
+converter to_value*(v: int32): Value {.inline.} =
+  # int32 always fits in 48 bits
+  result = cast[Value](SMALL_INT_TAG or (cast[uint64](v.int64) and PAYLOAD_MASK))
+
 converter to_value*(v: int64): Value {.inline.} =
   if v >= SMALL_INT_MIN and v <= SMALL_INT_MAX:
     # Fits in 48 bits - use NaN boxing
@@ -2112,12 +2125,14 @@ proc parse(self: RootMatcher, group: var seq[Matcher], v: Value) =
             m.is_prop = true
           else:
             m.name_key = v.str[1..^4].to_key()
+            m.is_prop = true  # Named parameters always have is_prop = true
         else:
           if v.str[1] == '^':
             m.name_key = v.str[2..^1].to_key()
             m.is_prop = true
           else:
             m.name_key = v.str[1..^1].to_key()
+            m.is_prop = true  # Named parameters always have is_prop = true
         group.add(m)
       else:
         let m = new_matcher(self, MatchData)
@@ -2709,6 +2724,7 @@ proc find_label*(self: CompilationUnit, label: Label): int =
         i.inc()
       return i
     i.inc()
+  not_allowed("Label not found: " & $label)
 
 proc find_loop_start*(self: CompilationUnit, pos: int): int =
   var pos = pos

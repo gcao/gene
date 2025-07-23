@@ -1,8 +1,8 @@
 import unittest, strutils, tables
 
-import gene/types
-import gene/parser
-import gene/vm
+import ../src/gene/types
+import ../src/gene/parser
+import ../src/gene/vm
 
 # Uncomment below lines to see logs
 # import logging

@@ -56,7 +56,7 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
       # Handle $ns/... specially
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](SYM_NS)))
     elif self.scope_tracker.mappings.has_key(key):
-      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
+      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].to_value()))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
     for s in r.csymbol[1..^1]:
@@ -85,9 +85,9 @@ proc compile_symbol(self: Compiler, input: Value) =
         let found = self.scope_tracker.locate(key)
         if found.local_index >= 0:
           if found.parent_index == 0:
-            self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
+            self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.to_value()))
           else:
-            self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index))
+            self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
         else:
           self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: base_symbol))
         self.output.instructions.add(Instruction(kind: IkSpread))
@@ -96,9 +96,9 @@ proc compile_symbol(self: Compiler, input: Value) =
       let found = self.scope_tracker.locate(key)
       if found.local_index >= 0:
         if found.parent_index == 0:
-          self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
+          self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.to_value()))
         else:
-          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index))
+          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
       else:
         self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
     elif input.kind == VkComplexSymbol:
@@ -154,13 +154,13 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
   self.compile(gene.props[COND_KEY.to_key()])
   var next_label = new_label()
   let end_label = new_label()
-  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.to_value()))
 
   # Compile then branch
   self.start_scope()
   self.compile(gene.props[THEN_KEY.to_key()])
   self.end_scope()
-  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
 
   # Handle elif branches if they exist
   if gene.props.has_key(ELIF_KEY.to_key()):
@@ -175,13 +175,13 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
             # Compile elif condition
             self.compile(elifs.ref.arr[i])
             next_label = new_label()
-            self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.Value))
+            self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.to_value()))
             
             # Compile elif body
             self.start_scope()
             self.compile(elifs.ref.arr[i + 1])
             self.end_scope()
-            self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+            self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
       else:
         discard
 
@@ -203,7 +203,7 @@ proc compile_var(self: Compiler, gene: ptr Gene) =
     self.compile(gene.children[1])
     self.add_scope_start()
     self.scope_tracker.next_index.inc()
-    self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
+    self.output.instructions.add(Instruction(kind: IkVar, arg0: index.to_value()))
   else:
     self.add_scope_start()
     self.scope_tracker.next_index.inc()
@@ -220,9 +220,9 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
       let found = self.scope_tracker.locate(key)
       if found.local_index >= 0:
         if found.parent_index == 0:
-          self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.Value))
+          self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: found.local_index.to_value()))
         else:
-          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.Value, arg1: found.parent_index))
+          self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
       else:
         self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`))
       
@@ -246,9 +246,9 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
     let found = self.scope_tracker.locate(key)
     if found.local_index >= 0:
       if found.parent_index == 0:
-        self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: found.local_index.Value))
+        self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: found.local_index.to_value()))
       else:
-        self.output.instructions.add(Instruction(kind: IkVarAssignInherited, arg0: found.local_index.Value, arg1: found.parent_index))
+        self.output.instructions.add(Instruction(kind: IkVarAssignInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
     else:
       self.output.instructions.add(Instruction(kind: IkAssign, arg0: `type`))
   elif `type`.kind == VkComplexSymbol:
@@ -259,7 +259,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
     if r.csymbol[0] == "SPECIAL_NS":
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](SYM_NS)))
     elif self.scope_tracker.mappings.has_key(key):
-      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].Value))
+      self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].to_value()))
     else:
       self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
       
@@ -321,11 +321,19 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
     not_allowed($`type`)
 
 proc compile_loop(self: Compiler, gene: ptr Gene) =
-  let label = new_label()
-  self.output.instructions.add(Instruction(kind: IkLoopStart, label: label))
+  let start_label = new_label()
+  let end_label = new_label()
+  
+  # Track this loop
+  self.loop_stack.add(LoopInfo(start_label: start_label, end_label: end_label))
+  
+  self.output.instructions.add(Instruction(kind: IkLoopStart, label: start_label))
   self.compile(gene.children)
-  self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.Value))
-  self.output.instructions.add(Instruction(kind: IkLoopEnd, label: label))
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.to_value()))
+  self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+  
+  # Pop loop from stack
+  discard self.loop_stack.pop()
 
 proc compile_while(self: Compiler, gene: ptr Gene) =
   if gene.children.len < 1:
@@ -334,12 +342,15 @@ proc compile_while(self: Compiler, gene: ptr Gene) =
   let label = new_label()
   let end_label = new_label()
   
+  # Track this loop
+  self.loop_stack.add(LoopInfo(start_label: label, end_label: end_label))
+  
   # Mark loop start
   self.output.instructions.add(Instruction(kind: IkLoopStart, label: label))
   
   # Compile and test condition
   self.compile(gene.children[0])
-  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.to_value()))
   
   # Compile body (remaining children)
   if gene.children.len > 1:
@@ -347,10 +358,13 @@ proc compile_while(self: Compiler, gene: ptr Gene) =
       self.compile(gene.children[i])
   
   # Jump back to condition
-  self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.Value))
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.to_value()))
   
   # Mark loop end
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+  
+  # Pop loop from stack
+  discard self.loop_stack.pop()
 
 proc compile_repeat(self: Compiler, gene: ptr Gene) =
   if gene.children.len < 1:
@@ -363,11 +377,14 @@ proc compile_repeat(self: Compiler, gene: ptr Gene) =
   let start_label = new_label()
   let end_label = new_label()
   
+  # Track this loop
+  self.loop_stack.add(LoopInfo(start_label: start_label, end_label: end_label))
+  
   # Compile count expression
   self.compile(gene.children[0])
   
   # Initialize loop counter to 0
-  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.Value))
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.to_value()))
   
   # Don't create a scope for the loop body - let each iteration handle its own scoping
   
@@ -379,7 +396,7 @@ proc compile_repeat(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkDup2))   # [count, counter, count, counter]
   self.output.instructions.add(Instruction(kind: IkSwap))   # [count, counter, counter, count]
   self.output.instructions.add(Instruction(kind: IkLt))     # [count, counter, bool]
-  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.to_value()))
   
   # Compile body - wrap in a scope to isolate each iteration
   if gene.children.len > 1:
@@ -395,11 +412,11 @@ proc compile_repeat(self: Compiler, gene: ptr Gene) =
     self.end_scope()
   
   # Increment counter: Stack is [count, counter]
-  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.Value))  # [count, counter, 1]
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.to_value()))  # [count, counter, 1]
   self.output.instructions.add(Instruction(kind: IkAdd))  # [count, counter+1]
   
   # Jump back to condition check
-  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.Value))
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.to_value()))
   
   # Mark loop end
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
@@ -412,6 +429,9 @@ proc compile_repeat(self: Compiler, gene: ptr Gene) =
   
   # Push nil as the result
   self.output.instructions.add(Instruction(kind: IkPushNil))
+  
+  # Pop loop from stack
+  discard self.loop_stack.pop()
 
 proc compile_for(self: Compiler, gene: ptr Gene) =
   # (for var in collection body...)
@@ -438,40 +458,43 @@ proc compile_for(self: Compiler, gene: ptr Gene) =
   self.scope_tracker.mappings["$for_collection".to_key()] = collection_index
   self.add_scope_start()
   self.scope_tracker.next_index.inc()
-  self.output.instructions.add(Instruction(kind: IkVar, arg0: collection_index.Value))
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: collection_index.to_value()))
   
   # Store index in a temporary variable, initialized to 0
-  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.Value))
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.to_value()))
   let index_var = self.scope_tracker.next_index
   self.scope_tracker.mappings["$for_index".to_key()] = index_var
   self.scope_tracker.next_index.inc()
-  self.output.instructions.add(Instruction(kind: IkVar, arg0: index_var.Value))
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: index_var.to_value()))
   
   let start_label = new_label()
   let end_label = new_label()
+  
+  # Track this loop
+  self.loop_stack.add(LoopInfo(start_label: start_label, end_label: end_label))
   
   # Mark loop start
   self.output.instructions.add(Instruction(kind: IkLoopStart, label: start_label))
   
   # Check if index < collection.length
   # Load index
-  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.Value))
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.to_value()))
   # Load collection
-  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: collection_index.Value))
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: collection_index.to_value()))
   # Get length
   self.output.instructions.add(Instruction(kind: IkLen))
   # Compare
   self.output.instructions.add(Instruction(kind: IkLt))
-  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: end_label.to_value()))
   
   # Create scope for loop iteration
   self.start_scope()
   
   # Get current element: collection[index]
   # Load collection
-  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: collection_index.Value))
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: collection_index.to_value()))
   # Load index
-  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.Value))
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.to_value()))
   # Get element
   self.output.instructions.add(Instruction(kind: IkGetChildDynamic))
   
@@ -480,7 +503,7 @@ proc compile_for(self: Compiler, gene: ptr Gene) =
   self.scope_tracker.mappings[var_name.to_key()] = var_index
   self.add_scope_start()
   self.scope_tracker.next_index.inc()
-  self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.Value))
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.to_value()))
   
   # Compile body (remaining children after 'in' and collection)
   if gene.children.len > 3:
@@ -494,15 +517,15 @@ proc compile_for(self: Compiler, gene: ptr Gene) =
   
   # Increment index
   # Load current index
-  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.Value))
+  self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: index_var.to_value()))
   # Add 1
-  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.Value))
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.to_value()))
   self.output.instructions.add(Instruction(kind: IkAdd))
   # Store back
-  self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: index_var.Value))
+  self.output.instructions.add(Instruction(kind: IkVarAssign, arg0: index_var.to_value()))
   
   # Jump back to condition check
-  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.Value))
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: start_label.to_value()))
   
   # Mark loop end
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
@@ -512,6 +535,9 @@ proc compile_for(self: Compiler, gene: ptr Gene) =
   
   # Push nil as the result
   self.output.instructions.add(Instruction(kind: IkPushNil))
+  
+  # Pop loop from stack
+  discard self.loop_stack.pop()
 
 proc compile_enum(self: Compiler, gene: ptr Gene) =
   # (enum Color red green blue)
@@ -543,7 +569,7 @@ proc compile_enum(self: Compiler, gene: ptr Gene) =
         not_allowed("enum member must be a symbol")
       # Push member name and value
       self.output.instructions.add(Instruction(kind: IkPushValue, arg0: member.str.to_value()))
-      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: value.Value))
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: value.to_value()))
       self.output.instructions.add(Instruction(kind: IkEnumAddMember))
       value.inc()
   else:
@@ -567,7 +593,7 @@ proc compile_enum(self: Compiler, gene: ptr Gene) =
       
       # Push member name and value
       self.output.instructions.add(Instruction(kind: IkPushValue, arg0: member.str.to_value()))
-      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: value.Value))
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: value.to_value()))
       self.output.instructions.add(Instruction(kind: IkEnumAddMember))
       
       value.inc()
@@ -578,21 +604,33 @@ proc compile_enum(self: Compiler, gene: ptr Gene) =
   self.scope_tracker.mappings[enum_name.to_key()] = index
   self.add_scope_start()
   self.scope_tracker.next_index.inc()
-  self.output.instructions.add(Instruction(kind: IkVar, arg0: index.Value))
+  self.output.instructions.add(Instruction(kind: IkVar, arg0: index.to_value()))
 
 proc compile_break(self: Compiler, gene: ptr Gene) =
+  if self.loop_stack.len == 0:
+    not_allowed("break used outside of a loop")
+  
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
-  self.output.instructions.add(Instruction(kind: IkBreak))
+  
+  # Get the current loop's end label
+  let current_loop = self.loop_stack[^1]
+  self.output.instructions.add(Instruction(kind: IkBreak, arg0: current_loop.end_label.to_value()))
 
 proc compile_continue(self: Compiler, gene: ptr Gene) =
+  if self.loop_stack.len == 0:
+    not_allowed("continue used outside of a loop")
+  
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
-  self.output.instructions.add(Instruction(kind: IkContinue))
+  
+  # Get the current loop's start label
+  let current_loop = self.loop_stack[^1]
+  self.output.instructions.add(Instruction(kind: IkContinue, arg0: current_loop.start_label.to_value()))
 
 proc compile_throw(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
@@ -610,7 +648,7 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
   let end_label = new_label()
   
   # Mark start of try block
-  self.output.instructions.add(Instruction(kind: IkTryStart, arg0: catch_end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkTryStart, arg0: catch_end_label.to_value()))
   
   # Compile try body
   var i = 0
@@ -623,7 +661,7 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
   
   # Mark end of try block
   self.output.instructions.add(Instruction(kind: IkTryEnd))
-  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
   
   # Handle catch blocks
   self.output.instructions.add(Instruction(kind: IkNoop, label: catch_end_label))
@@ -645,7 +683,7 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
           inc i
         
         self.output.instructions.add(Instruction(kind: IkCatchEnd))
-        self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+        self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
     elif child.kind == VkSymbol and child.str == "finally":
       inc i
       # TODO: Implement finally block
@@ -784,7 +822,7 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
 
   let fn_label = new_label()
   let end_label = new_label()
-  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.Value))
+  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.to_value()))
 
   # self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
   self.quote_level.inc()
@@ -794,7 +832,7 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
   for child in gene.children:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
   self.quote_level.dec()
 
   # self.output.instructions.add(Instruction(kind: IkGeneStartFn, label: fn_label))
@@ -826,7 +864,7 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
 
   let fn_label = new_label()
   let end_label = new_label()
-  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.Value))
+  self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.to_value()))
 
   self.quote_level.inc()
   for k, v in gene.props:
@@ -835,7 +873,7 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
   for child in gene.children:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.Value))
+  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
   self.quote_level.dec()
 
   self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
@@ -1001,7 +1039,7 @@ proc compile_gene(self: Compiler, input: Value) =
       of "continue":
         self.compile_continue(gene)
         return
-      of "fn", "fnx":
+      of "fn", "fnx", "fnxx":
         self.compile_fn(input)
         return
       of "macro":
@@ -1107,10 +1145,20 @@ proc compile*(self: Compiler, input: Value) =
       todo($input.kind)
 
 proc update_jumps(self: CompilationUnit) =
-  for i, inst in self.instructions:
+  for i in 0..<self.instructions.len:
+    let inst = self.instructions[i]
     case inst.kind
-      of IkJump, IkJumpIfFalse, IkContinue, IkGeneStartDefault:
-        self.instructions[i].arg0 = self.find_label(inst.arg0.Label).Value
+      of IkJump, IkJumpIfFalse, IkContinue, IkBreak, IkGeneStartDefault:
+        # Labels are stored as int16 values converted to Value
+        # Extract the int value and cast to Label (int16)
+        # Extract the label from the NaN-boxed value
+        # The label was stored as int16, so we need to extract just the low 16 bits
+        when not defined(release):
+          if inst.arg0.kind != VkInt:
+            echo "ERROR: inst ", i, " (", inst.kind, ") arg0 is not an int: ", inst.arg0, " kind: ", inst.arg0.kind
+        let label = (inst.arg0.int64.int and 0xFFFF).int16.Label
+        let new_pc = self.find_label(label)
+        self.instructions[i].arg0 = new_pc.to_value()
       of IkJumpIfMatchSuccess:
         self.instructions[i].arg1 = self.find_label(inst.arg1.Label).int32
       else:
@@ -1149,13 +1197,13 @@ proc compile*(f: Function) =
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: i.Value,
+      arg0: i.to_value(),
       arg1: label,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
       self.add_scope_start()
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.to_value()))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))
@@ -1183,13 +1231,13 @@ proc compile*(m: Macro) =
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: i.Value,
+      arg0: i.to_value(),
       arg1: label,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
       self.add_scope_start()
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.to_value()))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))
@@ -1217,13 +1265,13 @@ proc compile*(b: Block) =
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: i.Value,
+      arg0: i.to_value(),
       arg1: label,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
       self.add_scope_start()
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.to_value()))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))
@@ -1251,13 +1299,13 @@ proc compile*(f: CompileFn) =
     let label = new_label()
     self.output.instructions.add(Instruction(
       kind: IkJumpIfMatchSuccess,
-      arg0: i.Value,
+      arg0: i.to_value(),
       arg1: label,
     ))
     if m.default_value != nil:
       self.compile(m.default_value)
       self.add_scope_start()
-      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.Value))
+      self.output.instructions.add(Instruction(kind: IkVar, arg0: m.name_key.to_value()))
       self.output.instructions.add(Instruction(kind: IkPop))
     else:
       self.output.instructions.add(Instruction(kind: IkThrow))
@@ -1339,7 +1387,7 @@ proc compile_tap(self: Compiler, gene: ptr Gene) =
     
     # Duplicate the value again for binding
     self.output.instructions.add(Instruction(kind: IkSelf))
-    self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.Value))
+    self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.to_value()))
   
   # Compile body
   if gene.children.len > start_idx:

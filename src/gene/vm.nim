@@ -3,6 +3,7 @@ import tables, strutils, strformat
 import ./types
 import ./parser
 import ./compiler
+import ./vm/args
 
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
@@ -46,7 +47,7 @@ proc exec*(self: VirtualMachine): Value =
             var cu = self.frame.caller_address.cu
             let end_pos = self.frame.caller_address.pc
             let caller_instr = self.frame.caller_address.cu.instructions[end_pos]
-            let start_pos = caller_instr.arg0.int
+            let start_pos = caller_instr.arg0.int64.int
             var new_instructions: seq[Instruction] = @[]
             for item in v.ref.arr:
               case item.kind:
@@ -103,8 +104,8 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         when not defined(release):
           if self.trace:
-            echo fmt"IkVarResolve: arg0={inst.arg0}, arg0.int={inst.arg0.int}, scope.members.len={self.frame.scope.members.len}"
-        self.frame.push(self.frame.scope.members[inst.arg0.int])
+            echo fmt"IkVarResolve: arg0={inst.arg0}, arg0.int64.int={inst.arg0.int64.int}, scope.members.len={self.frame.scope.members.len}"
+        self.frame.push(self.frame.scope.members[inst.arg0.int64.int])
         {.pop.}
 
       of IkVarResolveInherited:
@@ -114,13 +115,13 @@ proc exec*(self: VirtualMachine): Value =
           parent_index.dec()
           scope = scope.parent
         {.push checks: off}
-        self.frame.push(scope.members[inst.arg0.int])
+        self.frame.push(scope.members[inst.arg0.int64.int])
         {.pop.}
 
       of IkVarAssign:
         {.push checks: off}
         let value = self.frame.current()
-        self.frame.scope.members[inst.arg0.int] = value
+        self.frame.scope.members[inst.arg0.int64.int] = value
         {.pop.}
 
       of IkVarAssignInherited:
@@ -133,7 +134,7 @@ proc exec*(self: VirtualMachine): Value =
           parent_index.dec()
           scope = scope.parent
         {.push checks: off}
-        scope.members[inst.arg0.int] = value
+        scope.members[inst.arg0.int64.int] = value
         {.pop.}
 
       of IkAssign:
@@ -193,18 +194,33 @@ proc exec*(self: VirtualMachine): Value =
         let value = self.frame.pop()
         case value.kind:
           of VkSymbol:
-            # For eval, we need to compile and execute the symbol
-            # This is similar to what happens when compiling a symbol normally
-            # For now, just do namespace lookup (variables would need special handling)
+            # For eval, we need to check local scope first, then namespaces
             let key = value.str.to_key()
-            var result = self.frame.ns[key]
-            if result == NIL:
-              result = App.app.global_ns.ns[key]
+            
+            # First check if it's a local variable in the current scope
+            var found_in_scope = false
+            if self.frame.scope != nil and self.frame.scope.tracker != nil:
+              let found = self.frame.scope.tracker.locate(key)
+              if found.local_index >= 0:
+                # Variable found in scope
+                var scope = self.frame.scope
+                var parent_index = found.parent_index
+                while parent_index > 0:
+                  parent_index.dec()
+                  scope = scope.parent
+                self.frame.push(scope.members[found.local_index])
+                found_in_scope = true
+            
+            if not found_in_scope:
+              # Not a local variable, look in namespaces
+              var result = self.frame.ns[key]
               if result == NIL:
-                result = App.app.gene_ns.ns[key]
+                result = App.app.global_ns.ns[key]
                 if result == NIL:
-                  not_allowed("Unknown symbol: " & value.str)
-            self.frame.push(result)
+                  result = App.app.gene_ns.ns[key]
+                  if result == NIL:
+                    not_allowed("Unknown symbol: " & value.str)
+              self.frame.push(result)
           of VkGene:
             # Evaluate a gene expression - compile and execute it
             let compiled = compile_init(value)
@@ -314,7 +330,7 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.pop2(index)
         var collection: Value  
         self.frame.pop2(collection)
-        let i = index.int
+        let i = index.int64.int
         when not defined(release):
           if self.trace:
             echo fmt"IkGetChildDynamic: collection={collection}, index={index}"
@@ -325,10 +341,10 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(collection.gene.children[i])
           of VkRange:
             # Calculate the i-th element in the range
-            let start = collection.ref.range_start.int
-            let step = if collection.ref.range_step == NIL: 1 else: collection.ref.range_step.int
+            let start = collection.ref.range_start.int64
+            let step = if collection.ref.range_step == NIL: 1 else: collection.ref.range_step.int64
             let value = start + (i * step)
-            self.frame.push(value.Value)
+            self.frame.push(value.to_value())
           else:
             when not defined(release):
               if self.trace:
@@ -337,7 +353,7 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkJump:
         {.push checks: off}
-        pc = inst.arg0.int
+        pc = inst.arg0.int64.int
         inst = self.cu.instructions[pc].addr
         continue
         {.pop.}
@@ -349,7 +365,7 @@ proc exec*(self: VirtualMachine): Value =
           if self.trace:
             echo fmt"IkJumpIfFalse: value={value}, to_bool={value.to_bool()}, jumping={not value.to_bool()}"
         if not value.to_bool():
-          pc = inst.arg0.int
+          pc = inst.arg0.int64.int
           inst = self.cu.instructions[pc].addr
           continue
         {.pop.}
@@ -357,8 +373,8 @@ proc exec*(self: VirtualMachine): Value =
       of IkJumpIfMatchSuccess:
         {.push checks: off}
         # if self.frame.match_result.fields[inst.arg0.int64] == MfSuccess:
-        if self.frame.scope.members.len > inst.arg0.int:
-          pc = inst.arg1.int
+        if self.frame.scope.members.len > inst.arg0.int64.int:
+          pc = inst.arg1.int32.int
           inst = self.cu.instructions[pc].addr
           continue
         {.pop.}
@@ -368,14 +384,15 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkContinue:
         {.push checks: off}
-        pc = self.cu.find_loop_start(pc)
+        pc = inst.arg0.int64.int
         inst = self.cu.instructions[pc].addr
         continue
         {.pop.}
 
       of IkBreak:
         {.push checks: off}
-        pc = self.cu.find_loop_end(pc)
+        # Jump to the end label stored in arg0
+        pc = inst.arg0.int64.int
         inst = self.cu.instructions[pc].addr
         continue
         {.pop.}
@@ -385,10 +402,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkPushNil:
         self.frame.push(NIL)
       of IkPop:
-        let value = self.frame.pop()
-        when not defined(release):
-          if self.trace:
-            echo fmt"IkPop: popped {value}"
+        discard self.frame.pop()
       of IkDup:
         let value = self.frame.current()
         when not defined(release):
@@ -436,7 +450,7 @@ proc exec*(self: VirtualMachine): Value =
         when not defined(release):
           if self.trace:
             echo fmt"IkLen: size({value}) = {length}"
-        self.frame.push(length.Value)
+        self.frame.push(length.to_value())
 
       of IkArrayStart:
         self.frame.push(new_array_value())
@@ -496,7 +510,7 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc = inst.arg0.int64.int64.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -540,7 +554,7 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc = inst.arg0.int64.int64.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -574,9 +588,13 @@ proc exec*(self: VirtualMachine): Value =
               args: new_gene_value(),
             )
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int
+            pc = inst.arg0.int64.int64.int
             inst = self.cu.instructions[pc].addr
             continue
+            
+          of VkBoundMethod:
+            # TODO: Handle bound method calls
+            discard
 
           else:
             discard
@@ -594,7 +612,17 @@ proc exec*(self: VirtualMachine): Value =
         let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
-        self.frame.current().gene.props[key] = value
+        let current = self.frame.current()
+        case current.kind:
+          of VkGene:
+            current.gene.props[key] = value
+          of VkFrame:
+            # For function calls, we need to set up the args gene with properties
+            if current.ref.frame.args.kind != VkGene:
+              current.ref.frame.args = new_gene_value()
+            current.ref.frame.args.gene.props[key] = value
+          else:
+            todo("GeneSetProp for " & $current.kind)
         {.pop.}
       of IkGeneAddChild:
         {.push checks: off}
@@ -603,9 +631,32 @@ proc exec*(self: VirtualMachine): Value =
         let v = self.frame.current()
         case v.kind:
           of VkFrame:
-            v.ref.frame.scope.members.add(child)
+            # For function calls, we need to set up the args gene with children
+            if v.ref.frame.args.kind != VkGene:
+              v.ref.frame.args = new_gene_value()
+            case child.kind:
+              of VkExplode:
+                # Expand the exploded array into individual elements
+                case child.ref.explode_value.kind:
+                  of VkArray:
+                    for item in child.ref.explode_value.ref.arr:
+                      v.ref.frame.args.gene.children.add(item)
+                  else:
+                    not_allowed("Can only explode arrays")
+              else:
+                v.ref.frame.args.gene.children.add(child)
           of VkNativeFrame:
-            v.ref.native_frame.args.gene.children.add(child)
+            case child.kind:
+              of VkExplode:
+                # Expand the exploded array into individual elements
+                case child.ref.explode_value.kind:
+                  of VkArray:
+                    for item in child.ref.explode_value.ref.arr:
+                      v.ref.native_frame.args.gene.children.add(item)
+                  else:
+                    not_allowed("Can only explode arrays")
+              else:
+                v.ref.native_frame.args.gene.children.add(child)
           of VkGene:
             case child.kind:
               of VkExplode:
@@ -645,8 +696,15 @@ proc exec*(self: VirtualMachine): Value =
                 frame.caller_frame.update(self.frame)
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = f.ns
+                # Pop the frame from the stack before switching context
+                discard self.frame.pop()
                 self.frame.update(frame)
                 self.cu = f.body_compiled
+                
+                # Process arguments if matcher exists
+                if not f.matcher.is_empty():
+                  process_args(f.matcher, frame.args, frame.scope)
+                
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -660,8 +718,15 @@ proc exec*(self: VirtualMachine): Value =
                 frame.caller_frame.update(self.frame)
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = m.ns
+                # Pop the frame from the stack before switching context
+                discard self.frame.pop()
                 self.frame.update(frame)
                 self.cu = m.body_compiled
+                
+                # Process arguments if matcher exists
+                if not m.matcher.is_empty():
+                  process_args(m.matcher, frame.args, frame.scope)
+                
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -675,6 +740,8 @@ proc exec*(self: VirtualMachine): Value =
                 frame.caller_frame.update(self.frame)
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = b.ns
+                # Pop the frame from the stack before switching context
+                discard self.frame.pop()
                 self.frame.update(frame)
                 self.cu = b.body_compiled
                 pc = 0
@@ -690,6 +757,8 @@ proc exec*(self: VirtualMachine): Value =
                 frame.caller_frame.update(self.frame)
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = f.ns
+                # Pop the frame from the stack before switching context
+                discard self.frame.pop()
                 self.frame.update(frame)
                 self.cu = f.body_compiled
                 pc = 0
@@ -732,11 +801,11 @@ proc exec*(self: VirtualMachine): Value =
           of VkFloat:
             case second.kind:
               of VkInt:
-                let result = first.float + second.int64.float64
+                let r = first.float + second.int64.float64
                 when not defined(release):
                   if self.trace:
-                    echo fmt"IkAdd float+int: {first.float} + {second.int64.float64} = {result}"
-                self.frame.push(result)
+                    echo fmt"IkAdd float+int: {first.float} + {second.int64.float64} = {r}"
+                self.frame.push(r)
               of VkFloat:
                 self.frame.push(first.float + second.float)
               else:
@@ -848,38 +917,133 @@ proc exec*(self: VirtualMachine): Value =
         let first = self.frame.current()
         when not defined(release):
           if self.trace:
-            echo fmt"IkLt: {first} < {second} = {first.int < second.int}"
-        self.frame.replace(self.frame.current().int64 < second.int64)
+            echo fmt"IkLt: {first} < {second}"
+        # Use proper comparison based on types
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.replace((first.int64 < second.int64).to_value())
+              of VkFloat:
+                self.frame.replace((first.int64.float64 < second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " < " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.replace((first.float < second.int64.float64).to_value())
+              of VkFloat:
+                self.frame.replace((first.float < second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " < " & $second.kind)
+          else:
+            not_allowed("Cannot compare " & $first.kind & " < " & $second.kind)
         {.pop.}
       of IkLtValue:
         var first: Value
         self.frame.pop2(first)
-        self.frame.push(first.int < inst.arg0.int)
+        # Use proper comparison based on types
+        case first.kind:
+          of VkInt:
+            case inst.arg0.kind:
+              of VkInt:
+                self.frame.push((first.int64 < inst.arg0.int64).to_value())
+              of VkFloat:
+                self.frame.push((first.int64.float64 < inst.arg0.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
+          of VkFloat:
+            case inst.arg0.kind:
+              of VkInt:
+                self.frame.push((first.float < inst.arg0.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((first.float < inst.arg0.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
+          else:
+            not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
 
       of IkLe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first <= second)
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        # Use proper comparison based on types
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.push((first.int64 <= second.int64).to_value())
+              of VkFloat:
+                self.frame.push((first.int64.float64 <= second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " <= " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.push((first.float <= second.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((first.float <= second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " <= " & $second.kind)
+          else:
+            not_allowed("Cannot compare " & $first.kind & " <= " & $second.kind)
 
       of IkGt:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first > second)
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        # Use proper comparison based on types
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.push((first.int64 > second.int64).to_value())
+              of VkFloat:
+                self.frame.push((first.int64.float64 > second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " > " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.push((first.float > second.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((first.float > second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " > " & $second.kind)
+          else:
+            not_allowed("Cannot compare " & $first.kind & " > " & $second.kind)
 
       of IkGe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first >= second)
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        # Use proper comparison based on types
+        case first.kind:
+          of VkInt:
+            case second.kind:
+              of VkInt:
+                self.frame.push((first.int64 >= second.int64).to_value())
+              of VkFloat:
+                self.frame.push((first.int64.float64 >= second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " >= " & $second.kind)
+          of VkFloat:
+            case second.kind:
+              of VkInt:
+                self.frame.push((first.float >= second.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((first.float >= second.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $first.kind & " >= " & $second.kind)
+          else:
+            not_allowed("Cannot compare " & $first.kind & " >= " & $second.kind)
 
       of IkEq:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first == second)
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        self.frame.push((first == second).to_value())
 
       of IkNe:
-        let second = self.frame.pop().int
-        let first = self.frame.pop().int
-        self.frame.push(first != second)
+        let second = self.frame.pop()
+        let first = self.frame.pop()
+        self.frame.push((first != second).to_value())
 
       of IkAnd:
         let second = self.frame.pop()
@@ -939,18 +1103,22 @@ proc exec*(self: VirtualMachine): Value =
           not_allowed("enum member value must be an integer")
         if enum_val.kind != VkEnum:
           not_allowed("can only add members to enums")
-        enum_val.add_member(name.str, value.int)
+        enum_val.add_member(name.str, value.int64.int)
 
       of IkCompileInit:
         let input = self.frame.pop()
         let compiled = compile_init(input)
         let r = new_ref(VkCompiledUnit)
         r.cu = compiled
-        self.frame.push(r.to_ref_value())
+        let cu_value = r.to_ref_value()
+        self.frame.push(cu_value)
 
       of IkCallInit:
         {.push checks: off}
-        let compiled = self.frame.pop().ref.cu
+        let compiled_value = self.frame.pop()
+        if compiled_value.kind != VkCompiledUnit:
+          raise new_exception(types.Exception, fmt"Expected VkCompiledUnit, got {compiled_value.kind}")
+        let compiled = compiled_value.ref.cu
         let obj = self.frame.current()
         var ns: Namespace
         case obj.kind:
@@ -974,7 +1142,28 @@ proc exec*(self: VirtualMachine): Value =
       of IkFunction:
         {.push checks: off}
         let f = to_function(inst.arg0)
-        f.ns = self.frame.ns
+        
+        # Determine the target namespace for the function
+        var target_ns = self.frame.ns
+        if inst.arg0.kind == VkGene and inst.arg0.gene.children.len > 0:
+          let first = inst.arg0.gene.children[0]
+          case first.kind:
+            of VkComplexSymbol:
+              # n/m/f - function should belong to the target namespace
+              for i in 0..<first.ref.csymbol.len - 1:
+                let key = first.ref.csymbol[i].to_key()
+                if target_ns.has_key(key):
+                  let nsval = target_ns[key]
+                  if nsval.kind == VkNamespace:
+                    target_ns = nsval.ref.ns
+                  else:
+                    raise new_exception(types.Exception, fmt"{first.ref.csymbol[i]} is not a namespace")
+                else:
+                  raise new_exception(types.Exception, fmt"Namespace {first.ref.csymbol[i]} not found")
+            else:
+              discard
+        
+        f.ns = target_ns
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
@@ -989,7 +1178,32 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkFunction)
         r.fn = f
         let v = r.to_ref_value()
-        f.ns[f.name.to_key()] = v
+        
+        # Handle namespaced function definitions
+        if inst.arg0.kind == VkGene and inst.arg0.gene.children.len > 0:
+          let first = inst.arg0.gene.children[0]
+          case first.kind:
+          of VkComplexSymbol:
+            # n/m/f - define in nested namespace
+            var ns = self.frame.ns
+            for i in 0..<first.ref.csymbol.len - 1:
+              let key = first.ref.csymbol[i].to_key()
+              if ns.has_key(key):
+                let nsval = ns[key]
+                if nsval.kind == VkNamespace:
+                  ns = nsval.ref.ns
+                else:
+                  raise new_exception(types.Exception, fmt"{first.ref.csymbol[i]} is not a namespace")
+              else:
+                raise new_exception(types.Exception, fmt"Namespace {first.ref.csymbol[i]} not found")
+            ns[f.name.to_key()] = v
+          else:
+            # Simple name - define in current namespace
+            f.ns[f.name.to_key()] = v
+        else:
+          # Fallback for other cases
+          f.ns[f.name.to_key()] = v
+        
         self.frame.push(v)
         {.pop.}
 

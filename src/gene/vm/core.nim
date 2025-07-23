@@ -198,67 +198,9 @@ proc vm_tap(self: VirtualMachine, args: Value): Value =
 
 proc vm_eval(self: VirtualMachine, args: Value): Value {.gcsafe.} =
   {.cast(gcsafe).}:
-    # eval evaluates symbols and expressions, returns the last value
-    if args.gene.children.len == 0:
-      return NIL
-    
-    result = NIL
-    for arg in args.gene.children:
-      case arg.kind:
-        of VkSymbol:
-          # Look up the symbol - first check local scope, then namespaces
-          let key = arg.str.to_key()
-          
-          # Check if it's a local variable first
-          if self.frame.scope != nil and self.frame.scope.tracker != nil:
-            let found = self.frame.scope.tracker.locate(key)
-            if found.local_index >= 0:
-              # Variable found in scope
-              var scope = self.frame.scope
-              var parent_index = found.parent_index
-              while parent_index > 0:
-                parent_index.dec()
-                scope = scope.parent
-              result = scope.members[found.local_index]
-            else:
-              # Not a local variable, look in namespaces
-              var value = self.frame.ns[key]
-              if value.int64 == NOT_FOUND.int64:
-                # Try global namespace
-                value = App.app.global_ns.ns[key]
-                if value.int64 == NOT_FOUND.int64:
-                  # Try gene namespace
-                  value = App.app.gene_ns.ns[key]
-                  if value.int64 == NOT_FOUND.int64:
-                    not_allowed("Unknown symbol: " & arg.str)
-              result = value
-          else:
-            # No scope available, just look in namespaces
-            var value = self.frame.ns[key]
-            if value.int64 == NOT_FOUND.int64:
-              # Try global namespace
-              value = App.app.global_ns.ns[key]
-              if value.int64 == NOT_FOUND.int64:
-                # Try gene namespace
-                value = App.app.gene_ns.ns[key]
-                if value.int64 == NOT_FOUND.int64:
-                  not_allowed("Unknown symbol: " & arg.str)
-            result = value
-        of VkGene:
-          # For Gene expressions, compile and execute them
-          let compiled = compile(@[arg])
-          let vm = VirtualMachine()
-          let ns = new_namespace("eval")
-          vm.frame.update(new_frame(ns))
-          vm.frame.ref_count.dec()
-          vm.frame.self = NIL
-          vm.cu = compiled
-          result = vm.exec()
-        else:
-          # For other types, just return the value as-is
-          result = arg
-    
-    return result
+    # This function is not used - eval is handled by IkEval instruction
+    # The compiler generates IkEval instructions for each argument
+    not_allowed("vm_eval should not be called directly")
 
 # TODO: Implement while loop properly - needs compiler-level support like loop/if
 
