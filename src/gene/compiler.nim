@@ -732,6 +732,28 @@ proc compile_ns(self: Compiler, gene: ptr Gene) =
     self.output.instructions.add(Instruction(kind: IkCompileInit))
     self.output.instructions.add(Instruction(kind: IkCallInit))
 
+proc compile_method_definition(self: Compiler, gene: ptr Gene) =
+  # Method definition: (.fn name args body...)
+  if gene.children.len < 3:
+    not_allowed("Method definition requires at least name, args and body")
+  
+  let name = gene.children[0]
+  if name.kind != VkSymbol:
+    not_allowed("Method name must be a symbol")
+  
+  # Create a function from the method definition
+  # The method is similar to (fn name args body...) but bound to the class
+  var fn_value = new_gene_value()
+  fn_value.gene.type = "fn".to_symbol_value()
+  for i in 0..<gene.children.len:
+    fn_value.gene.children.add(gene.children[i])
+  
+  # Compile the function definition
+  self.compile_fn(fn_value)
+  
+  # Add the method to the class
+  self.output.instructions.add(Instruction(kind: IkDefineMethod, arg0: name))
+
 proc compile_class(self: Compiler, gene: ptr Gene) =
   var body_start = 1
   if gene.children.len >= 3 and gene.children[1] == "<".to_symbol_value():
@@ -1102,8 +1124,13 @@ proc compile_gene(self: Compiler, input: Value) =
       else:
         let s = `type`.str
         if s.starts_with("."):
-          self.compile_method_call(gene)
-          return
+          # Check if this is a method definition (e.g., .fn, .ctor) or a method call
+          if s == ".fn" or s == ".ctor":
+            self.compile_method_definition(gene)
+            return
+          else:
+            self.compile_method_call(gene)
+            return
         elif s.starts_with("$"):
           # Handle $ prefixed operations
           case s:

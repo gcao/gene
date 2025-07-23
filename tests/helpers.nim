@@ -32,8 +32,12 @@ proc cleanup*(code: string): string =
   if result.contains("\n"):
     result = "\n" & result
 
+var initialized = false
+
 proc init_all*() =
-  init_app_and_vm()
+  if not initialized:
+    init_app_and_vm()
+    initialized = true
 
 proc test_parser*(code: string, result: Value) =
   var code = cleanup(code)

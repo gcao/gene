@@ -7,6 +7,8 @@ import ./vm/args
 
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
+  if pc >= self.cu.instructions.len:
+    raise new_exception(types.Exception, "Empty compilation unit")
   var inst = self.cu.instructions[pc].addr
 
   when not defined(release):
@@ -213,14 +215,14 @@ proc exec*(self: VirtualMachine): Value =
             
             if not found_in_scope:
               # Not a local variable, look in namespaces
-              var result = self.frame.ns[key]
-              if result == NIL:
-                result = App.app.global_ns.ns[key]
-                if result == NIL:
-                  result = App.app.gene_ns.ns[key]
-                  if result == NIL:
+              var r = self.frame.ns[key]
+              if r == NIL:
+                r = App.app.global_ns.ns[key]
+                if r == NIL:
+                  r = App.app.gene_ns.ns[key]
+                  if r == NIL:
                     not_allowed("Unknown symbol: " & value.str)
-              self.frame.push(result)
+              self.frame.push(r)
           of VkGene:
             # Evaluate a gene expression - compile and execute it
             let compiled = compile_init(value)
@@ -593,8 +595,33 @@ proc exec*(self: VirtualMachine): Value =
             continue
             
           of VkBoundMethod:
-            # TODO: Handle bound method calls
-            discard
+            # Handle bound method calls
+            let bm = gene_type.ref.bound_method
+            let meth = bm.`method`
+            let target = meth.callable
+            
+            case target.kind:
+              of VkFunction:
+                # Create a new frame for the method call
+                var scope: Scope
+                let f = target.ref.fn
+                if f.matcher.is_empty():
+                  scope = f.parent_scope
+                else:
+                  scope = new_scope(f.scope_tracker, f.parent_scope)
+                
+                var r = new_ref(VkFrame)
+                r.frame = new_frame()
+                r.frame.kind = FkFunction
+                r.frame.target = target
+                r.frame.scope = scope
+                r.frame.self = bm.self  # Set self to the instance
+                self.frame.replace(r.to_ref_value())
+                pc = inst.arg0.int64.int64.int
+                inst = self.cu.instructions[pc].addr
+                continue
+              else:
+                not_allowed("Method must be a function, got " & $target.kind)
 
           else:
             discard
@@ -1113,6 +1140,38 @@ proc exec*(self: VirtualMachine): Value =
         let cu_value = r.to_ref_value()
         self.frame.push(cu_value)
 
+      of IkDefineMethod:
+        # Stack: [class, function]
+        let name = inst.arg0
+        let fn_value = self.frame.pop()
+        
+        # The class should be the current 'self' in the initialization context
+        let class_value = self.frame.self
+        
+        
+        if class_value.kind != VkClass:
+          not_allowed("Can only define methods on classes, got " & $class_value.kind)
+        
+        if fn_value.kind != VkFunction:
+          not_allowed("Method value must be a function")
+        
+        # Access the class - VkClass should always be a reference value
+        let class = class_value.ref.class
+        let m = Method(
+          name: name.str,
+          callable: fn_value,
+          class: class,
+        )
+        class.methods[name.str.to_key()] = m
+        
+        # Set the function's namespace to the class namespace
+        fn_value.ref.fn.ns = class.ns
+        
+        # Return the method
+        let r = new_ref(VkMethod)
+        r.`method` = m
+        self.frame.push(r.to_ref_value())
+
       of IkCallInit:
         {.push checks: off}
         let compiled_value = self.frame.pop()
@@ -1133,6 +1192,10 @@ proc exec*(self: VirtualMachine): Value =
         self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
         self.frame.self = obj
         self.frame.ns = ns
+        # when not defined(release):
+        #   echo "IkCallInit: switching to init CU, obj kind: ", obj.kind
+        #   echo "  New frame self: ", self.frame.self.kind
+        #   echo "  Init CU has ", compiled.instructions.len, " instructions"
         self.cu = compiled
         pc = 0
         inst = self.cu.instructions[pc].addr
@@ -1325,12 +1388,17 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkSubClass:
         let name = inst.arg0
+        let parent_class = self.frame.pop()
         let class = new_class(name.str)
-        class.parent = self.frame.pop().ref.class
+        if parent_class.kind == VkClass:
+          class.parent = parent_class.ref.class
+        else:
+          not_allowed("Parent must be a class, got " & $parent_class.kind)
         let r = new_ref(VkClass)
         r.class = class
-        self.frame.ns[name.Key] = r.to_ref_value()
-        self.frame.push(r.to_ref_value())
+        let v = r.to_ref_value()
+        self.frame.ns[name.Key] = v
+        self.frame.push(v)
 
       of IkResolveMethod:
         let v = self.frame.pop()
@@ -1385,7 +1453,12 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
 
   let ns = new_namespace(module_name)
   # Add eval function to the module namespace
-  ns["eval".to_key()] = App.app.global_ns.ns["eval".to_key()]
+  # Add eval function to the namespace if it exists in global_ns
+  # NOTE: This line causes issues with reference access in some cases, commenting out for now
+  # if App.app.global_ns.kind == VkNamespace:
+  #   let global_ns = App.app.global_ns.ref.ns
+  #   if global_ns.has_key("eval".to_key()):
+  #     ns["eval".to_key()] = global_ns["eval".to_key()]
   self.frame.update(new_frame(ns))
   self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
   self.frame.self = NIL  # Set default self to nil

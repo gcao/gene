@@ -675,6 +675,7 @@ type
     IkCallMethod
     IkCallMethodNoArgs
     IkCallInit
+    IkDefineMethod      # Define a method on a class
 
     IkMapStart
     IkMapSetProp        # args: key
@@ -881,8 +882,6 @@ const SMALL_INT_MAX* = (1'i64 shl 47) - 1
 
 # Legacy constants for compatibility
 const I64_MASK* = 0xC000_0000_0000_0000u64  # Will be removed
-const F64_ZERO = 0x0000_0000_0000_0000u64   # Actual 0.0 in IEEE 754
-const AND_MASK = PAYLOAD_MASK
 
 
 # Primary type tags in NaN space
@@ -901,16 +900,6 @@ const NIL* = cast[Value](SPECIAL_TAG or 0)
 const TRUE* = cast[Value](SPECIAL_TAG or 1)
 const FALSE* = cast[Value](SPECIAL_TAG or 2)
 
-# Legacy prefix constants for compatibility
-const NIL_PREFIX = 0xFFF1
-const BOOL_PREFIX = 0xFFF1
-const POINTER_PREFIX = 0xFFFC
-const REF_PREFIX = 0xFFFD
-const REF_MASK = REF_TAG
-const GENE_PREFIX = 0xFFFA
-const GENE_MASK = GENE_TAG
-const OTHER_PREFIX = 0xFFF1
-
 const VOID* = cast[Value](SPECIAL_TAG or 3)
 const PLACEHOLDER* = cast[Value](SPECIAL_TAG or 4)
 # Used when a key does not exist in a map
@@ -925,15 +914,10 @@ const CHAR2_MASK = 0xFFF1_0000_0002_0000u64
 const CHAR3_MASK = 0xFFF1_0000_0003_0000u64
 const CHAR4_MASK = 0xFFF1_0000_0004_0000u64
 
-const SHORT_STR_PREFIX = 0xFFFB
 const SHORT_STR_MASK = SHORT_STR_TAG
-const LONG_STR_PREFIX = 0xFFFE  
 const LONG_STR_MASK = LONG_STR_TAG
 
 const EMPTY_STRING = SHORT_STR_TAG
-
-const SYMBOL_PREFIX = 0xFFF9
-const EMPTY_SYMBOL = SYMBOL_TAG
 
 const BIGGEST_INT = 2^61 - 1
 
@@ -1115,9 +1099,10 @@ proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
   copy_mem(result, kind.addr, 2)
   result.ref_count = 1
 
-template `ref`*(v: Value): ptr Reference =
-  if (cast[uint64](v) and 0xFFFF_0000_0000_0000u64) == REF_TAG:
-    cast[ptr Reference](cast[uint64](v) and PAYLOAD_MASK)
+proc `ref`*(v: Value): ptr Reference {.inline.} =
+  let u = cast[uint64](v)
+  if (u and 0xFFFF_0000_0000_0000u64) == REF_TAG:
+    cast[ptr Reference](u and PAYLOAD_MASK)
   else:
     raise newException(ValueError, "Value is not a reference")
 
