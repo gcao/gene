@@ -818,6 +818,64 @@ proc compile_super(self: Compiler, gene: ptr Gene) =
   # Push the parent class
   self.output.instructions.add(Instruction(kind: IkSuper))
 
+proc compile_match(self: Compiler, gene: ptr Gene) =
+  # Match statement: (match pattern value)
+  if gene.children.len != 2:
+    not_allowed("match expects exactly 2 arguments: pattern and value")
+  
+  let pattern = gene.children[0]
+  let value = gene.children[1]
+  
+  # Compile the value expression
+  self.compile(value)
+  
+  # For now, handle simple variable binding: (match a [1])
+  if pattern.kind == VkSymbol:
+    # Simple variable binding - match doesn't create a new scope
+    let var_name = pattern.str
+    
+    # Check if we're in a scope
+    if self.scope_trackers.len == 0:
+      not_allowed("match must be used within a scope")
+    
+    let var_index = self.scope_tracker.next_index
+    self.scope_tracker.mappings[var_name.to_key()] = var_index
+    self.scope_tracker.next_index.inc()
+    
+    # Store the value in the variable
+    self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.to_value()))
+    
+    # Push nil as the result of match
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  elif pattern.kind == VkArray:
+    # Array pattern matching: (match [a b] [1 2])
+    # For now, handle simple array destructuring
+    
+    # Store the value temporarily
+    self.output.instructions.add(Instruction(kind: IkDup))
+    
+    for i, elem in pattern.ref.arr:
+      if elem.kind == VkSymbol:
+        # Extract element at index i
+        self.output.instructions.add(Instruction(kind: IkDup))  # Duplicate the array
+        self.output.instructions.add(Instruction(kind: IkPushValue, arg0: i.to_value()))
+        self.output.instructions.add(Instruction(kind: IkGetMember))
+        
+        # Store in variable
+        let var_name = elem.str
+        let var_index = self.scope_tracker.next_index
+        self.scope_tracker.mappings[var_name.to_key()] = var_index
+        self.scope_tracker.next_index.inc()
+        self.output.instructions.add(Instruction(kind: IkVar, arg0: var_index.to_value()))
+    
+    # Pop the original array
+    self.output.instructions.add(Instruction(kind: IkPop))
+    
+    # Push nil as the result of match
+    self.output.instructions.add(Instruction(kind: IkPushNil))
+  else:
+    not_allowed("Unsupported pattern type: " & $pattern.kind)
+
 proc compile_range(self: Compiler, gene: ptr Gene) =
   # (range start end) or (range start end step)
   if gene.children.len < 2:
@@ -1131,6 +1189,9 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       of "super":
         self.compile_super(gene)
+        return
+      of "match":
+        self.compile_match(gene)
         return
       of "range":
         self.compile_range(gene)

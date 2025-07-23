@@ -62,11 +62,13 @@ test_vm """
   (f 1 2)
 """, 3
 
-# TODO: match is not implemented in VM yet
-# test_vm """
-#   (match a [1])
-#   a
-# """, 1
+test_vm """
+  (match a [1])
+  a
+""", proc(r: Value) =
+  check r.kind == VkArray
+  check r.ref.arr.len == 1
+  check r.ref.arr[0] == 1
 
 # test_interpreter """
 #   (match /a [1])

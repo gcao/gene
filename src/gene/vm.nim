@@ -80,6 +80,8 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkScopeStart:
+        if inst.arg0.kind != VkScopeTracker:
+          not_allowed("IkScopeStart: expected ScopeTracker, got " & $inst.arg0.kind)
         self.frame.scope = new_scope(inst.arg0.ref.scope_tracker, self.frame.scope)
       of IkScopeEnd:
         self.frame.scope = self.frame.scope.parent
@@ -87,7 +89,16 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVar:
         {.push checks: off.}
-        self.frame.scope.members.add(self.frame.current())
+        let index = inst.arg0.int64.int
+        let value = self.frame.pop()  # Pop the value from the stack
+        if self.frame.scope.isNil:
+          not_allowed("IkVar: scope is nil")
+        # Ensure the scope has enough space for the index
+        while self.frame.scope.members.len <= index:
+          self.frame.scope.members.add(NIL)
+        self.frame.scope.members[index] = value
+        # Push nil as the result of var
+        self.frame.push(NIL)
         {.pop.}
 
       of IkVarValue:
