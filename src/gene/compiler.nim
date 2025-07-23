@@ -78,7 +78,15 @@ proc compile_symbol(self: Compiler, input: Value) =
     let input = translate_symbol(input)
     if input.kind == VkSymbol:
       let symbol_str = input.str
-      if symbol_str.endsWith("..."):
+      if symbol_str == "self":
+        # Special handling for self - push the current frame's self
+        self.output.instructions.add(Instruction(kind: IkPushSelf))
+        return
+      elif symbol_str == "super":
+        # Special handling for super - will be handled differently when it's a function call
+        self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
+        return
+      elif symbol_str.endsWith("..."):
         # Handle variable spread like "a..." - strip the ... and add spread
         let base_symbol = symbol_str[0..^4].to_symbol_value()  # Remove "..."
         let key = cast[Key](base_symbol)
@@ -754,6 +762,27 @@ proc compile_method_definition(self: Compiler, gene: ptr Gene) =
   # Add the method to the class
   self.output.instructions.add(Instruction(kind: IkDefineMethod, arg0: name))
 
+proc compile_constructor_definition(self: Compiler, gene: ptr Gene) =
+  # Constructor definition: (.ctor args body...)
+  if gene.children.len < 2:
+    not_allowed("Constructor definition requires at least args and body")
+  
+  # Create a function from the constructor definition
+  # The constructor is similar to (fn new args body...) but bound to the class
+  var fn_value = new_gene_value()
+  fn_value.gene.type = "fn".to_symbol_value()
+  # Add "new" as the function name
+  fn_value.gene.children.add("new".to_symbol_value())
+  # Add remaining children (args and body)
+  for i in 0..<gene.children.len:
+    fn_value.gene.children.add(gene.children[i])
+  
+  # Compile the function definition
+  self.compile_fn(fn_value)
+  
+  # Set as constructor for the class
+  self.output.instructions.add(Instruction(kind: IkDefineConstructor))
+
 proc compile_class(self: Compiler, gene: ptr Gene) =
   var body_start = 1
   if gene.children.len >= 3 and gene.children[1] == "<".to_symbol_value():
@@ -779,6 +808,22 @@ proc compile_new(self: Compiler, gene: ptr Gene) =
   # IKGeneEnd is replaced by IkNew here
   # self.output.instructions.add(Instruction(kind: IkGeneEnd))
   self.output.instructions.add(Instruction(kind: IkNew))
+
+proc compile_super(self: Compiler, gene: ptr Gene) =
+  # Super call: (super arg1 arg2 ...)
+  # Compile it as a regular gene call with super as the type
+  self.output.instructions.add(Instruction(kind: IkGeneStart))
+  
+  # Push super - this will push the bound method for the parent
+  self.output.instructions.add(Instruction(kind: IkSuper))
+  self.output.instructions.add(Instruction(kind: IkGeneSetType))
+  
+  # Compile arguments
+  for child in gene.children:
+    self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  
+  self.output.instructions.add(Instruction(kind: IkGeneEnd))
 
 proc compile_range(self: Compiler, gene: ptr Gene) =
   # (range start end) or (range start end step)
@@ -1091,6 +1136,9 @@ proc compile_gene(self: Compiler, input: Value) =
       of "new":
         self.compile_new(gene)
         return
+      of "super":
+        self.compile_super(gene)
+        return
       of "range":
         self.compile_range(gene)
         return
@@ -1107,6 +1155,14 @@ proc compile_gene(self: Compiler, input: Value) =
           self.compile(child)
           self.output.instructions.add(Instruction(kind: IkPop))
         self.output.instructions.add(Instruction(kind: IkPushNil))
+        return
+      of ".fn":
+        # Method definition inside class body
+        self.compile_method_definition(gene)
+        return
+      of ".ctor":
+        # Constructor definition inside class body
+        self.compile_constructor_definition(gene)
         return
       of "eval":
         # Evaluate expressions

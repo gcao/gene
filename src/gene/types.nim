@@ -592,6 +592,7 @@ type
 
     IkPushValue   # push value to the next slot
     IkPushNil
+    IkPushSelf    # push the current frame's self value
     IkPop
     IkDup         # duplicate top stack element
     IkDup2        # duplicate top two stack elements
@@ -676,6 +677,8 @@ type
     IkCallMethodNoArgs
     IkCallInit
     IkDefineMethod      # Define a method on a class
+    IkDefineConstructor # Define a constructor on a class
+    IkSuper             # Push the parent method as a bound method
 
     IkMapStart
     IkMapSetProp        # args: key
@@ -801,6 +804,7 @@ type
     self*: Value
     args*: Value
     stack*: array[100, Value]
+    current_method*: Method  # Currently executing method (for super calls)
     stack_index*: uint8
 
   Frame* = ptr FrameObj

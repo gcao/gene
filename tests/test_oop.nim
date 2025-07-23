@@ -76,38 +76,39 @@ test_vm """
 """, 1
 
 # Instance variables - needs constructor support
-# test_vm """
-#   (class A
-#     (.ctor _
-#       (/a = 1)
-#     )
-#   )
-#   ((new A)./a)
-# """, 1
+test_vm """
+  (class A
+    (.ctor _
+      (/a = 1)
+    )
+  )
+  (var x (new A))
+  x/a
+""", 1
 
 # Method with parameters
-# test_vm """
-#   (class A
-#     (.fn test a
-#       a
-#     )
-#   )
-#   ((new A).test 1)
-# """, 1
+test_vm """
+  (class A
+    (.fn test a
+      a
+    )
+  )
+  ((new A).test 1)
+""", 1
 
 # Inheritance with method override
-# test_vm """
-#   (class A
-#     (.fn test []
-#       "A.test"
-#     )
-#   )
-#   (class B < A
-#   )
-#   ((new B) .test)
-# """, "A.test"
+test_vm """
+  (class A
+    (.fn test []
+      "A.test"
+    )
+  )
+  (class B < A
+  )
+  ((new B) .test)
+""", "A.test"
 
-# Super calls
+# Super calls - TODO: fix super to actually call the parent method
 # test_vm """
 #   (class A
 #     (.fn test a
@@ -122,7 +123,7 @@ test_vm """
 #   ((new B) .test 1)
 # """, 1
 
-# Inherited constructor
+# Inherited constructor - TODO: need to call parent constructor
 # test_vm """
 #   (class A
 #     (.ctor _
@@ -130,10 +131,11 @@ test_vm """
 #     )
 #   )
 #   (class B < A)
-#   ((new B)./test)
+#   (var b (new B))
+#   b/test
 # """, 1
 
-# Mixins
+# Mixins - TODO: implement mixin support
 # test_vm """
 #   (mixin M
 #     (.fn test _

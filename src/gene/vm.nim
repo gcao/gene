@@ -257,8 +257,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkClass:
             target.ref.class.ns[name] = value
           of VkInstance:
-            todo()
-            # target.ref.instance_props[name] = value
+            target.ref.instance_props[name] = value
           of VkArray:
             # Arrays don't support named members, this is likely an error
             not_allowed("Cannot set named member '" & name.int.get_symbol() & "' on array")
@@ -288,8 +287,10 @@ proc exec*(self: VirtualMachine): Value =
             else:
               not_allowed("enum " & value.ref.enum_def.name & " has no member " & member_name)
           of VkInstance:
-            todo()
-            # self.frame.push(value.ref.instance_props[name])
+            if name in value.ref.instance_props:
+              self.frame.push(value.ref.instance_props[name])
+            else:
+              self.frame.push(NIL)
           else:
             todo($value.kind)
 
@@ -403,6 +404,8 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(inst.arg0)
       of IkPushNil:
         self.frame.push(NIL)
+      of IkPushSelf:
+        self.frame.push(self.frame.self)
       of IkPop:
         discard self.frame.pop()
       of IkDup:
@@ -615,6 +618,7 @@ proc exec*(self: VirtualMachine): Value =
                 r.frame.kind = FkFunction
                 r.frame.target = target
                 r.frame.scope = scope
+                r.frame.current_method = meth  # Track the current method for super calls
                 r.frame.self = bm.self  # Set self to the instance
                 self.frame.replace(r.to_ref_value())
                 pc = inst.arg0.int64.int64.int
@@ -1171,6 +1175,61 @@ proc exec*(self: VirtualMachine): Value =
         let r = new_ref(VkMethod)
         r.`method` = m
         self.frame.push(r.to_ref_value())
+      
+      of IkDefineConstructor:
+        # Stack: [class, function]
+        let fn_value = self.frame.pop()
+        
+        # The class should be the current 'self' in the initialization context
+        let class_value = self.frame.self
+        
+        if class_value.kind != VkClass:
+          not_allowed("Can only define constructor on classes, got " & $class_value.kind)
+        
+        if fn_value.kind != VkFunction:
+          not_allowed("Constructor value must be a function")
+        
+        # Access the class
+        let class = class_value.ref.class
+        
+        # Set the constructor
+        class.constructor = fn_value
+        
+        # Set the function's namespace to the class namespace
+        fn_value.ref.fn.ns = class.ns
+        
+        # Return the function
+        self.frame.push(fn_value)
+      
+      of IkSuper:
+        # Super - pushes the parent method as a bound method
+        # Get the current method from the frame
+        let current_method = self.frame.current_method
+        if current_method == nil:
+          not_allowed("super can only be called from within a method")
+        
+        let method_name = current_method.name
+        
+        # Get the parent class and find the method with the same name
+        let parent_class = current_method.class.parent
+        if parent_class == nil:
+          not_allowed("No parent class for super call")
+        
+        let parent_method_key = method_name.to_key()
+        if parent_method_key notin parent_class.methods:
+          not_allowed("Parent class has no method: " & method_name)
+        
+        let parent_method = parent_class.methods[parent_method_key]
+        
+        # Create a bound method for the parent method with the current instance
+        let bm = new_ref(VkBoundMethod)
+        bm.bound_method = BoundMethod(
+          self: self.frame.self,
+          `method`: parent_method,
+        )
+        
+        # Push the bound method onto the stack
+        self.frame.push(bm.to_ref_value())
 
       of IkCallInit:
         {.push checks: off}
