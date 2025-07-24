@@ -775,6 +775,7 @@ type
     cu*: CompilationUnit
     saved_value*: Value  # Value to restore after finally block
     has_saved_value*: bool
+    in_finally*: bool
 
   VirtualMachine* = ref object
     cu*: CompilationUnit

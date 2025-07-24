@@ -422,17 +422,58 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkContinue:
         {.push checks: off}
-        pc = inst.arg0.int64.int
-        inst = self.cu.instructions[pc].addr
-        continue
+        let label = inst.arg0.int64.int
+        
+        # Check if this is a continue outside of a loop
+        if label == -1:
+          # Check if we're in a finally block
+          var in_finally = false
+          if self.exception_handlers.len > 0:
+            let handler = self.exception_handlers[^1]
+            if handler.in_finally:
+              in_finally = true
+          
+          if in_finally:
+            # Pop the value that continue would have used
+            if self.frame.stack_index > 0:
+              discard self.frame.pop()
+            # Silently ignore continue in finally block
+            discard
+          else:
+            not_allowed("continue used outside of a loop")
+        else:
+          # Normal continue - jump to the start label
+          pc = label
+          inst = self.cu.instructions[pc].addr
+          continue
         {.pop.}
 
       of IkBreak:
         {.push checks: off}
-        # Jump to the end label stored in arg0
-        pc = inst.arg0.int64.int
-        inst = self.cu.instructions[pc].addr
-        continue
+        let label = inst.arg0.int64.int
+        
+        # Check if this is a break outside of a loop
+        if label == -1:
+          # Check if we're in a finally block
+          var in_finally = false
+          if self.exception_handlers.len > 0:
+            let handler = self.exception_handlers[^1]
+            if handler.in_finally:
+              in_finally = true
+          
+          if in_finally:
+            # Pop the value that break would have used
+            if self.frame.stack_index > 0:
+              discard self.frame.pop()
+            # Silently ignore break in finally block
+            discard
+          else:
+            not_allowed("break used outside of a loop")
+        else:
+          # Normal break - jump to the end label
+          pc = label
+          inst = self.cu.instructions[pc].addr
+          continue
         {.pop.}
 
       of IkPushValue:
@@ -1432,7 +1473,20 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkReturn:
         {.push checks: off}
-        if self.frame.caller_frame == nil:
+        # Check if we're in a finally block first
+        var in_finally = false
+        if self.exception_handlers.len > 0:
+          let handler = self.exception_handlers[^1]
+          if handler.in_finally:
+            in_finally = true
+        
+        if in_finally:
+          # Pop the value that return would have used
+          if self.frame.stack_index > 0:
+            discard self.frame.pop()
+          # Silently ignore return in finally block
+          discard
+        elif self.frame.caller_frame == nil:
           not_allowed("Return from top level")
         else:
           let v = self.frame.pop()
@@ -1555,7 +1609,8 @@ proc exec*(self: VirtualMachine): Value =
           catch_pc: catch_pc,
           finally_pc: finally_pc,
           frame: self.frame,
-          cu: self.cu
+          cu: self.cu,
+          in_finally: false
         ))
         {.pop.}
         
@@ -1570,9 +1625,8 @@ proc exec*(self: VirtualMachine): Value =
         discard
         
       of IkCatchEnd:
-        # Clean up exception handler
-        if self.exception_handlers.len > 0:
-          discard self.exception_handlers.pop()
+        # Don't pop the exception handler yet if there's a finally block
+        # It will be popped after the finally block completes
         # Clear current exception
         self.current_exception = NIL
         
@@ -1581,8 +1635,10 @@ proc exec*(self: VirtualMachine): Value =
         # Save the current stack value if there is one (from try/catch block)
         if self.exception_handlers.len > 0:
           var handler = self.exception_handlers[^1]
+          # Mark that we're in a finally block
+          handler.in_finally = true
           # Only save value if we're not coming from an exception
-          if self.current_exception == NIL and self.frame.stack.len > 0:
+          if self.current_exception == NIL and self.frame.stack_index > 0:
             handler.saved_value = self.frame.pop()
             handler.has_saved_value = true
             self.exception_handlers[^1] = handler
@@ -1599,17 +1655,23 @@ proc exec*(self: VirtualMachine): Value =
       of IkFinallyEnd:
         # End of finally block
         # Pop any value left by the finally block
-        if self.frame.stack.len > 0:
+        if self.frame.stack_index > 0:
           discard self.frame.pop()
         
-        # Restore saved value if we have one
+        # Restore saved value if we have one and reset in_finally flag
         if self.exception_handlers.len > 0:
-          let handler = self.exception_handlers[^1]
+          var handler = self.exception_handlers[^1]
+          handler.in_finally = false
+          self.exception_handlers[^1] = handler
           if handler.has_saved_value:
             self.frame.push(handler.saved_value)
             when not defined(release):
               if self.trace:
                 echo "  FinallyEnd: restored value ", handler.saved_value
+        
+        # Now we can pop the exception handler
+        if self.exception_handlers.len > 0:
+          discard self.exception_handlers.pop()
         
         when not defined(release):
           if self.trace:

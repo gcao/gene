@@ -615,30 +615,34 @@ proc compile_enum(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkVar, arg0: index.to_value()))
 
 proc compile_break(self: Compiler, gene: ptr Gene) =
-  if self.loop_stack.len == 0:
-    not_allowed("break used outside of a loop")
-  
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   
-  # Get the current loop's end label
-  let current_loop = self.loop_stack[^1]
-  self.output.instructions.add(Instruction(kind: IkBreak, arg0: current_loop.end_label.to_value()))
+  if self.loop_stack.len == 0:
+    # Emit a break with label -1 to indicate no loop
+    # This will be checked at runtime
+    self.output.instructions.add(Instruction(kind: IkBreak, arg0: (-1).to_value()))
+  else:
+    # Get the current loop's end label
+    let current_loop = self.loop_stack[^1]
+    self.output.instructions.add(Instruction(kind: IkBreak, arg0: current_loop.end_label.to_value()))
 
 proc compile_continue(self: Compiler, gene: ptr Gene) =
-  if self.loop_stack.len == 0:
-    not_allowed("continue used outside of a loop")
-  
   if gene.children.len > 0:
     self.compile(gene.children[0])
   else:
     self.output.instructions.add(Instruction(kind: IkPushNil))
   
-  # Get the current loop's start label
-  let current_loop = self.loop_stack[^1]
-  self.output.instructions.add(Instruction(kind: IkContinue, arg0: current_loop.start_label.to_value()))
+  if self.loop_stack.len == 0:
+    # Emit a continue with label -1 to indicate no loop
+    # This will be checked at runtime
+    self.output.instructions.add(Instruction(kind: IkContinue, arg0: (-1).to_value()))
+  else:
+    # Get the current loop's start label
+    let current_loop = self.loop_stack[^1]
+    self.output.instructions.add(Instruction(kind: IkContinue, arg0: current_loop.start_label.to_value()))
 
 proc compile_throw(self: Compiler, gene: ptr Gene) =
   if gene.children.len > 0:
@@ -1365,16 +1369,21 @@ proc update_jumps(self: CompilationUnit) =
     let inst = self.instructions[i]
     case inst.kind
       of IkJump, IkJumpIfFalse, IkContinue, IkBreak, IkGeneStartDefault:
-        # Labels are stored as int16 values converted to Value
-        # Extract the int value and cast to Label (int16)
-        # Extract the label from the NaN-boxed value
-        # The label was stored as int16, so we need to extract just the low 16 bits
-        when not defined(release):
-          if inst.arg0.kind != VkInt:
-            echo "ERROR: inst ", i, " (", inst.kind, ") arg0 is not an int: ", inst.arg0, " kind: ", inst.arg0.kind
-        let label = (inst.arg0.int64.int and 0xFFFF).int16.Label
-        let new_pc = self.find_label(label)
-        self.instructions[i].arg0 = new_pc.to_value()
+        # Special case: -1 means no loop (for break/continue outside loops)
+        if inst.kind in {IkBreak, IkContinue} and inst.arg0.int64 == -1:
+          # Keep -1 as is for runtime checking
+          discard
+        else:
+          # Labels are stored as int16 values converted to Value
+          # Extract the int value and cast to Label (int16)
+          # Extract the label from the NaN-boxed value
+          # The label was stored as int16, so we need to extract just the low 16 bits
+          when not defined(release):
+            if inst.arg0.kind != VkInt:
+              echo "ERROR: inst ", i, " (", inst.kind, ") arg0 is not an int: ", inst.arg0, " kind: ", inst.arg0.kind
+          let label = (inst.arg0.int64.int and 0xFFFF).int16.Label
+          let new_pc = self.find_label(label)
+          self.instructions[i].arg0 = new_pc.to_value()
       of IkTryStart:
         # IkTryStart has arg0 for catch PC and optional arg1 for finally PC
         when not defined(release):
