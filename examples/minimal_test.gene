@@ -1,0 +1,6 @@
+#!/usr/bin/env gene
+
+(var x 1)
+(var y 2)
+(var z (x + y))
+z

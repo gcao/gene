@@ -1390,6 +1390,9 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        # Initialize parent_scope if it doesn't exist
+        if f.parent_scope == nil:
+          f.parent_scope = new_scope(new_scope_tracker())
         f.parent_scope.update(self.frame.scope)
         f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
 
@@ -1529,6 +1532,10 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))
 
   let ns = new_namespace(module_name)
+  
+  # Add gene namespace to module namespace
+  ns["gene".to_key()] = App.app.gene_ns
+  
   # Add eval function to the module namespace
   # Add eval function to the namespace if it exists in global_ns
   # NOTE: This line causes issues with reference access in some cases, commenting out for now
@@ -1536,8 +1543,14 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   #   let global_ns = App.app.global_ns.ref.ns
   #   if global_ns.has_key("eval".to_key()):
   #     ns["eval".to_key()] = global_ns["eval".to_key()]
-  self.frame.update(new_frame(ns))
-  self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+  
+  # Initialize frame if it doesn't exist
+  if self.frame == nil:
+    self.frame = new_frame(ns)
+  else:
+    self.frame.update(new_frame(ns))
+    self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+  
   self.frame.self = NIL  # Set default self to nil
   self.cu = compiled
 
