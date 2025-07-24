@@ -683,8 +683,9 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
   # Mark end of try block
   self.output.instructions.add(Instruction(kind: IkTryEnd))
   
-  # Jump to finally if exists, otherwise to end
+  # If we have a finally block, we need to preserve the try block's value
   if has_finally:
+    # The try block's value is on the stack - we'll handle it in the finally section
     self.output.instructions.add(Instruction(kind: IkJump, arg0: finally_label.to_value()))
   else:
     self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))

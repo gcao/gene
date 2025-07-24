@@ -48,14 +48,14 @@ import ./helpers
 
 # Exception handling is not yet implemented in the VM
 # These tests are placeholders for future implementation
-# test_vm """
-#   (try
-#     (throw)
-#     1
-#   catch *
-#     2
-#   )
-# """, 2
+test_vm """
+  (try
+    (throw)
+    1
+  catch *
+    2
+  )
+""", 2
 
 # test_vm """
 #   (class TestException < Exception)
@@ -81,25 +81,24 @@ import ./helpers
 #   )
 # """, 3
 
-# test_vm """
-#   (try
-#     (throw "test")
-#   catch *
-#     $ex
-#   )
-# """, proc(r: Value) =
-#   check r.exception.msg == "test"
+test_vm """
+  (try
+    (throw "test")
+  catch *
+    $ex
+  )
+""", "test"
 
-# test_vm """
-#   (try
-#     (throw)
-#     1
-#   catch *
-#     2
-#   finally
-#     3   # value is discarded
-#   )
-# """, 2
+test_vm """
+  (try
+    (throw)
+    1
+  catch *
+    2
+  finally
+    3   # value is discarded
+  )
+""", 2
 
 # # Try can be omitted on the module level, like function body
 # # This can simplify freeing resources

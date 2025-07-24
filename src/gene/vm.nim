@@ -287,7 +287,12 @@ proc exec*(self: VirtualMachine): Value =
           of VkGene:
             self.frame.push(value.gene.props[name])
           of VkNamespace:
-            self.frame.push(value.ref.ns[name])
+            # Special handling for $ex (gene/ex)
+            if name == "ex".to_key() and value == App.app.gene_ns:
+              # Return current exception
+              self.frame.push(self.current_exception)
+            else:
+              self.frame.push(value.ref.ns[name])
           of VkClass:
             self.frame.push(value.ref.class.ns[name])
           of VkEnum:
@@ -1501,29 +1506,17 @@ proc exec*(self: VirtualMachine): Value =
         # Look for exception handler
         if self.exception_handlers.len > 0:
           let handler = self.exception_handlers[^1]
-          # If there's a finally block, jump there first
-          if handler.finally_pc >= 0:
-            when not defined(release):
-              if self.trace:
-                echo "  Throw: jumping to finally at pc=", handler.finally_pc
-            # Jump to finally block
-            self.cu = handler.cu
-            pc = handler.finally_pc
-            if pc < self.cu.instructions.len:
-              inst = self.cu.instructions[pc].addr
-            else:
-              raise new_exception(types.Exception, "Invalid finally PC: " & $pc)
+          # Always jump to catch block first (catch will jump to finally if needed)
+          when not defined(release):
+            if self.trace:
+              echo "  Throw: jumping to catch at pc=", handler.catch_pc
+          # Jump to catch block
+          self.cu = handler.cu
+          pc = handler.catch_pc
+          if pc < self.cu.instructions.len:
+            inst = self.cu.instructions[pc].addr
           else:
-            when not defined(release):
-              if self.trace:
-                echo "  Throw: jumping to catch at pc=", handler.catch_pc
-            # Jump to catch block
-            self.cu = handler.cu
-            pc = handler.catch_pc
-            if pc < self.cu.instructions.len:
-              inst = self.cu.instructions[pc].addr
-            else:
-              raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
+            raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
           continue
         else:
           # No handler, raise Nim exception
@@ -1567,14 +1560,39 @@ proc exec*(self: VirtualMachine): Value =
         
       of IkFinally:
         # Finally block execution
-        # Nothing special needed here - just continue execution
+        # Save the current stack value if there is one (from try/catch block)
+        if self.exception_handlers.len > 0:
+          var handler = self.exception_handlers[^1]
+          # Only save value if we're not coming from an exception
+          if self.current_exception == NIL and self.frame.stack.len > 0:
+            handler.saved_value = self.frame.pop()
+            handler.has_saved_value = true
+            self.exception_handlers[^1] = handler
+            when not defined(release):
+              if self.trace:
+                echo "  Finally: saved value ", handler.saved_value
+          else:
+            handler.has_saved_value = false
+            self.exception_handlers[^1] = handler
         when not defined(release):
           if self.trace:
             echo "  Finally: starting finally block"
       
       of IkFinallyEnd:
         # End of finally block
-        # If there was an exception being handled, we need to rethrow it
+        # Pop any value left by the finally block
+        if self.frame.stack.len > 0:
+          discard self.frame.pop()
+        
+        # Restore saved value if we have one
+        if self.exception_handlers.len > 0:
+          let handler = self.exception_handlers[^1]
+          if handler.has_saved_value:
+            self.frame.push(handler.saved_value)
+            when not defined(release):
+              if self.trace:
+                echo "  FinallyEnd: restored value ", handler.saved_value
+        
         when not defined(release):
           if self.trace:
             echo "  FinallyEnd: current_exception = ", self.current_exception
