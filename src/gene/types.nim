@@ -653,6 +653,7 @@ type
     IkCatchStart  # mark start of catch block
     IkCatchEnd    # mark end of catch block
     IkFinally     # mark start of finally block
+    IkFinallyEnd  # mark end of finally block
 
     # IkApplication
     # IkPackage
@@ -764,11 +765,19 @@ type
 
   # Virtual machine and its data can be separated however it doesn't
   # bring much benefit. So we keep them together.
+  ExceptionHandler* = object
+    catch_pc*: int
+    finally_pc*: int
+    frame*: Frame
+    cu*: CompilationUnit
+
   VirtualMachine* = ref object
     cu*: CompilationUnit
     pc*: int
     frame*: Frame
     trace*: bool
+    exception_handlers*: seq[ExceptionHandler]
+    current_exception*: Value
 
   VmCallback* = proc() {.gcsafe.}
 
@@ -2757,6 +2766,8 @@ proc new_instr*(kind: InstructionKind, arg0: Value): Instruction =
 
 proc init_app_and_vm*() =
   VM = VirtualMachine(
+    exception_handlers: @[],
+    current_exception: NIL,
   )
   let r = new_ref(VkApplication)
   r.app = new_app()

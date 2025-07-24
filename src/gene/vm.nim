@@ -1494,31 +1494,110 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkThrow:
         {.push checks: off}
+        # Pop value from stack if there is one, otherwise use NIL
         let value = self.frame.pop()
-        # TODO: Implement proper exception handling
-        # For now, just raise a Nim exception
-        raise new_exception(types.Exception, "Gene exception: " & $value)
+        self.current_exception = value
+        
+        # Look for exception handler
+        if self.exception_handlers.len > 0:
+          let handler = self.exception_handlers[^1]
+          # If there's a finally block, jump there first
+          if handler.finally_pc >= 0:
+            when not defined(release):
+              if self.trace:
+                echo "  Throw: jumping to finally at pc=", handler.finally_pc
+            # Jump to finally block
+            self.cu = handler.cu
+            pc = handler.finally_pc
+            if pc < self.cu.instructions.len:
+              inst = self.cu.instructions[pc].addr
+            else:
+              raise new_exception(types.Exception, "Invalid finally PC: " & $pc)
+          else:
+            when not defined(release):
+              if self.trace:
+                echo "  Throw: jumping to catch at pc=", handler.catch_pc
+            # Jump to catch block
+            self.cu = handler.cu
+            pc = handler.catch_pc
+            if pc < self.cu.instructions.len:
+              inst = self.cu.instructions[pc].addr
+            else:
+              raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
+          continue
+        else:
+          # No handler, raise Nim exception
+          raise new_exception(types.Exception, "Gene exception: " & $value)
         {.pop.}
         
       of IkTryStart:
-        # TODO: Push exception handler info onto a stack
-        discard
+        {.push checks: off}
+        # arg0 contains the catch PC
+        let catch_pc = inst.arg0.int64.int
+        # arg1 contains the finally PC (if present)
+        let finally_pc = if inst.arg1 != 0: inst.arg1.int else: -1
+        when not defined(release):
+          if self.trace:
+            echo "  TryStart: catch_pc=", catch_pc, ", finally_pc=", finally_pc
+        
+        self.exception_handlers.add(ExceptionHandler(
+          catch_pc: catch_pc,
+          finally_pc: finally_pc,
+          frame: self.frame,
+          cu: self.cu
+        ))
+        {.pop.}
         
       of IkTryEnd:
-        # TODO: Pop exception handler info from stack
-        discard
+        # Pop exception handler since we exited try block normally
+        if self.exception_handlers.len > 0:
+          discard self.exception_handlers.pop()
         
       of IkCatchStart:
-        # TODO: Set up catch block context
+        # We're in a catch block
+        # TODO: Make exception available as $ex variable
         discard
         
       of IkCatchEnd:
-        # TODO: Clean up catch block context
-        discard
+        # Clean up exception handler
+        if self.exception_handlers.len > 0:
+          discard self.exception_handlers.pop()
+        # Clear current exception
+        self.current_exception = NIL
         
       of IkFinally:
-        # TODO: Implement finally block
-        discard
+        # Finally block execution
+        # Nothing special needed here - just continue execution
+        when not defined(release):
+          if self.trace:
+            echo "  Finally: starting finally block"
+      
+      of IkFinallyEnd:
+        # End of finally block
+        # If there was an exception being handled, we need to rethrow it
+        when not defined(release):
+          if self.trace:
+            echo "  FinallyEnd: current_exception = ", self.current_exception
+        
+        if self.current_exception != NIL:
+          # Re-throw the exception
+          let value = self.current_exception
+          self.current_exception = NIL  # Clear before rethrowing
+          
+          if self.exception_handlers.len > 0:
+            let handler = self.exception_handlers[^1]
+            when not defined(release):
+              if self.trace:
+                echo "  FinallyEnd: re-throwing to catch at pc=", handler.catch_pc
+            self.cu = handler.cu
+            pc = handler.catch_pc
+            if pc < self.cu.instructions.len:
+              inst = self.cu.instructions[pc].addr
+            else:
+              raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
+            continue
+          else:
+            raise new_exception(types.Exception, "Gene exception: " & $value)
 
       else:
         todo($inst.kind)
@@ -1534,7 +1613,7 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let ns = new_namespace(module_name)
   
   # Add gene namespace to module namespace
-  ns["gene".to_key()] = App.app.gene_ns
+  # ns["gene".to_key()] = App.app.gene_ns
   
   # Add eval function to the module namespace
   # Add eval function to the namespace if it exists in global_ns

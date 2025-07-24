@@ -655,8 +655,21 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
   let finally_label = new_label()
   let end_label = new_label()
   
+  # Check if there's a finally block
+  var has_finally = false
+  var finally_idx = -1
+  for idx in 0..<gene.children.len:
+    if gene.children[idx].kind == VkSymbol and gene.children[idx].str == "finally":
+      has_finally = true
+      finally_idx = idx
+      break
+  
   # Mark start of try block
-  self.output.instructions.add(Instruction(kind: IkTryStart, arg0: catch_end_label.to_value()))
+  # If we have a finally, catch handler should point to finally_label
+  if has_finally:
+    self.output.instructions.add(Instruction(kind: IkTryStart, arg0: catch_end_label.to_value(), arg1: finally_label))
+  else:
+    self.output.instructions.add(Instruction(kind: IkTryStart, arg0: catch_end_label.to_value()))
   
   # Compile try body
   var i = 0
@@ -669,7 +682,12 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
   
   # Mark end of try block
   self.output.instructions.add(Instruction(kind: IkTryEnd))
-  self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
+  
+  # Jump to finally if exists, otherwise to end
+  if has_finally:
+    self.output.instructions.add(Instruction(kind: IkJump, arg0: finally_label.to_value()))
+  else:
+    self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
   
   # Handle catch blocks
   self.output.instructions.add(Instruction(kind: IkNoop, label: catch_end_label))
@@ -691,13 +709,28 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
           inc i
         
         self.output.instructions.add(Instruction(kind: IkCatchEnd))
-        self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
+        # Jump to finally if exists, otherwise to end
+        if has_finally:
+          self.output.instructions.add(Instruction(kind: IkJump, arg0: finally_label.to_value()))
+        else:
+          self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
     elif child.kind == VkSymbol and child.str == "finally":
-      inc i
-      # TODO: Implement finally block
       break
     else:
       inc i
+  
+  # Handle finally block
+  if has_finally:
+    self.output.instructions.add(Instruction(kind: IkNoop, label: finally_label))
+    self.output.instructions.add(Instruction(kind: IkFinally))
+    
+    # Compile finally body
+    i = finally_idx + 1
+    while i < gene.children.len:
+      self.compile(gene.children[i])
+      inc i
+    
+    self.output.instructions.add(Instruction(kind: IkFinallyEnd))
   
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
 
@@ -1298,6 +1331,19 @@ proc update_jumps(self: CompilationUnit) =
         let label = (inst.arg0.int64.int and 0xFFFF).int16.Label
         let new_pc = self.find_label(label)
         self.instructions[i].arg0 = new_pc.to_value()
+      of IkTryStart:
+        # IkTryStart has arg0 for catch PC and optional arg1 for finally PC
+        when not defined(release):
+          if inst.arg0.kind != VkInt:
+            echo "ERROR: inst ", i, " (", inst.kind, ") arg0 is not an int: ", inst.arg0, " kind: ", inst.arg0.kind
+        let catch_label = (inst.arg0.int64.int and 0xFFFF).int16.Label
+        let catch_pc = self.find_label(catch_label)
+        self.instructions[i].arg0 = catch_pc.to_value()
+        
+        # Handle finally PC if present
+        if inst.arg1 != 0:
+          let finally_pc = self.find_label(inst.arg1.Label)
+          self.instructions[i].arg1 = finally_pc.int32
       of IkJumpIfMatchSuccess:
         self.instructions[i].arg1 = self.find_label(inst.arg1.Label).int32
       else:
