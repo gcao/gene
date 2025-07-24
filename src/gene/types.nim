@@ -654,6 +654,9 @@ type
     IkCatchEnd    # mark end of catch block
     IkFinally     # mark start of finally block
     IkFinallyEnd  # mark end of finally block
+    IkGetClass    # get the class of a value
+    IkIsInstance  # check if value is instance of class
+    IkCatchRestore # restore exception for next catch clause
 
     # IkApplication
     # IkPackage

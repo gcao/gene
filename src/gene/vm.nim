@@ -173,7 +173,11 @@ proc exec*(self: VirtualMachine): Value =
             let name = cast[Key](inst.arg0)
             when not defined(release):
               if self.trace:
-                echo "  ResolveSymbol: looking for ", get_symbol(name.int)
+                echo "  ResolveSymbol: looking for key ", name.int
+                try:
+                  echo "  Symbol name: ", get_symbol(name.int)
+                except:
+                  echo "  Failed to get symbol for key ", name.int
             var value = self.frame.ns[name]
             if value == NIL:
               # Try global namespace
@@ -188,7 +192,7 @@ proc exec*(self: VirtualMachine): Value =
                   if self.trace and value != NIL:
                     echo "  Found in gene namespace: ", value.kind
                 if value == NIL:
-                  not_allowed("Unknown symbol")
+                  not_allowed("Unknown symbol: " & get_symbol(name.int))
             else:
               when not defined(release):
                 if self.trace:
@@ -1631,6 +1635,116 @@ proc exec*(self: VirtualMachine): Value =
           else:
             raise new_exception(types.Exception, "Gene exception: " & $value)
 
+      of IkGetClass:
+        # Get the class of a value
+        {.push checks: off}
+        let value = self.frame.pop()
+        var class_val: Value
+        
+        case value.kind
+        of VkNil:
+          class_val = App.app.nil_class
+        of VkBool:
+          class_val = App.app.bool_class
+        of VkInt:
+          class_val = App.app.int_class
+        of VkFloat:
+          class_val = App.app.float_class
+        of VkChar:
+          class_val = App.app.char_class
+        of VkString:
+          class_val = App.app.string_class
+        of VkSymbol:
+          class_val = App.app.symbol_class
+        of VkComplexSymbol:
+          class_val = App.app.complex_symbol_class
+        of VkArray:
+          class_val = App.app.array_class
+        of VkMap:
+          class_val = App.app.map_class
+        of VkGene:
+          class_val = App.app.gene_class
+        of VkSet:
+          class_val = App.app.set_class
+        of VkTime:
+          class_val = App.app.time_class
+        of VkDate:
+          class_val = App.app.date_class
+        of VkDateTime:
+          class_val = App.app.datetime_class
+        of VkClass:
+          if value.ref.class.parent != nil:
+            let parent_ref = new_ref(VkClass)
+            parent_ref.class = value.ref.class.parent
+            class_val = parent_ref.to_ref_value()
+          else:
+            class_val = App.app.object_class
+        of VkInstance:
+          # Get the class of the instance
+          let instance_class_ref = new_ref(VkClass)
+          instance_class_ref.class = value.ref.instance_class
+          class_val = instance_class_ref.to_ref_value()
+        of VkApplication:
+          # Applications don't have a specific class
+          class_val = App.app.object_class
+        else:
+          # For all other types, use the Object class
+          class_val = App.app.object_class
+        
+        self.frame.push(class_val)
+        {.pop.}
+      
+      of IkIsInstance:
+        # Check if a value is an instance of a class (including inheritance)
+        {.push checks: off}
+        let expected_class = self.frame.pop()
+        let value = self.frame.pop()
+        
+        var is_instance = false
+        var actual_class: Class
+        
+        # Get the actual class of the value
+        case value.kind
+        of VkInstance:
+          actual_class = value.ref.instance_class
+        of VkClass:
+          actual_class = value.ref.class
+        else:
+          # For primitive types, we would need to check against their built-in classes
+          # For now, just return false
+          self.frame.push(false.to_value())
+          continue
+        
+        # Check if expected_class is a class
+        if expected_class.kind != VkClass:
+          self.frame.push(false.to_value())
+          continue
+        
+        let expected = expected_class.ref.class
+        
+        # Check direct match first
+        if actual_class == expected:
+          is_instance = true
+        else:
+          # Check inheritance chain
+          var current = actual_class
+          while current.parent != nil:
+            if current.parent == expected:
+              is_instance = true
+              break
+            current = current.parent
+        
+        self.frame.push(is_instance.to_value())
+        {.pop.}
+      
+      of IkCatchRestore:
+        # Restore the current exception for the next catch clause
+        {.push checks: off}
+        if self.exception_handlers.len > 0:
+          # Push the current exception back onto the stack for the next catch
+          self.frame.push(self.current_exception)
+        {.pop.}
+      
       else:
         todo($inst.kind)
 

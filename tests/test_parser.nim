@@ -1,9 +1,8 @@
 # To run these tests, simply execute `nimble test` or `nim c -r tests/test_parser.nim`
 
-import unittest, options, tables, unicode, times, nre
+import unittest, options, tables, unicode
 
 import gene/types
-import gene/parser
 
 import ./helpers
 

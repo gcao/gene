@@ -692,16 +692,47 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
   
   # Handle catch blocks
   self.output.instructions.add(Instruction(kind: IkNoop, label: catch_end_label))
+  var catch_count = 0
   while i < gene.children.len:
     let child = gene.children[i]
     if child.kind == VkSymbol and child.str == "catch":
       inc i
       if i < gene.children.len:
-        # TODO: Handle catch patterns (exception types)
-        self.output.instructions.add(Instruction(kind: IkCatchStart))
-        
-        # Skip pattern for now, just compile body
+        # Get the catch pattern
+        let pattern = gene.children[i]
         inc i
+        
+        var next_catch_label: Label
+        let is_catch_all = pattern.kind == VkSymbol and pattern.str == "*"
+        
+        # Generate catch matching code
+        if is_catch_all:
+          # Catch all - no need to check type
+          self.output.instructions.add(Instruction(kind: IkCatchStart))
+        else:
+          # Type-specific catch
+          next_catch_label = new_label()
+          
+          # Check if exception matches this type
+          self.output.instructions.add(Instruction(kind: IkCatchStart))
+          
+          # Load the current exception and check its type
+          self.output.instructions.add(Instruction(kind: IkPushValue, arg0: App.app.gene_ns))
+          self.output.instructions.add(Instruction(kind: IkGetMember, arg0: "ex".to_key().to_value()))
+          
+          # Get the class of the exception
+          self.output.instructions.add(Instruction(kind: IkGetClass))
+          
+          # Load the expected exception type
+          self.compile(pattern)
+          
+          # Check if they match (including inheritance)
+          self.output.instructions.add(Instruction(kind: IkIsInstance))
+          
+          # If not a match, jump to next catch
+          self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_catch_label.to_value()))
+        
+        # Compile catch body
         while i < gene.children.len:
           let body_child = gene.children[i]
           if body_child.kind == VkSymbol and (body_child.str == "catch" or body_child.str == "finally"):
@@ -715,10 +746,22 @@ proc compile_try(self: Compiler, gene: ptr Gene) =
           self.output.instructions.add(Instruction(kind: IkJump, arg0: finally_label.to_value()))
         else:
           self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
+        
+        # Add label for next catch if this was a type-specific catch
+        if not is_catch_all:
+          self.output.instructions.add(Instruction(kind: IkNoop, label: next_catch_label))
+          # Pop the exception handler and push it back for the next catch
+          self.output.instructions.add(Instruction(kind: IkCatchRestore))
+        
+        catch_count.inc
     elif child.kind == VkSymbol and child.str == "finally":
       break
     else:
       inc i
+  
+  # If no catch blocks handled the exception, re-throw
+  if catch_count > 0:
+    self.output.instructions.add(Instruction(kind: IkThrow))
   
   # Handle finally block
   if has_finally:
