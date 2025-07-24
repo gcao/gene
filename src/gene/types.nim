@@ -2778,6 +2778,14 @@ proc init_app_and_vm*() =
   r.app.genex_ns  = new_namespace("gene"  ).to_value()
   App = r.to_ref_value()
 
+  # Create built-in GeneException class
+  # TODO: Rename to Exception once symbol collision is fixed
+  let exception_class = new_class("GeneException")
+  let exception_ref = new_ref(VkClass)
+  exception_ref.class = exception_class
+  # Add to global namespace so it's accessible everywhere
+  App.app.global_ns.ref.ns["GeneException".to_key()] = exception_ref.to_ref_value()
+
   for callback in VmCreatedCallbacks:
     callback()
 

@@ -57,8 +57,9 @@ test_vm """
   )
 """, 2
 
+# TODO: Enable these tests once class inheritance and exception type matching are implemented
 # test_vm """
-#   (class TestException < Exception)
+#   (class TestException < GeneException)
 #   (try
 #     (throw TestException)
 #     1
@@ -70,7 +71,7 @@ test_vm """
 # """, 2
 
 # test_vm """
-#   (class TestException < Exception)
+#   (class TestException < GeneException)
 #   (try
 #     (throw)
 #     1
