@@ -204,6 +204,8 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
   self.end_scope()
 
 proc compile_caller_eval(self: Compiler, gene: ptr Gene)  # Forward declaration
+proc compile_async(self: Compiler, gene: ptr Gene)  # Forward declaration
+proc compile_await(self: Compiler, gene: ptr Gene)  # Forward declaration
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
@@ -1288,6 +1290,12 @@ proc compile_gene(self: Compiler, input: Value) =
         self.compile(gene.children[0])
         self.output.instructions.add(Instruction(kind: IkSpread))
         return
+      of "async":
+        self.compile_async(gene)
+        return
+      of "await":
+        self.compile_await(gene)
+        return
       of "void":
         # Compile all arguments but return nil
         for child in gene.children:
@@ -1670,6 +1678,41 @@ proc compile_caller_eval(self: Compiler, gene: ptr Gene) =
   
   # Then evaluate the result in caller's context
   self.output.instructions.add(Instruction(kind: IkCallerEval))
+
+proc compile_async(self: Compiler, gene: ptr Gene) =
+  # (async expr)
+  if gene.children.len != 1:
+    not_allowed("async expects exactly 1 argument")
+  
+  # We need to wrap the expression evaluation in exception handling
+  # Generate: try expr catch e -> future.fail(e)
+  
+  # Push a marker for the async block
+  self.output.instructions.add(Instruction(kind: IkAsyncStart))
+  
+  # Compile the expression
+  self.compile(gene.children[0])
+  
+  # End async block - this will handle exceptions and wrap in future
+  self.output.instructions.add(Instruction(kind: IkAsyncEnd))
+
+proc compile_await(self: Compiler, gene: ptr Gene) =
+  # (await future) or (await future1 future2 ...)
+  if gene.children.len == 0:
+    not_allowed("await expects at least 1 argument")
+  
+  if gene.children.len == 1:
+    # Single future
+    self.compile(gene.children[0])
+    self.output.instructions.add(Instruction(kind: IkAwait))
+  else:
+    # Multiple futures - await each and collect results
+    self.output.instructions.add(Instruction(kind: IkArrayStart))
+    for child in gene.children:
+      self.compile(child)
+      self.output.instructions.add(Instruction(kind: IkAwait))
+      self.output.instructions.add(Instruction(kind: IkArrayAddChild))
+    self.output.instructions.add(Instruction(kind: IkArrayEnd))
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

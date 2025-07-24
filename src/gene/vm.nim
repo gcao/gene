@@ -4,6 +4,7 @@ import ./types
 import ./parser
 import ./compiler
 import ./vm/args
+import ./vm_async
 
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
@@ -80,13 +81,24 @@ proc exec*(self: VirtualMachine): Value =
             continue
 
           let skip_return = self.cu.skip_return
+          # Check if we're returning from an async function before updating frame
+          var result_val = v
+          if self.frame.kind == FkFunction and self.frame.target.kind == VkFunction:
+            let f = self.frame.target.ref.fn
+            if f.async:
+              # Wrap the return value in a future
+              let future_val = new_future_value()
+              let future_obj = future_val.ref.future
+              future_obj.complete(result_val)
+              result_val = future_val
+          
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
           self.frame.update(self.frame.caller_frame)
           self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           if not skip_return:
-            self.frame.push(v)
+            self.frame.push(result_val)
           continue
         {.pop.}
 
@@ -843,6 +855,18 @@ proc exec*(self: VirtualMachine): Value =
                 if not f.matcher.is_empty():
                   process_args(f.matcher, frame.args, frame.scope)
                 
+                # If this is an async function, set up exception handler
+                if f.async:
+                  self.exception_handlers.add(ExceptionHandler(
+                    catch_pc: -3,  # Special marker for async function
+                    finally_pc: -1,
+                    frame: self.frame,
+                    cu: self.cu,
+                    saved_value: NIL,
+                    has_saved_value: false,
+                    in_finally: false
+                  ))
+                
                 pc = 0
                 inst = self.cu.instructions[pc].addr
                 continue
@@ -1520,7 +1544,22 @@ proc exec*(self: VirtualMachine): Value =
         elif self.frame.caller_frame == nil:
           not_allowed("Return from top level")
         else:
-          let v = self.frame.pop()
+          var v = self.frame.pop()
+          
+          # Check if we're returning from an async function
+          if self.frame.kind == FkFunction and self.frame.target.kind == VkFunction:
+            let f = self.frame.target.ref.fn
+            if f.async:
+              # Remove the async function exception handler
+              if self.exception_handlers.len > 0 and self.exception_handlers[^1].catch_pc == -3:
+                discard self.exception_handlers.pop()
+              
+              # Wrap the return value in a future
+              let future_val = new_future_value()
+              let future_obj = future_val.ref.future
+              future_obj.complete(v)
+              v = future_val
+          
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
@@ -1609,18 +1648,58 @@ proc exec*(self: VirtualMachine): Value =
         # Look for exception handler
         if self.exception_handlers.len > 0:
           let handler = self.exception_handlers[^1]
-          # Always jump to catch block first (catch will jump to finally if needed)
-          when not defined(release):
-            if self.trace:
-              echo "  Throw: jumping to catch at pc=", handler.catch_pc
-          # Jump to catch block
-          self.cu = handler.cu
-          pc = handler.catch_pc
-          if pc < self.cu.instructions.len:
-            inst = self.cu.instructions[pc].addr
+          
+          # Check if this is an async block or async function handler
+          if handler.catch_pc == -2:
+            # This is an async block - create a failed future
+            discard self.exception_handlers.pop()
+            
+            # Create a failed future
+            let future_val = new_future_value()
+            let future_obj = future_val.ref.future
+            future_obj.fail(value)
+            
+            self.frame.push(future_val)
+            
+            # Skip to the instruction after IkAsyncEnd
+            # We need to find it by scanning forward
+            while pc < self.cu.instructions.len and self.cu.instructions[pc].kind != IkAsyncEnd:
+              pc.inc()
+            if pc < self.cu.instructions.len:
+              pc.inc()  # Skip past IkAsyncEnd
+              inst = self.cu.instructions[pc].addr
+            continue
+          elif handler.catch_pc == -3:
+            # This is an async function - create a failed future and return it
+            discard self.exception_handlers.pop()
+            
+            # Create a failed future
+            let future_val = new_future_value()
+            let future_obj = future_val.ref.future
+            future_obj.fail(value)
+            
+            # Return from the function with the failed future
+            if self.frame.caller_frame != nil:
+              self.cu = self.frame.caller_address.cu
+              pc = self.frame.caller_address.pc
+              inst = self.cu.instructions[pc].addr
+              self.frame.update(self.frame.caller_frame)
+              self.frame.ref_count.dec()
+              self.frame.push(future_val)
+            continue
           else:
-            raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
-          continue
+            # Regular exception handler
+            when not defined(release):
+              if self.trace:
+                echo "  Throw: jumping to catch at pc=", handler.catch_pc
+            # Jump to catch block
+            self.cu = handler.cu
+            pc = handler.catch_pc
+            if pc < self.cu.instructions.len:
+              inst = self.cu.instructions[pc].addr
+            else:
+              raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
+            continue
         else:
           # No handler, raise Nim exception
           raise new_exception(types.Exception, "Gene exception: " & $value)
@@ -1923,6 +2002,92 @@ proc exec*(self: VirtualMachine): Value =
             
             # Push result back to macro's stack
             self.frame.push(result)
+        {.pop.}
+      
+      of IkAsyncStart:
+        # Start of async block - push a special marker
+        {.push checks: off}
+        # Add an exception handler that will catch exceptions for the async block
+        self.exception_handlers.add(ExceptionHandler(
+          catch_pc: -2,  # Special marker for async
+          finally_pc: -1,
+          frame: self.frame,
+          cu: self.cu,
+          saved_value: NIL,
+          has_saved_value: false,
+          in_finally: false
+        ))
+        {.pop.}
+      
+      of IkAsyncEnd:
+        # End of async block - wrap result in future
+        {.push checks: off}
+        let value = self.frame.pop()
+        
+        # Remove the async exception handler
+        if self.exception_handlers.len > 0:
+          discard self.exception_handlers.pop()
+        
+        # Create a new Future
+        let future_val = new_future_value()
+        let future_obj = future_val.ref.future
+        
+        # Complete the future with the value
+        future_obj.complete(value)
+        
+        self.frame.push(future_val)
+        {.pop.}
+      
+      of IkAsync:
+        # Legacy instruction - just wrap value in future
+        {.push checks: off}
+        let value = self.frame.pop()
+        let future_val = new_future_value()
+        let future_obj = future_val.ref.future
+        
+        if value.kind == VkException:
+          future_obj.fail(value)
+        else:
+          future_obj.complete(value)
+        
+        self.frame.push(future_val)
+        {.pop.}
+      
+      of IkAwait:
+        # Wait for a Future to complete
+        {.push checks: off}
+        let future_val = self.frame.pop()
+        
+        if future_val.kind != VkFuture:
+          not_allowed("await expects a Future, got: " & $future_val.kind)
+        
+        let future = future_val.ref.future
+        
+        # For now, futures complete immediately (pseudo-async)
+        # In the future, we would check the future state here
+        case future.state:
+          of FsSuccess:
+            self.frame.push(future.value)
+          of FsFailure:
+            # Re-throw the exception stored in the future
+            self.current_exception = future.value
+            # Look for exception handler (same logic as IkThrow)
+            if self.exception_handlers.len > 0:
+              let handler = self.exception_handlers[^1]
+              # Jump to catch block
+              self.cu = handler.cu
+              pc = handler.catch_pc
+              if pc < self.cu.instructions.len:
+                inst = self.cu.instructions[pc].addr
+              else:
+                raise new_exception(types.Exception, "Invalid catch PC: " & $pc)
+              continue
+            else:
+              # No handler, raise Nim exception
+              raise new_exception(types.Exception, "Gene exception: " & $future.value)
+          of FsPending:
+            # For now, we don't support actual async operations
+            not_allowed("Cannot await a pending future in pseudo-async mode")
         {.pop.}
       
       else:

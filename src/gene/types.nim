@@ -16,6 +16,18 @@ type
     parent*: Value  # The enum this member belongs to
     name*: string
     value*: int
+    
+  FutureState* = enum
+    FsPending
+    FsSuccess
+    FsFailure
+    
+  FutureObj* = ref object
+    state*: FutureState
+    value*: Value              # Result value or exception
+    success_callbacks*: seq[Value]  # Success callback functions
+    failure_callbacks*: seq[Value]  # Failure callback functions
+    
   ExceptionData* = ref object
   Interception* = ref object
   Expression* = ref object
@@ -56,6 +68,9 @@ type
     VkRegexMatch
     VkRange
     VkSelector
+    
+    # Async types
+    VkFuture             # Async future/promise
     
     # Date and time types
     VkDate               # Date only
@@ -117,9 +132,6 @@ type
     VkGeneProcessor      # Gene processing context
     
     # Concurrency types
-    VkFuture             # Async operations
-    VkThread             # Thread objects
-    VkThreadMessage      # Inter-thread communication
     
     # JSON integration
     VkJson               # JSON values
@@ -236,6 +248,8 @@ type
         target_id*: int64
       of VkExplode:
         explode_value*: Value
+      of VkFuture:
+        future*: FutureObj
       
       # Language constructs
       of VkApplication:
@@ -292,12 +306,6 @@ type
         processor*: GeneProcessor
       
       # Concurrency types
-      of VkFuture:
-        future*: Future
-      of VkThread:
-        thread*: Thread
-      of VkThreadMessage:
-        thread_msg*: ThreadMessage
       
       # JSON and file types
       of VkJson:
@@ -716,6 +724,10 @@ type
     IkParse        # Parse string to Gene value
     IkEval         # Evaluate a value
     IkCallerEval   # Evaluate expression in caller's context
+    IkAsync        # Wrap value in a Future
+    IkAsyncStart   # Start async block with exception handling
+    IkAsyncEnd     # End async block and create future
+    IkAwait        # Wait for Future to complete
 
     IkYield
     IkResume
@@ -1321,6 +1333,8 @@ proc `$`*(self: Value): string {.gcsafe.} =
                  " " & $self.ref.dt_hour & ":" & $self.ref.dt_minute & ":" & $self.ref.dt_second
       of VkTime:
         result = $self.ref.time_hour & ":" & $self.ref.time_minute & ":" & $self.ref.time_second
+      of VkFuture:
+        result = "<Future " & $self.ref.future.state & ">"
       else:
         result = $self.kind
 
@@ -2249,9 +2263,16 @@ proc to_function*(node: Value): Function {.gcsafe.} =
   for i in body_start..<node.gene.children.len:
     body.add node.gene.children[i]
 
+  # Check if function has async attribute from properties
+  var is_async = false
+  let async_key = "async".to_key()
+  if node.gene.props.has_key(async_key) and node.gene.props[async_key] == TRUE:
+    is_async = true
+    discard  # Function is async
+  
   # body = wrap_with_try(body)
   result = new_fn(name, matcher, body)
-  result.async = node.gene.props.get_or_default("async".to_key(), false)
+  result.async = is_async
 
 # compile method is defined in compiler.nim
 
@@ -2411,8 +2432,8 @@ proc get_class*(val: Value): Class =
     #   return App.ref.app.mixin_class.ref.class
     of VkNamespace:
       return App.ref.app.namespace_class.ref.class
-    # of VkFuture:
-    #   return App.ref.app.future_class.ref.class
+    of VkFuture:
+      return App.ref.app.future_class.ref.class
     # of VkThread:
     #   return App.ref.app.thread_class.ref.class
     # of VkThreadMessage:
@@ -2543,6 +2564,41 @@ proc clone*(self: Method): Method =
     name: self.name,
     callable: self.callable,
   )
+
+#################### Future ######################
+
+proc new_future*(): FutureObj =
+  result = FutureObj(
+    state: FsPending,
+    value: NIL,
+    success_callbacks: @[],
+    failure_callbacks: @[]
+  )
+
+proc new_future_value*(): Value =
+  let r = new_ref(VkFuture)
+  r.future = new_future()
+  return r.to_ref_value()
+
+proc complete*(f: FutureObj, value: Value) =
+  if f.state != FsPending:
+    not_allowed("Future already completed")
+  f.state = FsSuccess
+  f.value = value
+  # Execute success callbacks
+  for callback in f.success_callbacks:
+    # TODO: Execute callback with value
+    discard
+
+proc fail*(f: FutureObj, error: Value) =
+  if f.state != FsPending:
+    not_allowed("Future already completed")
+  f.state = FsFailure
+  f.value = error
+  # Execute failure callbacks
+  for callback in f.failure_callbacks:
+    # TODO: Execute callback with error
+    discard
 
 #################### Enum ########################
 
