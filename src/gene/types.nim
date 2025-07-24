@@ -715,6 +715,7 @@ type
     IkRot          # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
     IkParse        # Parse string to Gene value
     IkEval         # Evaluate a value
+    IkCallerEval   # Evaluate expression in caller's context
 
     IkYield
     IkResume
@@ -813,6 +814,7 @@ type
     kind*: FrameKind
     caller_frame*: Frame
     caller_address*: Address
+    caller_context*: Frame  # For $caller_eval in macros
     ns*: Namespace
     scope*: Scope
     target*: Value  # target of the invocation

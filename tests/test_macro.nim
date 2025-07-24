@@ -37,25 +37,33 @@ test_vm """
   (m)
 """, 3
 
-# TODO: Implement $caller_eval support
-# test_vm """
-#   (macro m []
-#     ($caller_eval :a)
-#   )
-#   (fn f _
-#     (var a 1)
-#     (m)
-#   )
-#   (f)
-# """, 1
+# Simple test without function wrapper
+test_vm """
+  (var a 1)
+  (macro m []
+    ($caller_eval :a)
+  )
+  (m)
+""", 1
 
-# test_vm """
-#   (var a 1)
-#   (macro m b
-#     ($caller_eval b)
-#   )
-#   (m a)
-# """, 1
+test_vm """
+  (macro m []
+    ($caller_eval :a)
+  )
+  (fn f _
+    (var a 1)
+    (m)
+  )
+  (f)
+""", 1
+
+test_vm """
+  (var a 1)
+  (macro m b
+    ($caller_eval b)
+  )
+  (m a)
+""", 1
 
 # test_core """
 #   (macro m _

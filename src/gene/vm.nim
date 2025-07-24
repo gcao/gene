@@ -37,7 +37,8 @@ proc exec*(self: VirtualMachine): Value =
       of IkEnd:
         {.push checks: off}
         when not defined(release):
-          indent.delete(indent.len-2..indent.len-1)
+          if indent.len >= 2:
+            indent.delete(indent.len-2..indent.len-1)
         # TODO: validate that there is only one value on the stack
         let v = self.frame.current
         if self.frame.caller_frame == nil:
@@ -637,6 +638,11 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.kind = FkMacro
             r.frame.target = gene_type
             r.frame.scope = scope
+            
+            # Pass caller's context as implicit argument (design decision D)
+            # Store a reference to the current frame for $caller_eval
+            r.frame.caller_context = self.frame
+            
             self.frame.replace(r.to_ref_value())
             pc.inc()
             inst = self.cu.instructions[pc].addr
@@ -921,8 +927,6 @@ proc exec*(self: VirtualMachine): Value =
 
           else:
             discard
-
-        # TODO: After a gene expression completes, check if we need to evaluate a macro result
           
         {.pop.}
 
@@ -1832,6 +1836,93 @@ proc exec*(self: VirtualMachine): Value =
         if self.exception_handlers.len > 0:
           # Push the current exception back onto the stack for the next catch
           self.frame.push(self.current_exception)
+        {.pop.}
+      
+      of IkCallerEval:
+        # Evaluate expression in caller's context
+        {.push checks: off}
+        let expr = self.frame.pop()
+        
+        # We need to be in a macro context to use $caller_eval
+        if self.frame.kind != FkMacro:
+          not_allowed("$caller_eval can only be used within macros")
+        
+        # Get the caller's context
+        if self.frame.caller_context == nil:
+          not_allowed("$caller_eval: caller context not available")
+        
+        let caller_frame = self.frame.caller_context
+        
+        # The expression might be a quoted symbol like :a
+        # We need to evaluate it, not compile the quote itself
+        var expr_to_eval = expr
+        if expr.kind == VkQuote:
+          expr_to_eval = expr.ref.quote
+        
+        # Evaluate the expression in the caller's context
+        # For now, we'll handle simple cases directly
+        case expr_to_eval.kind:
+          of VkSymbol:
+            # Direct symbol evaluation in caller's context
+            let key = expr_to_eval.str.to_key()
+            var result = NIL
+            
+            # First check if it's a local variable in the caller's scope
+            if caller_frame.scope != nil and caller_frame.scope.tracker != nil:
+              let found = caller_frame.scope.tracker.locate(key)
+              if found.local_index >= 0:
+                # Variable found in scope
+                var scope = caller_frame.scope
+                var parent_index = found.parent_index
+                while parent_index > 0:
+                  parent_index.dec()
+                  scope = scope.parent
+                if found.local_index < scope.members.len:
+                  result = scope.members[found.local_index]
+            
+            if result == NIL:
+              # Not a local variable, look in namespaces
+              result = caller_frame.ns[key]
+              if result == NIL:
+                result = App.app.global_ns.ref.ns[key]
+                if result == NIL:
+                  result = App.app.gene_ns.ref.ns[key]
+                  if result == NIL:
+                    not_allowed("Unknown symbol in caller context: " & expr_to_eval.str)
+            
+            self.frame.push(result)
+            
+          else:
+            # For complex expressions, compile and execute
+            # This will have issues with local variables, but at least handles globals
+            let compiled = compile_init(expr_to_eval)
+            
+            # Save current state
+            let saved_frame = self.frame
+            let saved_cu = self.cu
+            let saved_pc = pc
+            
+            # Create a new frame that inherits from caller's frame
+            let eval_frame = new_frame(caller_frame, Address(cu: saved_cu, pc: saved_pc))
+            eval_frame.ns = caller_frame.ns
+            eval_frame.self = caller_frame.self
+            eval_frame.scope = caller_frame.scope
+            
+            # Switch to evaluation context
+            self.frame = eval_frame
+            self.cu = compiled
+            
+            # Execute in caller's context
+            let result = self.exec()
+            
+            # Restore macro context
+            self.frame = saved_frame
+            self.cu = saved_cu
+            pc = saved_pc
+            inst = self.cu.instructions[pc].addr
+            
+            # Push result back to macro's stack
+            self.frame.push(result)
         {.pop.}
       
       else:

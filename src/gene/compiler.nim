@@ -58,7 +58,7 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
     elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].to_value()))
     else:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
     for s in r.csymbol[1..^1]:
       let (is_int, i) = to_int(s)
       if is_int:
@@ -89,7 +89,7 @@ proc compile_symbol(self: Compiler, input: Value) =
       elif symbol_str.endsWith("..."):
         # Handle variable spread like "a..." - strip the ... and add spread
         let base_symbol = symbol_str[0..^4].to_symbol_value()  # Remove "..."
-        let key = cast[Key](base_symbol)
+        let key = base_symbol.str.to_key()
         let found = self.scope_tracker.locate(key)
         if found.local_index >= 0:
           if found.parent_index == 0:
@@ -97,10 +97,10 @@ proc compile_symbol(self: Compiler, input: Value) =
           else:
             self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
         else:
-          self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: base_symbol))
+          self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
         self.output.instructions.add(Instruction(kind: IkSpread))
         return
-      let key = cast[Key](input)
+      let key = input.str.to_key()
       let found = self.scope_tracker.locate(key)
       if found.local_index >= 0:
         if found.parent_index == 0:
@@ -108,7 +108,7 @@ proc compile_symbol(self: Compiler, input: Value) =
         else:
           self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
       else:
-        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: input))
+        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
     elif input.kind == VkComplexSymbol:
       self.compile_complex_symbol(input)
 
@@ -203,6 +203,8 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 
   self.end_scope()
 
+proc compile_caller_eval(self: Compiler, gene: ptr Gene)  # Forward declaration
+
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
   let index = self.scope_tracker.next_index
@@ -232,7 +234,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
         else:
           self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
       else:
-        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: `type`))
+        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
       
       # Compile the right-hand side value
       self.compile(gene.children[1])
@@ -269,7 +271,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
     elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].to_value()))
     else:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: r.csymbol[0].to_symbol_value()))
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
       
     # Navigate to parent object (if nested property access)
     if r.csymbol.len > 2:
@@ -1336,6 +1338,9 @@ proc compile_gene(self: Compiler, input: Value) =
             of "$parse":
               self.compile_parse(gene)
               return
+            of "$caller_eval":
+              self.compile_caller_eval(gene)
+              return
 
   self.compile_gene_unknown(gene)
 
@@ -1654,6 +1659,17 @@ proc compile_parse(self: Compiler, gene: ptr Gene) =
   
   # Parse it
   self.output.instructions.add(Instruction(kind: IkParse))
+
+proc compile_caller_eval(self: Compiler, gene: ptr Gene) =
+  # ($caller_eval expr)
+  if gene.children.len != 1:
+    not_allowed("$caller_eval expects exactly 1 argument")
+  
+  # Compile the expression argument (will be evaluated in macro context first)
+  self.compile(gene.children[0])
+  
+  # Then evaluate the result in caller's context
+  self.output.instructions.add(Instruction(kind: IkCallerEval))
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())
