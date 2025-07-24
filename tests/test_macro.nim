@@ -1,4 +1,4 @@
-# import unittest
+import unittest
 
 import gene/types
 
@@ -9,13 +9,29 @@ import ./helpers
 # * A macro will generate an AST tree and pass back to the VM to execute.
 #
 
-# TODO: Convert to test_vm when macro support is complete
-# test_interpreter """
-#   (macro m a
-#     a
-#   )
-#   (m b)
-# """, new_gene_symbol("b")
+# Basic macro that returns its argument
+test_vm """
+  (macro m a
+    a
+  )
+  (m :b)
+""", "b".to_symbol_value()
+
+# Test that macro arguments are not evaluated
+test_vm """
+  (macro m a
+    :macro_result
+  )
+  (m (this_would_fail_if_evaluated))
+""", "macro_result".to_symbol_value()
+
+# Test that macro result is evaluated - simple case without interpolation
+test_vm """
+  (macro m [a b]
+    :(1 + 2)
+  )
+  (m ignored ignored)
+""", 3
 
 # TODO: Convert to test_vm when macro support is complete
 # test_interpreter """

@@ -67,6 +67,16 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.update(self.frame.caller_frame)
             self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
             continue
+          elif self.cu.kind == CkMacro:
+            # Return to caller who will handle macro expansion
+            self.cu = self.frame.caller_address.cu
+            pc = self.frame.caller_address.pc
+            inst = self.cu.instructions[pc].addr
+            self.frame.update(self.frame.caller_frame)
+            self.frame.ref_count.dec()
+            # Push the macro result for the caller to process
+            self.frame.push(v)
+            continue
 
           let skip_return = self.cu.skip_return
           self.cu = self.frame.caller_address.cu
@@ -255,6 +265,21 @@ proc exec*(self: VirtualMachine): Value =
           of VkGene:
             # Evaluate a gene expression - compile and execute it
             let compiled = compile_init(value)
+            # Save current state
+            let saved_cu = self.cu
+            let saved_pc = pc
+            # Execute the compiled code
+            self.cu = compiled
+            let eval_result = self.exec()
+            # Restore state
+            self.cu = saved_cu
+            pc = saved_pc
+            inst = self.cu.instructions[pc].addr
+            self.frame.push(eval_result)
+          of VkQuote:
+            # Evaluate a quoted expression by compiling and executing the quoted value
+            let quoted_value = value.ref.quote
+            let compiled = compile_init(quoted_value)
             # Save current state
             let saved_cu = self.cu
             let saved_pc = pc
@@ -897,6 +922,8 @@ proc exec*(self: VirtualMachine): Value =
           else:
             discard
 
+        # TODO: After a gene expression completes, check if we need to evaluate a macro result
+          
         {.pop.}
 
       of IkAdd:

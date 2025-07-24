@@ -2251,6 +2251,8 @@ proc to_function*(node: Value): Function {.gcsafe.} =
   result = new_fn(name, matcher, body)
   result.async = node.gene.props.get_or_default("async".to_key(), false)
 
+# compile method is defined in compiler.nim
+
 #################### CompileFn ###################
 
 proc new_compile_fn*(name: string, matcher: RootMatcher, body: sink seq[Value]): CompileFn =
@@ -2279,6 +2281,8 @@ proc to_compile_fn*(node: Value): CompileFn {.gcsafe.} =
 
   # body = wrap_with_try(body)
   result = new_compile_fn(name, matcher, body)
+
+# compile method needs to be defined - see compiler.nim
 
 #################### Macro #######################
 
@@ -2309,6 +2313,8 @@ proc to_macro*(node: Value): Macro =
   # body = wrap_with_try(body)
   result = new_macro(name, matcher, body)
 
+# compile method needs to be defined - see compiler.nim
+
 #################### Block #######################
 
 proc new_block*(matcher: RootMatcher,  body: sink seq[Value]): Block =
@@ -2334,6 +2340,8 @@ proc to_block*(node: Value): Block {.gcsafe.} =
 
   # body = wrap_with_try(body)
   result = new_block(matcher, body)
+
+# compile method needs to be defined - see compiler.nim
 
 #################### Class #######################
 

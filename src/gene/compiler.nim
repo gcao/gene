@@ -1487,6 +1487,7 @@ proc compile*(m: Macro) =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   m.body_compiled = self.output
+  m.body_compiled.kind = CkMacro
   m.body_compiled.matcher = m.matcher
 
 proc compile*(b: Block) =
@@ -1669,3 +1670,5 @@ proc compile_init*(input: Value): CompilationUnit =
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
+
+# Compile methods for Function, Macro, Block, and CompileFn are defined above
