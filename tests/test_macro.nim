@@ -1,5 +1,3 @@
-import unittest
-
 import gene/types
 
 import ./helpers
@@ -14,7 +12,7 @@ test_vm """
   (macro m a
     a
   )
-  (m :b)
+  (m b)
 """, "b".to_symbol_value()
 
 # Test that macro arguments are not evaluated
@@ -25,32 +23,22 @@ test_vm """
   (m (this_would_fail_if_evaluated))
 """, "macro_result".to_symbol_value()
 
-# Test that macro result is evaluated - simple case without interpolation
 test_vm """
   (macro m [a b]
-    :(1 + 2)
+    (a + b)
   )
-  (m ignored ignored)
+  (m 1 2)
 """, 3
 
-# TODO: Convert to test_vm when macro support is complete
-# test_interpreter """
-#   (macro m [a b]
-#     (a + b)
-#   )
-#   (m 1 2)
-# """, 3
+test_vm """
+  (macro m [a = 1]
+    (a + 2)
+  )
+  (m)
+""", 3
 
-# TODO: Convert to test_vm when macro support is complete
-# test_interpreter """
-#   (macro m [a = 1]
-#     (a + 2)
-#   )
-#   (m)
-# """, 3
-
-# TODO: Convert to test_vm when macro support is complete
-# test_interpreter """
+# TODO: Implement $caller_eval support
+# test_vm """
 #   (macro m []
 #     ($caller_eval :a)
 #   )
@@ -61,8 +49,7 @@ test_vm """
 #   (f)
 # """, 1
 
-# TODO: Convert to test_vm when macro support is complete
-# test_interpreter """
+# test_vm """
 #   (var a 1)
 #   (macro m b
 #     ($caller_eval b)
@@ -97,8 +84,7 @@ test_vm """
 # """, "A.test"
 
 # # TODO: this should be possible with macro/caller_eval etc
-# # TODO: Convert to test_vm when macro support is complete
-# test_interpreter """
+# test_vm """
 #   (macro with [name value body...]
 #     (var expr
 #       :(do
@@ -112,6 +98,3 @@ test_vm """
 #     (a = (a b))
 #   )
 # """, "ab"
-
-# Placeholder to ensure the file compiles
-discard
