@@ -1,0 +1,11 @@
+#!/usr/bin/env gene run
+
+# Test: Variable declaration and access
+(var x 10)
+(var y 20)
+(print "x = " x)
+(print "y = " y)
+
+# Variable shadowing
+(var x 30)
+(print "x after shadowing = " x)

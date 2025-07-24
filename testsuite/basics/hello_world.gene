@@ -1,0 +1,4 @@
+#!/usr/bin/env gene run
+
+# Test: Basic print statement
+(print "Hello, World!")
