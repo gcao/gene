@@ -11,7 +11,7 @@ import ../src/gene/vm
 converter to_value*(self: seq[int]): Value =
   let r = new_ref(VkArray)
   for item in self:
-    r.arr.add(item)
+    r.arr.add(item.to_value())
   result = r.to_ref_value()
 
 converter seq_to_gene*(self: seq[string]): Value =

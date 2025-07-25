@@ -714,6 +714,8 @@ type
     IkResolveSymbol
     IkSetMember
     IkGetMember
+    IkGetMemberOrNil    # Get member or return NIL if not found
+    IkGetMemberDefault  # Get member or return default value
     IkSetChild
     IkGetChild
     IkGetChildDynamic  # Get child using index from stack
@@ -2744,7 +2746,7 @@ proc `$`*(self: Instruction): string =
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
       IkResolveSymbol, IkResolveMethod,
-      IkSetMember, IkGetMember,
+      IkSetMember, IkGetMember, IkGetMemberOrNil, IkGetMemberDefault,
       IkSetChild, IkGetChild:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0}"

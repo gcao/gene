@@ -3,6 +3,8 @@ import tables, strutils
 import ./types
 import "./compiler/if"
 
+const DEBUG = false
+
 #################### Definitions #################
 proc compile*(self: Compiler, input: Value)
 proc compile_with(self: Compiler, gene: ptr Gene)
@@ -206,6 +208,9 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
 proc compile_caller_eval(self: Compiler, gene: ptr Gene)  # Forward declaration
 proc compile_async(self: Compiler, gene: ptr Gene)  # Forward declaration
 proc compile_await(self: Compiler, gene: ptr Gene)  # Forward declaration
+proc compile_selector(self: Compiler, gene: ptr Gene)  # Forward declaration
+proc compile_at_selector(self: Compiler, gene: ptr Gene)  # Forward declaration
+proc compile_set(self: Compiler, gene: ptr Gene)  # Forward declaration
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
@@ -1011,6 +1016,77 @@ proc compile_gene_default(self: Compiler, gene: ptr Gene) {.inline.} =
 # * GeneLabel: GeneEnd
 # Similar logic is used for regular method calls and macro-method calls
 proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
+  # Special case: handle @ selector application
+  # ((@ "test") {^test 1}) - gene.type is (@ "test"), children is [{^test 1}]
+  if gene.type.kind == VkGene and gene.type.gene.type == "@".to_symbol_value():
+    # This is a selector being applied
+    if gene.children.len != 1:
+      not_allowed("@ selector expects exactly 1 argument when called")
+    
+    # Compile as (./ target property)
+    # gene.children[0] is the target
+    # gene.type.gene.children[0] is the property
+    self.compile(gene.children[0])  # target
+    self.compile(gene.type.gene.children[0])  # property
+    self.output.instructions.add(Instruction(kind: IkGetMemberOrNil))
+    return
+  
+  # Check for selector syntax: (target ./ property) or (target ./property)
+  if DEBUG:
+    echo "DEBUG: compile_gene_unknown: gene.type = ", gene.type
+    echo "DEBUG: compile_gene_unknown: gene.children.len = ", gene.children.len
+    if gene.children.len > 0:
+      echo "DEBUG: compile_gene_unknown: first child = ", gene.children[0]
+      if gene.children[0].kind == VkComplexSymbol:
+        echo "DEBUG: compile_gene_unknown: first child csymbol = ", gene.children[0].ref.csymbol
+  if gene.children.len >= 1:
+    let first_child = gene.children[0]
+    if first_child.kind == VkSymbol and first_child.str == "./":
+      # Syntax: (target ./ property [default])
+      if gene.children.len < 2 or gene.children.len > 3:
+        not_allowed("(target ./ property [default]) expects 2 or 3 arguments")
+      
+      # Compile the target
+      self.compile(gene.type)
+      
+      # Compile the property
+      self.compile(gene.children[1])
+      
+      # If there's a default value, compile it
+      if gene.children.len == 3:
+        self.compile(gene.children[2])
+        self.output.instructions.add(Instruction(kind: IkGetMemberDefault))
+      else:
+        self.output.instructions.add(Instruction(kind: IkGetMemberOrNil))
+      return
+    elif first_child.kind == VkComplexSymbol and first_child.ref.csymbol.len >= 2 and first_child.ref.csymbol[0] == ".":
+      # Syntax: (target ./property) where ./property is a complex symbol
+      if DEBUG:
+        echo "DEBUG: Handling selector with complex symbol"
+      # Compile the target
+      self.compile(gene.type)
+      
+      # The property is the second part of the complex symbol
+      let prop_name = first_child.ref.csymbol[1]
+      # Check if property is numeric
+      try:
+        let idx = prop_name.parse_int()
+        if DEBUG:
+          echo "DEBUG: Property is numeric: ", idx
+        self.output.instructions.add(Instruction(kind: IkPushValue, arg0: idx.to_value()))
+      except ValueError:
+        if DEBUG:
+          echo "DEBUG: Property is symbolic: ", prop_name
+        self.output.instructions.add(Instruction(kind: IkPushValue, arg0: prop_name.to_symbol_value()))
+      
+      # Check for default value (second child of gene)
+      if gene.children.len == 2:
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkGetMemberDefault))
+      else:
+        self.output.instructions.add(Instruction(kind: IkGetMemberOrNil))
+      return
+  
   let start_pos = self.output.instructions.len
   self.compile(gene.type)
 
@@ -1093,6 +1169,22 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
 
 proc compile_gene(self: Compiler, input: Value) =
   let gene = input.gene
+  
+  # Special case: handle selector operator ./
+  if not gene.type.is_nil():
+    if DEBUG:
+      echo "DEBUG: compile_gene: gene.type.kind = ", gene.type.kind
+      if gene.type.kind == VkSymbol:
+        echo "DEBUG: compile_gene: gene.type.str = '", gene.type.str, "'"
+      elif gene.type.kind == VkComplexSymbol:
+        echo "DEBUG: compile_gene: gene.type.csymbol = ", gene.type.ref.csymbol
+    if gene.type.kind == VkSymbol and gene.type.str == "./":
+      self.compile_selector(gene)
+      return
+    elif gene.type.kind == VkComplexSymbol and gene.type.ref.csymbol.len >= 2 and gene.type.ref.csymbol[0] == "." and gene.type.ref.csymbol[1] == "":
+      # "./" is parsed as complex symbol @[".", ""]
+      self.compile_selector(gene)
+      return
   
   # Special case: handle range expressions like (0 .. 2)
   if gene.children.len == 2 and gene.children[0].kind == VkSymbol and gene.children[0].str == "..":
@@ -1326,7 +1418,12 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       else:
         let s = `type`.str
-        if s.starts_with("."):
+        echo "DEBUG: compile_gene: type.str = ", s
+        if s == "@":
+          # Handle @ selector operator
+          self.compile_at_selector(gene)
+          return
+        elif s.starts_with("."):
           # Check if this is a method definition (e.g., .fn, .ctor) or a method call
           if s == ".fn" or s == ".ctor":
             self.compile_method_definition(gene)
@@ -1348,6 +1445,9 @@ proc compile_gene(self: Compiler, input: Value) =
               return
             of "$caller_eval":
               self.compile_caller_eval(gene)
+              return
+            of "$set":
+              self.compile_set(gene)
               return
 
   self.compile_gene_unknown(gene)
@@ -1713,6 +1813,78 @@ proc compile_await(self: Compiler, gene: ptr Gene) =
       self.output.instructions.add(Instruction(kind: IkAwait))
       self.output.instructions.add(Instruction(kind: IkArrayAddChild))
     self.output.instructions.add(Instruction(kind: IkArrayEnd))
+
+proc compile_selector(self: Compiler, gene: ptr Gene) =
+  # (./ target property [default])
+  # ({^a "A"} ./ "a") -> "A"
+  # ({} ./ "a" 1) -> 1 (default value)
+  if gene.children.len < 2 or gene.children.len > 3:
+    not_allowed("./ expects 2 or 3 arguments")
+  
+  # Compile the target
+  self.compile(gene.children[0])
+  
+  # Compile the property/index
+  self.compile(gene.children[1])
+  
+  # If there's a default value, compile it
+  if gene.children.len == 3:
+    self.compile(gene.children[2])
+    self.output.instructions.add(Instruction(kind: IkGetMemberDefault))
+  else:
+    self.output.instructions.add(Instruction(kind: IkGetMemberOrNil))
+
+proc compile_at_selector(self: Compiler, gene: ptr Gene) =
+  # (@ "property") creates a selector
+  # For now, we'll implement a simplified version
+  # The full implementation would create a selector object
+  
+  # Since @ is used in contexts like ((@ "test") {^test 1}),
+  # and this gets compiled as a function call where (@ "test") is the function
+  # and {^test 1} is the argument, we need to handle this specially
+  
+  # For now, just push the property name as a special selector value
+  # The VM will need to handle this when it sees a selector being called
+  if gene.children.len != 1:
+    not_allowed("@ expects exactly 1 argument for basic property access")
+  
+  # Create a special selector value - for now use a gene with type @
+  let selector = new_gene("@".to_symbol_value())
+  selector.children.add(gene.children[0])
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: selector.to_gene_value()))
+
+proc compile_set(self: Compiler, gene: ptr Gene) =
+  # ($set target @property value)
+  # ($set a @test 1)
+  if gene.children.len != 3:
+    not_allowed("$set expects exactly 3 arguments")
+  
+  # Compile the target
+  self.compile(gene.children[0])
+  
+  # The second argument should be a selector like @test
+  let selector = gene.children[1]
+  if selector.kind != VkGene or selector.gene.type != "@".to_symbol_value():
+    not_allowed("$set expects a selector (@property) as second argument")
+  
+  # Extract the property name
+  if selector.gene.children.len != 1:
+    not_allowed("$set selector must have exactly one property")
+  
+  let prop = selector.gene.children[0]
+  let prop_key = case prop.kind:
+    of VkString: prop.str.to_key()
+    of VkSymbol: prop.str.to_key()
+    of VkInt: ($prop.int).to_key()
+    else: 
+      not_allowed("Invalid property type for $set")
+      "".to_key()  # Never reached, but satisfies type checker
+  
+  # Compile the value
+  self.compile(gene.children[2])
+  
+  # Set the member
+  self.output.instructions.add(Instruction(kind: IkSetMember, arg0: prop_key.to_value()))
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

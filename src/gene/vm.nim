@@ -366,6 +366,122 @@ proc exec*(self: VirtualMachine): Value =
           else:
             todo($value.kind)
 
+      of IkGetMemberOrNil:
+        # Pop property/index, then target
+        var prop: Value
+        self.frame.pop2(prop)
+        var target: Value
+        self.frame.pop2(target)
+        
+        let key = case prop.kind:
+          of VkString: prop.str.to_key()
+          of VkSymbol: prop.str.to_key()
+          of VkInt: ($prop.int).to_key()
+          else: 
+            not_allowed("Invalid property type: " & $prop.kind)
+            "".to_key()  # Never reached, but satisfies type checker
+        
+        case target.kind:
+          of VkMap:
+            if key in target.ref.map:
+              self.frame.push(target.ref.map[key])
+            else:
+              self.frame.push(NIL)
+          of VkGene:
+            if key in target.gene.props:
+              self.frame.push(target.gene.props[key])
+            else:
+              self.frame.push(NIL)
+          of VkNamespace:
+            if target.ref.ns.has_key(key):
+              self.frame.push(target.ref.ns[key])
+            else:
+              self.frame.push(NIL)
+          of VkClass:
+            if target.ref.class.ns.has_key(key):
+              self.frame.push(target.ref.class.ns[key])
+            else:
+              self.frame.push(NIL)
+          of VkInstance:
+            if key in target.ref.instance_props:
+              self.frame.push(target.ref.instance_props[key])
+            else:
+              self.frame.push(NIL)
+          of VkArray:
+            # Handle array index access
+            if prop.kind == VkInt:
+              let idx = prop.int
+              if idx >= 0 and idx < target.ref.arr.len:
+                self.frame.push(target.ref.arr[idx])
+              elif idx < 0 and -idx <= target.ref.arr.len:
+                # Negative indexing
+                self.frame.push(target.ref.arr[target.ref.arr.len + idx])
+              else:
+                self.frame.push(NIL)
+            else:
+              self.frame.push(NIL)
+          else:
+            self.frame.push(NIL)
+      
+      of IkGetMemberDefault:
+        # Pop default value, property/index, then target
+        var default_val: Value
+        self.frame.pop2(default_val)
+        var prop: Value
+        self.frame.pop2(prop)
+        var target: Value
+        self.frame.pop2(target)
+        
+        let key = case prop.kind:
+          of VkString: prop.str.to_key()
+          of VkSymbol: prop.str.to_key()
+          of VkInt: ($prop.int).to_key()
+          else: 
+            not_allowed("Invalid property type: " & $prop.kind)
+            "".to_key()  # Never reached, but satisfies type checker
+        
+        case target.kind:
+          of VkMap:
+            if key in target.ref.map:
+              self.frame.push(target.ref.map[key])
+            else:
+              self.frame.push(default_val)
+          of VkGene:
+            if key in target.gene.props:
+              self.frame.push(target.gene.props[key])
+            else:
+              self.frame.push(default_val)
+          of VkNamespace:
+            if target.ref.ns.has_key(key):
+              self.frame.push(target.ref.ns[key])
+            else:
+              self.frame.push(default_val)
+          of VkClass:
+            if target.ref.class.ns.has_key(key):
+              self.frame.push(target.ref.class.ns[key])
+            else:
+              self.frame.push(default_val)
+          of VkInstance:
+            if key in target.ref.instance_props:
+              self.frame.push(target.ref.instance_props[key])
+            else:
+              self.frame.push(default_val)
+          of VkArray:
+            # Handle array index access
+            if prop.kind == VkInt:
+              let idx = prop.int
+              if idx >= 0 and idx < target.ref.arr.len:
+                self.frame.push(target.ref.arr[idx])
+              elif idx < 0 and -idx <= target.ref.arr.len:
+                # Negative indexing
+                self.frame.push(target.ref.arr[target.ref.arr.len + idx])
+              else:
+                self.frame.push(default_val)
+            else:
+              self.frame.push(default_val)
+          else:
+            self.frame.push(default_val)
+
       of IkSetChild:
         let i = inst.arg0.int64
         var new_value: Value
