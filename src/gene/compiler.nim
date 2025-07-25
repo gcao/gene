@@ -1654,9 +1654,25 @@ proc update_jumps(self: CompilationUnit) =
       else:
         discard
 
-# # Clean up scopes by removing unnecessary ScopeStart and ScopeEnd instructions
-# proc cleanup_scopes(self: CompilationUnit) =
-#   todo("cleanup_scopes")
+# Remove IkNoop instructions that don't serve as jump targets
+proc optimize_noops(self: CompilationUnit) =
+  # After jumps are resolved, we can remove IkNoop instructions that don't have labels
+  # BUT we must keep IkNoop instructions that store data (like scope trackers)
+  var new_instructions: seq[Instruction] = @[]
+  
+  for i, inst in self.instructions:
+    if inst.kind != IkNoop:
+      # Keep all non-Noop instructions
+      new_instructions.add(inst)
+    elif inst.label != 0:
+      # Keep IkNoop if it has a label (used as jump target)
+      new_instructions.add(inst)
+    elif inst.arg0.kind != VkNil:
+      # Keep IkNoop if it has data in arg0 (e.g., scope tracker)
+      new_instructions.add(inst)
+    # Skip IkNoop without labels or data
+  
+  self.instructions = new_instructions
 
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())
@@ -1671,6 +1687,7 @@ proc compile*(input: seq[Value]): CompilationUnit =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
+  self.output.optimize_noops()
   result = self.output
 
 proc compile*(f: Function) =
@@ -1704,6 +1721,7 @@ proc compile*(f: Function) =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
+  self.output.optimize_noops()
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
 
@@ -1738,6 +1756,7 @@ proc compile*(m: Macro) =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
+  self.output.optimize_noops()
   m.body_compiled = self.output
   m.body_compiled.kind = CkMacro
   m.body_compiled.matcher = m.matcher
@@ -1773,6 +1792,7 @@ proc compile*(b: Block) =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
+  self.output.optimize_noops()
   b.body_compiled = self.output
   b.body_compiled.matcher = b.matcher
 
@@ -1807,6 +1827,7 @@ proc compile*(f: CompileFn) =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
+  self.output.optimize_noops()
   f.body_compiled = self.output
   f.body_compiled.kind = CkCompileFn
   f.body_compiled.matcher = f.matcher
@@ -2136,6 +2157,7 @@ proc compile_init*(input: Value): CompilationUnit =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
+  self.output.optimize_noops()
   result = self.output
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =

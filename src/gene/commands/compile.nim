@@ -88,20 +88,48 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
     # Raw bytecode format
     result = $inst.kind
     case inst.kind
-    of IkPushValue:
+    # Instructions with no arguments
+    of IkNoop, IkEnd, IkScopeEnd, IkSelf, IkSetSelf, IkRotate, IkParse, IkRender,
+       IkEval, IkPushNil, IkPushSelf, IkPop, IkDup, IkDup2, IkDupSecond, IkSwap,
+       IkOver, IkLen, IkArrayStart, IkArrayAddChild, IkArrayEnd, IkMapStart,
+       IkMapEnd, IkGeneStart, IkGeneEnd, IkGeneSetType, IkGeneAddChild,
+       IkGetChildDynamic, IkGetMemberOrNil, IkGetMemberDefault, IkAdd, IkSub,
+       IkMul, IkDiv, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr, IkNot,
+       IkNeg, IkSpread, IkCreateRange, IkCreateEnum, IkEnumAddMember, IkReturn,
+       IkThrow, IkCatchEnd, IkCatchRestore, IkFinally, IkFinallyEnd,
+       IkLoopStart, IkLoopEnd, IkNew, IkGetClass, IkIsInstance, IkSuper,
+       IkCallerEval, IkAsync, IkAwait, IkAsyncStart, IkAsyncEnd, IkCompileInit,
+       IkCallInit, IkStart, IkImport, IkPow:
+      # No arguments
+      discard
+    # Instructions with arg0
+    of IkPushValue, IkScopeStart, IkVar, IkVarResolve, IkVarAssign,
+       IkResolveSymbol, IkJump, IkJumpIfFalse, IkContinue, IkBreak,
+       IkGeneStartDefault, IkSubValue, IkAddValue, IkLtValue, IkFunction,
+       IkMacro, IkBlock, IkCompileFn, IkNamespace, IkNamespaceStore,
+       IkClass, IkSubClass, IkDefineMethod, IkResolveMethod, IkCallMethodNoArgs,
+       IkCallMethod, IkAssign:
       result &= " " & $inst.arg0
-    of IkJump, IkJumpIfFalse, IkJumpIfMatchSuccess:
-      result &= " " & $inst.arg0.int64
-    of IkSetMember, IkGetMember, IkGetMemberOrNil, IkGetMemberDefault:
+    of IkSetMember, IkGetMember:
+      let key = inst.arg0.Key
+      let symbol_value = cast[Value](key)
+      let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
+      result &= " " & get_symbol(symbol_index.int)
+    of IkMapSetProp, IkGeneSetProp:
       let key = inst.arg0.Key
       let symbol_value = cast[Value](key)
       let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
       result &= " " & get_symbol(symbol_index.int)
     of IkSetChild, IkGetChild:
       result &= " " & $inst.arg0.int64
-    of IkCallInit:
+    # Instructions with both args
+    of IkVarValue, IkVarResolveInherited, IkVarAssignInherited,
+       IkJumpIfMatchSuccess, IkTryStart, IkTryEnd, IkCatchStart:
       result &= " " & $inst.arg0
+      if inst.arg1 != 0:
+        result &= " " & $inst.arg1
     else:
+      # Fallback for any unhandled instructions
       if inst.arg0.kind != VkNil:
         result &= " " & $inst.arg0
       if inst.arg1.kind != VkNil:
@@ -110,7 +138,7 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
     result = $inst
   else:  # "pretty"
     if show_addresses:
-      result = "[" & index.toHex(4) & "] "
+      result = index.toHex(4) & "  "
     else:
       result = "  "
     
@@ -118,53 +146,137 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
     
     # Add arguments based on instruction type - only show args that are actually used
     case inst.kind
+    # Instructions with no arguments
+    of IkNoop, IkEnd, IkScopeEnd, IkSelf, IkSetSelf, IkRotate, IkParse, IkRender,
+       IkEval, IkPushNil, IkPushSelf, IkPop, IkDup, IkDup2, IkDupSecond, IkSwap,
+       IkOver, IkLen, IkArrayStart, IkArrayAddChild, IkArrayEnd, IkMapStart,
+       IkMapEnd, IkGeneStart, IkGeneEnd, IkGeneSetType, IkGeneAddChild,
+       IkGetChildDynamic, IkGetMemberOrNil, IkGetMemberDefault, IkAdd, IkSub,
+       IkMul, IkDiv, IkLt, IkLe, IkGt, IkGe, IkEq, IkNe, IkAnd, IkOr, IkNot,
+       IkNeg, IkSpread, IkCreateRange, IkCreateEnum, IkEnumAddMember, IkReturn,
+       IkThrow, IkCatchEnd, IkCatchRestore, IkFinally, IkFinallyEnd,
+       IkLoopStart, IkLoopEnd, IkNew, IkGetClass, IkIsInstance, IkSuper,
+       IkCallerEval, IkAsync, IkAwait, IkAsyncStart, IkAsyncEnd, IkCompileInit,
+       IkCallInit:
+      # No arguments to display
+      discard
+    
+    # Instructions with only arg0
     of IkPushValue:
       result &= formatValue(inst.arg0)
-    of IkJump, IkJumpIfFalse, IkJumpIfMatchSuccess:
-      result &= "-> " & inst.arg0.int64.toHex(4)
-    of IkSetMember, IkGetMember, IkGetMemberOrNil, IkGetMemberDefault:
+    of IkScopeStart:
+      if inst.arg0.kind == VkScopeTracker:
+        result &= "<scope>"
+      elif inst.arg0.kind != VkNil:
+        result &= formatValue(inst.arg0)
+    of IkVar, IkVarResolve, IkVarAssign:
+      if inst.arg0.kind == VkInt:
+        result &= "var[" & $inst.arg0.int64 & "]"
+      else:
+        result &= formatValue(inst.arg0)
+    of IkResolveSymbol:
+      if inst.arg0.kind == VkSymbol:
+        result &= inst.arg0.str
+      else:
+        result &= formatValue(inst.arg0)
+    of IkSetMember, IkGetMember:
       let key = inst.arg0.Key
       let symbol_value = cast[Value](key)
       let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
       result &= "." & get_symbol(symbol_index.int)
     of IkSetChild, IkGetChild:
       result &= "[" & $inst.arg0.int64 & "]"
-    of IkCallInit:
-      result &= "<compiled unit>"
-    of IkClass:
-      if inst.arg0.kind == VkString:
-        result &= inst.arg0.str
-    of IkNew:
+    of IkJump, IkJumpIfFalse:
+      result &= "-> " & inst.arg0.int64.toHex(4)
+    of IkContinue, IkBreak:
+      if inst.arg0.int64 == -1:
+        result &= "<error>"
+      else:
+        result &= "label=" & $inst.arg0.int64
+    of IkMapSetProp, IkGeneSetProp:
+      let key = inst.arg0.Key
+      let symbol_value = cast[Value](key)
+      let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
+      result &= "^" & get_symbol(symbol_index.int)
+    of IkGeneStartDefault:
       if inst.arg0.kind == VkInt:
-        result &= "argc=" & $inst.arg0.int64
-    of IkThrow:
-      result &= "<exception>"
-    of IkCallMethodNoArgs:
-      result &= "." & inst.arg0.str & "()"
-    of IkCallerEval:
-      result &= "frames_back=" & $inst.arg0.int64
-    of IkVar, IkVarValue, IkVarResolve, IkVarResolveInherited,
-       IkVarAssign, IkVarAssignInherited, IkResolveSymbol:
-      if inst.arg0.kind == VkSymbol:
-        result &= inst.arg0.str
-    of IkGeneStart, IkGeneStartDefault, IkGeneEnd:
-      # Show gene construction arguments if they're meaningful
-      if inst.arg0.kind == VkInt and inst.arg0.int64 > 0:
         result &= "size=" & $inst.arg0.int64
-    of IkFunction:
-      # Show function source
+    of IkSubValue, IkAddValue:
+      result &= formatValue(inst.arg0)
+    of IkLtValue:
+      result &= "< " & formatValue(inst.arg0)
+    of IkFunction, IkMacro, IkBlock, IkCompileFn:
       if inst.arg0.kind != VkNil:
         result &= formatValue(inst.arg0)
-    of IkGeneAddChild, IkGeneSetType, IkGeneSetProp:
-      # These use the stack, don't show the nil arguments
+    of IkNamespace:
+      if inst.arg0.kind == VkString:
+        result &= inst.arg0.str
+      elif inst.arg0.kind == VkSymbol:
+        result &= inst.arg0.str
+      else:
+        result &= formatValue(inst.arg0)
+    of IkNamespaceStore:
+      if inst.arg0.kind == VkSymbol:
+        result &= inst.arg0.str
+      else:
+        result &= formatValue(inst.arg0)
+    of IkClass, IkSubClass:
+      if inst.arg0.kind == VkString:
+        result &= inst.arg0.str
+      else:
+        result &= formatValue(inst.arg0)
+    of IkDefineMethod, IkResolveMethod:
+      if inst.arg0.kind == VkSymbol:
+        result &= inst.arg0.str
+      else:
+        result &= formatValue(inst.arg0)
+    of IkCallMethodNoArgs:
+      if inst.arg0.kind == VkSymbol:
+        result &= "." & inst.arg0.str & "()"
+      else:
+        result &= formatValue(inst.arg0)
+    of IkImport:
+      # Import uses stack for the import gene
       discard
-    of IkStart, IkEnd, IkAdd, IkPop,
-       IkNoop, IkScopeStart, IkScopeEnd, IkSelf, IkSetSelf,
-       IkLoopStart, IkLoopEnd, IkContinue, IkBreak:
-      # These instructions have no arguments or don't use them
+    of IkStart:
+      # Start has no visible arguments
       discard
+    of IkPow:
+      # Power operation
+      discard
+    
+    # Instructions with both arg0 and arg1  
+    of IkVarValue:
+      result &= formatValue(inst.arg0) & " -> var[" & $inst.arg1 & "]"
+    of IkVarResolveInherited, IkVarAssignInherited:
+      result &= "var[" & $inst.arg0.int64 & "] up=" & $inst.arg1
+    of IkJumpIfMatchSuccess:
+      result &= "index=" & $inst.arg0.int64 & " -> " & inst.arg1.toHex(4)
+    of IkTryStart:
+      result &= "catch=" & inst.arg0.int64.toHex(4)
+      if inst.arg1 != 0:
+        result &= " finally=" & inst.arg1.toHex(4)
+    of IkTryEnd:
+      # TryEnd uses arg0 and arg1 but they're internal values
+      discard
+    of IkCatchStart:
+      # CatchStart might have exception type in arg0
+      if inst.arg0.kind != VkNil:
+        result &= "type=" & formatValue(inst.arg0)
+    of IkCallMethod:
+      # CallMethod has method name in arg0
+      if inst.arg0.kind == VkSymbol:
+        result &= "." & inst.arg0.str
+      else:
+        result &= formatValue(inst.arg0)
+    of IkAssign:
+      # Assign has symbol in arg0
+      if inst.arg0.kind == VkSymbol:
+        result &= inst.arg0.str & " ="
+      else:
+        result &= formatValue(inst.arg0)
     else:
-      # For any other instructions, show non-nil arguments
+      # For any unhandled instructions, show non-nil arguments
       var shown = false
       if inst.arg0.kind != VkNil:
         result &= formatValue(inst.arg0)

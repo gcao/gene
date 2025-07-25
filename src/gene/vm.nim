@@ -26,7 +26,7 @@ proc render_template(self: VirtualMachine, tpl: Value): Value =
       
       # For now, evaluate simple cases directly without creating new frames
       # TODO: Implement full expression evaluation
-      var result: Value = NIL
+      var r: Value = NIL
       
       case expr.kind:
         of VkSymbol:
@@ -46,17 +46,17 @@ proc render_template(self: VirtualMachine, tpl: Value): Value =
               scope = scope.parent
             
             if scope != nil and var_index.local_index < scope.members.len:
-              result = scope.members[var_index.local_index]
+              r = scope.members[var_index.local_index]
             else:
               # Not found, default to symbol
-              result = expr
+              r = expr
           else:
             # Not in scope, check namespace
             if self.frame.ns.members.hasKey(key):
-              result = self.frame.ns.members[key]
+              r = self.frame.ns.members[key]
             else:
               # Default to the symbol itself
-              result = expr
+              r = expr
             
         of VkGene:
           # For gene expressions, recursively render the parts
@@ -76,20 +76,20 @@ proc render_template(self: VirtualMachine, tpl: Value): Value =
           
           # For now, return the rendered gene without evaluating
           # TODO: Implement full expression evaluation
-          result = new_gene.to_gene_value()
+          r = new_gene.to_gene_value()
             
         of VkInt, VkFloat, VkBool, VkString, VkChar:
           # Literal values pass through unchanged
-          result = expr
+          r = expr
         else:
           # For other types, recursively render
-          result = self.render_template(expr)
+          r = self.render_template(expr)
       
       if discard_result:
-        # %_ means discard the result
+        # %_ means discard the r
         return NIL
       else:
-        return result
+        return r
     
     of VkGene:
       # Recursively render gene expressions
