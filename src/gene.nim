@@ -1,6 +1,6 @@
 import os, strutils, tables
 import gene/commands/base
-import gene/commands/[run, eval, repl, help]
+import gene/commands/[run, eval, repl, help, parse, compile]
 
 var CommandMgr = CommandManager(data: initTable[string, Command](), help: "")
 
@@ -9,6 +9,8 @@ run.init(CommandMgr)
 eval.init(CommandMgr)
 repl.init(CommandMgr)
 help.init(CommandMgr)
+parse.init(CommandMgr)
+compile.init(CommandMgr)
 
 proc main() =
   var args = command_line_params()

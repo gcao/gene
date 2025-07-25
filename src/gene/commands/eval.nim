@@ -1,6 +1,8 @@
-import parseopt, strutils
+import parseopt, strutils, strformat
 import ../types
 import ../vm
+import ../parser
+import ../compiler
 import ./base
 
 const DEFAULT_COMMAND = "eval"
@@ -13,6 +15,8 @@ type
     csv: bool
     gene: bool
     line: bool
+    trace: bool
+    compile: bool
     code: string
 
 proc handle*(cmd: string, args: seq[string]): string
@@ -30,6 +34,8 @@ let long_no_val = @[
   "csv",
   "gene",
   "line",
+  "trace",
+  "compile",
 ]
 
 proc parse_options(args: seq[string]): Options =
@@ -50,6 +56,10 @@ proc parse_options(args: seq[string]): Options =
         result.gene = true
       of "line":
         result.line = true
+      of "trace":
+        result.trace = true
+      of "compile":
+        result.compile = true
       else:
         echo "Unknown option: ", key
     of cmdEnd:
@@ -61,23 +71,53 @@ proc handle*(cmd: string, args: seq[string]): string =
   let options = parse_options(args)
   setup_logger(options.debugging)
   
-  if options.code.len == 0:
+  var code = options.code
+  
+  # If no code provided via arguments, read from stdin
+  if code.len == 0:
+    # Try to read from stdin regardless of TTY status
+    var lines: seq[string] = @[]
+    var line: string
+    while read_line(stdin, line):
+      lines.add(line)
+    if lines.len > 0:
+      code = lines.join("\n")
+    else:
+      return "Error: no code provided to evaluate"
+  
+  if code.len == 0:
     return "Error: no code provided to evaluate"
   
   init_app_and_vm()
   
   try:
-    let value = VM.exec(options.code, "<eval>")
+    # Enable tracing if requested
+    if options.trace:
+      VM.trace = true
     
-    if options.print_result or true:  # Always print result for eval
-      if options.csv:
-        # Basic CSV output - could be enhanced
-        echo $value
-      elif options.gene:
-        # Output as gene expression format
+    # Show compilation details if requested
+    if options.compile or options.debugging:
+      let compiled = compile(read_all(code))
+      echo "=== Compilation Output ==="
+      echo "Instructions:"
+      for i, instr in compiled.instructions:
+        echo fmt"{i:03d}: {instr}"
+      echo ""
+      
+      if not options.trace:  # If not tracing, just show compilation
+        VM.cu = compiled
+        let value = VM.exec()
+        echo "=== Result ==="
         echo $value
       else:
+        echo "=== Execution Trace ==="
+        VM.cu = compiled
+        let value = VM.exec()
+        echo "=== Final Result ==="
         echo $value
+    else:
+      let value = VM.exec(code, "<eval>")
+      echo $value
         
   except ValueError as e:
     return "Error: " & e.msg

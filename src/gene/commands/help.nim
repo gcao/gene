@@ -1,4 +1,3 @@
-import strutils, tables
 import ./base
 
 const DEFAULT_COMMAND = "help"

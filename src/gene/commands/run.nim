@@ -1,7 +1,9 @@
-import parseopt, times
+import parseopt, times, strformat
 
 import ../types
 import ../vm
+import ../parser
+import ../compiler
 import ./base
 
 const DEFAULT_COMMAND = "run"
@@ -13,6 +15,8 @@ type
     debugging: bool
     print_result: bool
     repl_on_error: bool
+    trace: bool
+    compile: bool
     file: string
     args: seq[string]
 
@@ -25,6 +29,8 @@ proc init*(manager: CommandManager) =
 let short_no_val = {'d'}
 let long_no_val = @[
   "repl-on-error",
+  "trace",
+  "compile",
 ]
 proc parse_options(args: seq[string]): Options =
   result = Options()
@@ -47,6 +53,10 @@ proc parse_options(args: seq[string]): Options =
           result.debugging = true
         of "repl-on-error":
           result.repl_on_error = true
+        of "trace":
+          result.trace = true
+        of "compile":
+          result.compile = true
         else:
           echo "Unknown option: ", key
           discard
@@ -71,9 +81,30 @@ proc handle*(cmd: string, args: seq[string]): string =
   # Initialize the VM if not already initialized
   init_app_and_vm()
   
+  # Enable tracing if requested
+  if options.trace:
+    VM.trace = true
+
   # Read the file and execute it
   let code = read_file(file)
-  value = VM.exec(code, file)
+  
+  if options.compile or options.debugging:
+    echo "=== Compilation Output ==="
+    let compiled = compile(read_all(code))
+    echo "Instructions:"
+    for i, instr in compiled.instructions:
+      echo fmt"{i:03d}: {instr}"
+    echo ""
+    
+    if not options.trace:  # If not tracing, just show compilation
+      VM.cu = compiled
+      value = VM.exec()
+    else:
+      echo "=== Execution Trace ==="
+      VM.cu = compiled
+      value = VM.exec()
+  else:
+    value = VM.exec(code, file)
   
   if options.print_result:
     echo value

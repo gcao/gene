@@ -2164,7 +2164,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkSymbol:
             # Direct symbol evaluation in caller's context
             let key = expr_to_eval.str.to_key()
-            var result = NIL
+            var r = NIL
             
             # First check if it's a local variable in the caller's scope
             if caller_frame.scope != nil and caller_frame.scope.tracker != nil:
@@ -2177,19 +2177,19 @@ proc exec*(self: VirtualMachine): Value =
                   parent_index.dec()
                   scope = scope.parent
                 if found.local_index < scope.members.len:
-                  result = scope.members[found.local_index]
+                  r = scope.members[found.local_index]
             
-            if result == NIL:
+            if r == NIL:
               # Not a local variable, look in namespaces
-              result = caller_frame.ns[key]
-              if result == NIL:
-                result = App.app.global_ns.ref.ns[key]
-                if result == NIL:
-                  result = App.app.gene_ns.ref.ns[key]
-                  if result == NIL:
+              r = caller_frame.ns[key]
+              if r == NIL:
+                r = App.app.global_ns.ref.ns[key]
+                if r == NIL:
+                  r = App.app.gene_ns.ref.ns[key]
+                  if r == NIL:
                     not_allowed("Unknown symbol in caller context: " & expr_to_eval.str)
             
-            self.frame.push(result)
+            self.frame.push(r)
             
           else:
             # For complex expressions, compile and execute
@@ -2212,7 +2212,7 @@ proc exec*(self: VirtualMachine): Value =
             self.cu = compiled
             
             # Execute in caller's context
-            let result = self.exec()
+            let r = self.exec()
             
             # Restore macro context
             self.frame = saved_frame
@@ -2220,8 +2220,8 @@ proc exec*(self: VirtualMachine): Value =
             pc = saved_pc
             inst = self.cu.instructions[pc].addr
             
-            # Push result back to macro's stack
-            self.frame.push(result)
+            # Push r back to macro's stack
+            self.frame.push(r)
         {.pop.}
       
       of IkAsyncStart:
