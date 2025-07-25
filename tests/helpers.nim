@@ -3,6 +3,7 @@ import unittest, strutils, tables
 import ../src/gene/types
 import ../src/gene/parser
 import ../src/gene/vm
+import ../src/gene/serdes
 
 # Uncomment below lines to see logs
 # import logging
@@ -25,6 +26,37 @@ converter to_value*(self: openArray[(string, Value)]): Value =
   for (k, v) in self:
     map[k.to_key()] = v
   new_map_value(map)
+
+# Helper functions for serialization tests
+proc new_gene_int*(val: int): Value =
+  val.to_value()
+
+proc new_gene_symbol*(s: string): Value =
+  s.to_symbol_value()
+
+proc gene_type*(v: Value): Value =
+  if v.kind == VkGene:
+    v.gene.type
+  else:
+    raise newException(ValueError, "Not a gene value")
+
+proc gene_props*(v: Value): Table[string, Value] =
+  if v.kind == VkGene:
+    var result = initTable[string, Value]()
+    for k, val in v.gene.props:
+      # k is a Key (distinct int64), which is a packed symbol value
+      let symbol_value = cast[Value](k)
+      let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
+      result[get_symbol(symbol_index.int)] = val
+    return result
+  else:
+    raise newException(ValueError, "Not a gene value")
+
+proc gene_children*(v: Value): seq[Value] =
+  if v.kind == VkGene:
+    v.gene.children
+  else:
+    raise newException(ValueError, "Not a gene value")
 
 proc cleanup*(code: string): string =
   result = code
@@ -107,3 +139,23 @@ proc test_vm_error*(code: string) =
       fail()
     except CatchableError:
       discard
+
+proc test_serdes*(code: string, result: Value) =
+  var code = cleanup(code)
+  test "Serdes: " & code:
+    init_all()
+    init_serdes()
+    var value = VM.exec(code, "test_code")
+    var s = serialize(value).to_s()
+    var value2 = deserialize(s)
+    check value2 == result
+
+proc test_serdes*(code: string, callback: proc(result: Value)) =
+  var code = cleanup(code)
+  test "Serdes: " & code:
+    init_all()
+    init_serdes()
+    var value = VM.exec(code, "test_code")
+    var s = serialize(value).to_s()
+    var value2 = deserialize(s)
+    callback(value2)

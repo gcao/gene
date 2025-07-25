@@ -2310,6 +2310,30 @@ proc exec*(self: VirtualMachine): Value =
             not_allowed("Cannot await a pending future in pseudo-async mode")
         {.pop.}
       
+      of IkCallMethodNoArgs:
+        # Method call with no arguments (e.g., obj.name)
+        let method_name = inst.arg0.str
+        var obj: Value
+        self.frame.pop2(obj)
+        
+        case obj.kind:
+        of VkClass:
+          # Handle built-in class properties
+          if method_name == "name":
+            self.frame.push(obj.ref.class.name.to_value())
+          else:
+            todo("class method: " & method_name)
+        of VkInstance:
+          # Handle instance methods
+          if method_name == "class":
+            let r = new_ref(VkClass)
+            r.class = obj.ref.instance_class
+            self.frame.push(r.to_ref_value())
+          else:
+            todo("instance method: " & method_name)
+        else:
+          todo($obj.kind & " method: " & method_name)
+      
       else:
         todo($inst.kind)
 
