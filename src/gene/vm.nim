@@ -9,6 +9,138 @@ import ./vm/module
 
 const DEBUG_VM = false
 
+# Forward declaration
+proc exec*(self: VirtualMachine): Value
+
+proc render_template(self: VirtualMachine, tpl: Value): Value =
+  # Render a template by recursively processing quote/unquote values
+  case tpl.kind:
+    of VkQuote:
+      # A quoted value - render its contents
+      return self.render_template(tpl.ref.quote)
+    
+    of VkUnquote:
+      # An unquoted value - evaluate it in the current context
+      let expr = tpl.ref.unquote
+      let discard_result = tpl.ref.unquote_discard
+      
+      # For now, evaluate simple cases directly without creating new frames
+      # TODO: Implement full expression evaluation
+      var result: Value = NIL
+      
+      case expr.kind:
+        of VkSymbol:
+          # Look up the symbol in the current scope using the scope tracker
+          let key = expr.str.to_key()
+          
+          # Use the scope tracker to find the variable
+          let var_index = self.frame.scope.tracker.locate(key)
+          
+          if var_index.local_index >= 0:
+            # Found in scope - navigate to the correct scope
+            var scope = self.frame.scope
+            var parent_index = var_index.parent_index
+            
+            while parent_index > 0 and scope != nil:
+              parent_index.dec()
+              scope = scope.parent
+            
+            if scope != nil and var_index.local_index < scope.members.len:
+              result = scope.members[var_index.local_index]
+            else:
+              # Not found, default to symbol
+              result = expr
+          else:
+            # Not in scope, check namespace
+            if self.frame.ns.members.hasKey(key):
+              result = self.frame.ns.members[key]
+            else:
+              # Default to the symbol itself
+              result = expr
+            
+        of VkGene:
+          # For gene expressions, recursively render the parts
+          let gene = expr.gene
+          let rendered_type = self.render_template(gene.type)
+          
+          # Create a new gene with rendered parts
+          let new_gene = new_gene(rendered_type)
+          
+          # Render properties
+          for k, v in gene.props:
+            new_gene.props[k] = self.render_template(v)
+          
+          # Render children
+          for child in gene.children:
+            new_gene.children.add(self.render_template(child))
+          
+          # For now, return the rendered gene without evaluating
+          # TODO: Implement full expression evaluation
+          result = new_gene.to_gene_value()
+            
+        of VkInt, VkFloat, VkBool, VkString, VkChar:
+          # Literal values pass through unchanged
+          result = expr
+        else:
+          # For other types, recursively render
+          result = self.render_template(expr)
+      
+      if discard_result:
+        # %_ means discard the result
+        return NIL
+      else:
+        return result
+    
+    of VkGene:
+      # Recursively render gene expressions
+      let gene = tpl.gene
+      let new_gene = new_gene(self.render_template(gene.type))
+      
+      # Render properties
+      for k, v in gene.props:
+        new_gene.props[k] = self.render_template(v)
+      
+      # Render children
+      for child in gene.children:
+        let rendered = self.render_template(child)
+        if rendered.kind == VkExplode:
+          # Handle %_ spread operator
+          if rendered.ref.explode_value.kind == VkArray:
+            for item in rendered.ref.explode_value.ref.arr:
+              new_gene.children.add(item)
+        else:
+          new_gene.children.add(rendered)
+      
+      return new_gene.to_gene_value()
+    
+    of VkArray:
+      # Recursively render array elements
+      let new_arr = new_ref(VkArray)
+      for item in tpl.ref.arr:
+        let rendered = self.render_template(item)
+        # Skip NIL values that come from %_ (unquote discard)
+        if rendered.kind == VkNil and item.kind == VkUnquote and item.ref.unquote_discard:
+          continue
+        elif rendered.kind == VkExplode:
+          # Handle spread in arrays
+          if rendered.ref.explode_value.kind == VkArray:
+            for sub_item in rendered.ref.explode_value.ref.arr:
+              new_arr.arr.add(sub_item)
+        else:
+          new_arr.arr.add(rendered)
+      return new_arr.to_ref_value()
+    
+    of VkMap:
+      # Recursively render map values
+      let new_map = new_ref(VkMap)
+      for k, v in tpl.ref.map:
+        new_map.map[k] = self.render_template(v)
+      return new_map.to_ref_value()
+    
+    else:
+      # Other values pass through unchanged
+      return tpl
+
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
   if pc >= self.cu.instructions.len:
@@ -270,6 +402,11 @@ proc exec*(self: VirtualMachine): Value =
           raise new_exception(types.Exception, "$parse expects a string")
         let parsed = read(str_value.str)
         self.frame.push(parsed)
+      
+      of IkRender:
+        let template_value = self.frame.pop()
+        let rendered = self.render_template(template_value)
+        self.frame.push(rendered)
       
       of IkEval:
         let value = self.frame.pop()

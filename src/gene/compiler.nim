@@ -10,6 +10,8 @@ proc compile*(self: Compiler, input: Value)
 proc compile_with(self: Compiler, gene: ptr Gene)
 proc compile_tap(self: Compiler, gene: ptr Gene)
 proc compile_parse(self: Compiler, gene: ptr Gene)
+proc compile_render(self: Compiler, gene: ptr Gene)
+proc compile_emit(self: Compiler, gene: ptr Gene)
 
 proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:
@@ -1566,6 +1568,12 @@ proc compile_gene(self: Compiler, input: Value) =
             of "$set":
               self.compile_set(gene)
               return
+            of "$render":
+              self.compile_render(gene)
+              return
+            of "$emit":
+              self.compile_emit(gene)
+              return
 
   self.compile_gene_unknown(gene)
 
@@ -1598,6 +1606,13 @@ proc compile*(self: Compiler, input: Value) =
       self.compile_map(input)
     of VkGene:
       self.compile_gene(input)
+    of VkUnquote:
+      # Unquote values should be compiled as literals
+      # They will be processed during template rendering
+      self.compile_literal(input)
+    of VkFunction:
+      # Functions should be compiled as literals
+      self.compile_literal(input)
     else:
       todo($input.kind)
 
@@ -1891,6 +1906,33 @@ proc compile_parse(self: Compiler, gene: ptr Gene) =
   
   # Parse it
   self.output.instructions.add(Instruction(kind: IkParse))
+
+proc compile_render(self: Compiler, gene: ptr Gene) =
+  # ($render template)
+  if gene.children.len != 1:
+    not_allowed("$render expects exactly 1 argument")
+  
+  # Compile the template argument
+  self.compile(gene.children[0])
+  
+  # Render it
+  self.output.instructions.add(Instruction(kind: IkRender))
+
+proc compile_emit(self: Compiler, gene: ptr Gene) =
+  # ($emit value) - used within templates to emit values
+  if gene.children.len < 1:
+    not_allowed("$emit expects at least 1 argument")
+  
+  # For now, $emit just evaluates to its argument
+  # The actual emission logic is handled by the template renderer
+  if gene.children.len == 1:
+    self.compile(gene.children[0])
+  else:
+    # Multiple arguments - create an array
+    let arr_gene = new_gene("Array".to_symbol_value())
+    for child in gene.children:
+      arr_gene.children.add(child)
+    self.compile(arr_gene.to_gene_value())
 
 proc compile_caller_eval(self: Compiler, gene: ptr Gene) =
   # ($caller_eval expr)

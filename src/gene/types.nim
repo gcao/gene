@@ -729,6 +729,7 @@ type
     IkParse        # Parse string to Gene value
     IkEval         # Evaluate a value
     IkCallerEval   # Evaluate expression in caller's context
+    IkRender       # Render a template
     IkAsync        # Wrap value in a Future
     IkAsyncStart   # Start async block with exception handling
     IkAsyncEnd     # End async block and create future
