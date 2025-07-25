@@ -69,7 +69,8 @@ proc start_repl(debugging: bool) =
       
       try:
         let value = VM.exec(trimmed, "<repl>")
-        if not value.is_nil():
+        # Only print return value if it's not nil/void and not from print/println statements
+        if not value.is_nil() and value.kind != VkVoid and not trimmed.starts_with("(print") and not trimmed.starts_with("(println"):
           echo $value
       except ValueError as e:
         echo "Error: ", e.msg

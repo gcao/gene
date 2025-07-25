@@ -8,10 +8,18 @@ proc debug(self: VirtualMachine, args: Value): Value =
 proc println(self: VirtualMachine, args: Value): Value =
   var s = ""
   for i, k in args.gene.children:
-    s &= $k
+    s &= k.str_no_quotes()
     if i < args.gene.children.len - 1:
       s &= " "
   echo s
+
+proc print(self: VirtualMachine, args: Value): Value =
+  var s = ""
+  for i, k in args.gene.children:
+    s &= k.str_no_quotes()
+    if i < args.gene.children.len - 1:
+      s &= " "
+  stdout.write(s)
 
 proc gene_assert(self: VirtualMachine, args: Value): Value =
   if args.gene.children.len > 0:
@@ -300,6 +308,7 @@ VmCreatedCallbacks.add proc() =
 
   App.app.gene_ns.ns["debug".to_key()] = debug
   App.app.gene_ns.ns["println".to_key()] = println
+  App.app.gene_ns.ns["print".to_key()] = print
   App.app.gene_ns.ns["assert".to_key()] = gene_assert
   App.app.gene_ns.ns["trace_start".to_key()] = trace_start
   App.app.gene_ns.ns["trace_end".to_key()] = trace_end

@@ -1270,6 +1270,79 @@ proc is_literal*(self: Value): bool =
       else:
         result = false
 
+proc str_no_quotes*(self: Value): string {.gcsafe.} =
+  {.cast(gcsafe).}:
+    case self.kind:
+      of VkNil:
+        result = "nil"
+      of VkVoid:
+        result = "void"
+      of VkPlaceholder:
+        result = "_"
+      of VkBool:
+        result = $(self == TRUE)
+      of VkInt:
+        result = $self.int64
+      of VkFloat:
+        result = $(cast[float64](self))
+      of VkChar:
+        result = $cast[char](cast[int64](self) and 0xFF)
+      of VkString:
+        result = $self.str
+      of VkSymbol:
+        result = $self.str
+      of VkComplexSymbol:
+        result = self.ref.csymbol.join("/")
+      of VkRatio:
+        result = $self.ref.ratio_num & "/" & $self.ref.ratio_denom
+      of VkArray, VkVector:
+        result = "["
+        for i, v in self.ref.arr:
+          if i > 0:
+            result &= " "
+          result &= v.str_no_quotes()
+        result &= "]"
+      of VkSet:
+        result = "#{"
+        var first = true
+        for v in self.ref.set:
+          if not first:
+            result &= " "
+          result &= v.str_no_quotes()
+          first = false
+        result &= "}"
+      of VkMap:
+        result = "{"
+        var first = true
+        for k, v in self.ref.map:
+          if not first:
+            result &= " "
+          # Key is a symbol value cast to int64, need to extract the symbol index
+          let symbol_value = cast[Value](k)
+          let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
+          result &= "^" & get_symbol(symbol_index.int) & " " & v.str_no_quotes()
+          first = false
+        result &= "}"
+      of VkGene:
+        result = $self.gene
+      of VkRange:
+        result = $self.ref.range_start & ".." & $self.ref.range_end
+        if self.ref.range_step != NIL:
+          result &= " step " & $self.ref.range_step
+      of VkRegex:
+        result = "/" & self.ref.regex_pattern & "/"
+      of VkDate:
+        result = $self.ref.date_year & "-" & $self.ref.date_month & "-" & $self.ref.date_day
+      of VkDateTime:
+        result = $self.ref.dt_year & "-" & $self.ref.dt_month & "-" & $self.ref.dt_day & 
+                 " " & $self.ref.dt_hour & ":" & $self.ref.dt_minute & ":" & $self.ref.dt_second
+      of VkTime:
+        result = $self.ref.time_hour & ":" & $self.ref.time_minute & ":" & $self.ref.time_second
+      of VkFuture:
+        result = "<Future " & $self.ref.future.state & ">"
+      else:
+        result = $self.kind
+
 proc `$`*(self: Value): string {.gcsafe.} =
   {.cast(gcsafe).}:
     case self.kind:

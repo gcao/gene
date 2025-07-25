@@ -922,6 +922,9 @@ proc exec*(self: VirtualMachine): Value =
             if current.ref.frame.args.kind != VkGene:
               current.ref.frame.args = new_gene_value()
             current.ref.frame.args.gene.props[key] = value
+          of VkNativeFrame:
+            # For native function calls, ignore property setting for now
+            discard
           else:
             todo("GeneSetProp for " & $current.kind)
         {.pop.}
