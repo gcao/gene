@@ -120,6 +120,16 @@ proc exec*(self: VirtualMachine): Value =
         while self.frame.scope.members.len <= index:
           self.frame.scope.members.add(NIL)
         self.frame.scope.members[index] = value
+        
+        # If we're in a namespace initialization context, also store in namespace members
+        if self.frame.self != nil and self.frame.self.kind == VkNamespace:
+          # Find the variable name from the scope tracker
+          if self.frame.scope.tracker != nil:
+            for key, idx in self.frame.scope.tracker.mappings:
+              if idx == index:
+                self.frame.self.ref.ns.members[key] = value
+                break
+        
         # Push the value as the result of var
         self.frame.push(value)
         {.pop.}
@@ -132,6 +142,16 @@ proc exec*(self: VirtualMachine): Value =
         while self.frame.scope.members.len <= index:
           self.frame.scope.members.add(NIL)
         self.frame.scope.members[index] = value
+        
+        # If we're in a namespace initialization context, also store in namespace members
+        if self.frame.self != nil and self.frame.self.kind == VkNamespace:
+          # Find the variable name from the scope tracker
+          if self.frame.scope.tracker != nil:
+            for key, idx in self.frame.scope.tracker.mappings:
+              if idx == index:
+                self.frame.self.ref.ns.members[key] = value
+                break
+        
         # Also push the value to the stack (like IkVar)
         self.frame.push(value)
         {.pop.}
@@ -200,7 +220,7 @@ proc exec*(self: VirtualMachine): Value =
                 try:
                   echo "  Symbol name: ", get_symbol(name.int)
                 except:
-                  echo "  Failed to get symbol for key ", name.int
+                  echo "  Invalid symbol key: ", name.int
             var value = self.frame.ns[name]
             if value == NIL:
               # Try global namespace
@@ -215,7 +235,11 @@ proc exec*(self: VirtualMachine): Value =
                   if self.trace and value != NIL:
                     echo "  Found in gene namespace: ", value.kind
                 if value == NIL:
-                  not_allowed("Unknown symbol: " & get_symbol(name.int))
+                  let symbol_name = try:
+                    get_symbol(name.int)
+                  except:
+                    "<invalid key: " & $name.int & ">"
+                  not_allowed("Unknown symbol: " & symbol_name)
             else:
               when not defined(release):
                 if self.trace:
@@ -327,7 +351,11 @@ proc exec*(self: VirtualMachine): Value =
             target.ref.instance_props[name] = value
           of VkArray:
             # Arrays don't support named members, this is likely an error
-            not_allowed("Cannot set named member '" & name.int.get_symbol() & "' on array")
+            let symbol_name = try:
+              get_symbol(name.int)
+            except:
+              "<invalid key: " & $name.int & ">"
+            not_allowed("Cannot set named member '" & symbol_name & "' on array")
           else:
             todo($target.kind)
         self.frame.push(value)

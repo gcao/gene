@@ -632,6 +632,7 @@ type
     IkAddValue    # args: literal value
     IkSub
     IkSubValue
+    IkNeg          # Unary negation
     IkMul
     IkDiv
     IkPow

@@ -23,11 +23,11 @@ import ./helpers
 #     <GIT COMMIT>/
 #
 
-test_interpreter """
+test_vm """
   $pkg/.name
 """, "gene"
 
-test_interpreter """
+test_vm """
   ($dep "my-lib" ^path "example-projects/my-lib")
   (import x from "index" ^pkg "my-lib")
   (x)

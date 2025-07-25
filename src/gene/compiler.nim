@@ -1205,35 +1205,83 @@ proc compile_gene(self: Compiler, input: Value) =
     return
 
   let `type` = gene.type
+  
+  # Check if type is an arithmetic operator
+  if `type`.kind == VkSymbol:
+    case `type`.str:
+      of "+":
+        if gene.children.len == 0:
+          # (+) with no args returns 0
+          self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.to_value()))
+          return
+        elif gene.children.len == 1:
+          # Unary + is identity
+          self.compile(gene.children[0])
+          return
+        else:
+          # Multi-arg addition
+          self.compile(gene.children[0])
+          for i in 1..<gene.children.len:
+            self.compile(gene.children[i])
+            self.output.instructions.add(Instruction(kind: IkAdd))
+          return
+      of "-":
+        if gene.children.len == 0:
+          not_allowed("- requires at least one argument")
+        elif gene.children.len == 1:
+          # Unary minus - use 0 - x for now
+          self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.to_value()))
+          self.compile(gene.children[0])
+          self.output.instructions.add(Instruction(kind: IkSub))
+          return
+        else:
+          # Multi-arg subtraction
+          self.compile(gene.children[0])
+          for i in 1..<gene.children.len:
+            self.compile(gene.children[i])
+            self.output.instructions.add(Instruction(kind: IkSub))
+          return
+      of "*":
+        if gene.children.len == 0:
+          # (*) with no args returns 1
+          self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.to_value()))
+          return
+        elif gene.children.len == 1:
+          # Unary * is identity
+          self.compile(gene.children[0])
+          return
+        else:
+          # Multi-arg multiplication
+          self.compile(gene.children[0])
+          for i in 1..<gene.children.len:
+            self.compile(gene.children[i])
+            self.output.instructions.add(Instruction(kind: IkMul))
+          return
+      of "/":
+        if gene.children.len == 0:
+          not_allowed("/ requires at least one argument")
+        elif gene.children.len == 1:
+          # Unary / is reciprocal: 1/x
+          self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 1.to_value()))
+          self.compile(gene.children[0])
+          self.output.instructions.add(Instruction(kind: IkDiv))
+          return
+        else:
+          # Multi-arg division
+          self.compile(gene.children[0])
+          for i in 1..<gene.children.len:
+            self.compile(gene.children[i])
+            self.output.instructions.add(Instruction(kind: IkDiv))
+          return
+      else:
+        discard  # Not an arithmetic operator, continue with normal processing
+  
   if gene.children.len > 0:
     let first = gene.children[0]
     if first.kind == VkSymbol:
       case first.str:
         of "=", "+=", "-=":
           self.compile_assignment(gene)
-          return
-        of "+":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkAdd))
-          return
-        of "-":
-          self.compile(`type`)
-          if gene.children[1].is_literal():
-            self.output.instructions.add(Instruction(kind: IkSubValue, arg0: gene.children[1]))
-          else:
-            self.compile(gene.children[1])
-            self.output.instructions.add(Instruction(kind: IkSub))
-          return
-        of "*":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkMul))
-          return
-        of "/":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkDiv))
           return
         of "<":
           self.compile(`type`)
@@ -1418,7 +1466,6 @@ proc compile_gene(self: Compiler, input: Value) =
         return
       else:
         let s = `type`.str
-        echo "DEBUG: compile_gene: type.str = ", s
         if s == "@":
           # Handle @ selector operator
           self.compile_at_selector(gene)
