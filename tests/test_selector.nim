@@ -141,14 +141,11 @@ test_vm """
 test_vm """
   ([1 2] ./ 0)
 """, proc(r: Value) =
-  check r.kind == VkInt
-  check r.int == 1
+  check r == 1.to_value()
 
 test_vm """
   ([1 2] ./0)
-""", proc(r: Value) =
-  check r.kind == VkInt
-  check r.int == 1
+""", 1
 
 # test_vm """
 #   ([0 1 2 -2 -1] ./ (0 .. 1))
@@ -203,6 +200,7 @@ test_vm """
 """, 1
 
 # This test uses @test shorthand which requires special parsing
+# For now, @test creates a selector that needs to be applied differently
 # test_vm """
 #   (@test {^test 1})
 # """, 1
@@ -256,11 +254,14 @@ test_vm """
   ((@ "test") a)
 """, 1
 
-# test_vm """
-#   (var a [0])
-#   ($set a @0 1)
-#   a
-# """, @[1]
+test_vm """
+  (var a [0])
+  ($set a @0 1)
+  a
+""", proc(r: Value) =
+  check r.kind == VkArray
+  check r.ref.arr.len == 1
+  check r.ref.arr[0] == 1.to_value()
 
 # test_vm """
 #   (class A)

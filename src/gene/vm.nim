@@ -407,7 +407,7 @@ proc exec*(self: VirtualMachine): Value =
         let key = case prop.kind:
           of VkString: prop.str.to_key()
           of VkSymbol: prop.str.to_key()
-          of VkInt: ($prop.int).to_key()
+          of VkInt: ($prop.int64).to_key()
           else: 
             not_allowed("Invalid property type: " & $prop.kind)
             "".to_key()  # Never reached, but satisfies type checker
@@ -441,7 +441,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkArray:
             # Handle array index access
             if prop.kind == VkInt:
-              let idx = prop.int
+              let idx = prop.int64
               if idx >= 0 and idx < target.ref.arr.len:
                 self.frame.push(target.ref.arr[idx])
               elif idx < 0 and -idx <= target.ref.arr.len:
@@ -466,7 +466,7 @@ proc exec*(self: VirtualMachine): Value =
         let key = case prop.kind:
           of VkString: prop.str.to_key()
           of VkSymbol: prop.str.to_key()
-          of VkInt: ($prop.int).to_key()
+          of VkInt: ($prop.int64).to_key()
           else: 
             not_allowed("Invalid property type: " & $prop.kind)
             "".to_key()  # Never reached, but satisfies type checker

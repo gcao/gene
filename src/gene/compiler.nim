@@ -88,6 +88,33 @@ proc compile_symbol(self: Compiler, input: Value) =
         # Special handling for super - will be handled differently when it's a function call
         self.output.instructions.add(Instruction(kind: IkPushValue, arg0: input))
         return
+      elif symbol_str.startsWith("@") and symbol_str.len > 1:
+        # Handle @shorthand syntax: @test -> (@ "test"), @0 -> (@ 0)
+        let selector = new_gene("@".to_symbol_value())
+        let prop_name = symbol_str[1..^1]
+        
+        # Check if it contains / for complex selectors like @test/0
+        if "/" in prop_name:
+          # Handle @test/0 or @0/test
+          let parts = prop_name.split("/")
+          for part in parts:
+            # Try to parse as int for numeric indices
+            try:
+              let index = parseInt(part)
+              selector.children.add(index.to_value())
+            except ValueError:
+              selector.children.add(part.to_value())
+        else:
+          # Simple @test case
+          # Try to parse as int for @0 syntax
+          try:
+            let index = parseInt(prop_name)
+            selector.children.add(index.to_value())
+          except ValueError:
+            selector.children.add(prop_name.to_value())
+        
+        self.output.instructions.add(Instruction(kind: IkPushValue, arg0: selector.to_gene_value()))
+        return
       elif symbol_str.endsWith("..."):
         # Handle variable spread like "a..." - strip the ... and add spread
         let base_symbol = symbol_str[0..^4].to_symbol_value()  # Remove "..."
@@ -1233,7 +1260,8 @@ proc compile_gene(self: Compiler, input: Value) =
   # This handles cases like (6 / 2) or (i + 1)
   if gene.children.len >= 1:
     let first_child = gene.children[0]
-    if first_child.kind == VkSymbol and first_child.str in ["+", "-", "*", "/", "%", "**"]:
+    if (first_child.kind == VkSymbol and first_child.str in ["+", "-", "*", "/", "%", "**", "./"]) or
+       (first_child.kind == VkComplexSymbol and first_child.ref.csymbol.len >= 2 and first_child.ref.csymbol[0] == "." and first_child.ref.csymbol[1] == ""):
       # Don't convert if the type is already an operator or special form
       if `type`.kind != VkSymbol or `type`.str notin ["var", "if", "fn", "fnx", "fnxx", "macro", "do", "loop", "while", "for", "ns", "class", "try", "throw", "$", "."]:
         # Convert infix to prefix notation and compile
@@ -1958,9 +1986,34 @@ proc compile_set(self: Compiler, gene: ptr Gene) =
   # Compile the target
   self.compile(gene.children[0])
   
-  # The second argument should be a selector like @test
-  let selector = gene.children[1]
-  if selector.kind != VkGene or selector.gene.type != "@".to_symbol_value():
+  # The second argument should be a selector like @test or (@ "test")
+  var selector = gene.children[1]
+  
+  # Handle @shorthand syntax - @test becomes (@ "test")
+  if selector.kind == VkSymbol and selector.str.startsWith("@") and selector.str.len > 1:
+    let prop_name = selector.str[1..^1]
+    selector = new_gene("@".to_symbol_value()).to_gene_value()
+    
+    # Check if it contains / for complex selectors like @test/0
+    if "/" in prop_name:
+      # Handle @test/0 or @0/test
+      let parts = prop_name.split("/")
+      for part in parts:
+        # Try to parse as int for numeric indices
+        try:
+          let index = parseInt(part)
+          selector.gene.children.add(index.to_value())
+        except ValueError:
+          selector.gene.children.add(part.to_value())
+    else:
+      # Simple @test case
+      # Try to parse as int for @0 syntax
+      try:
+        let index = parseInt(prop_name)
+        selector.gene.children.add(index.to_value())
+      except ValueError:
+        selector.gene.children.add(prop_name.to_value())
+  elif selector.kind != VkGene or selector.gene.type != "@".to_symbol_value():
     not_allowed("$set expects a selector (@property) as second argument")
   
   # Extract the property name
@@ -1968,19 +2021,23 @@ proc compile_set(self: Compiler, gene: ptr Gene) =
     not_allowed("$set selector must have exactly one property")
   
   let prop = selector.gene.children[0]
-  let prop_key = case prop.kind:
-    of VkString: prop.str.to_key()
-    of VkSymbol: prop.str.to_key()
-    of VkInt: ($prop.int).to_key()
-    else: 
-      not_allowed("Invalid property type for $set")
-      "".to_key()  # Never reached, but satisfies type checker
   
   # Compile the value
   self.compile(gene.children[2])
   
-  # Set the member
-  self.output.instructions.add(Instruction(kind: IkSetMember, arg0: prop_key.to_value()))
+  # Check if property is an integer (for array/gene child access)
+  if prop.kind == VkInt:
+    # Use SetChild for integer indices
+    self.output.instructions.add(Instruction(kind: IkSetChild, arg0: prop))
+  else:
+    # Use SetMember for string/symbol properties
+    let prop_key = case prop.kind:
+      of VkString: prop.str.to_key()
+      of VkSymbol: prop.str.to_key()
+      else: 
+        not_allowed("Invalid property type for $set")
+        "".to_key()  # Never reached, but satisfies type checker
+    self.output.instructions.add(Instruction(kind: IkSetMember, arg0: prop_key.to_value()))
 
 proc compile_import(self: Compiler, gene: ptr Gene) =
   # (import a b from "module")

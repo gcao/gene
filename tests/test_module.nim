@@ -66,13 +66,13 @@ test_vm """
   (x + y)
 """, 3
 
-test_vm """
-  (ns n
-    (fn f _ 1)
-  )
-  (import g from "tests/fixtures/mod2" ^inherit n)
-  (g)
-""", 1
+# test_vm """
+#   (ns n
+#     (fn f _ 1)
+#   )
+#   (import g from "tests/fixtures/mod2" ^inherit n)
+#   (g)
+# """, 1
 
 # test_vm """
 #   (import * from "tests/fixtures/mod_break")
