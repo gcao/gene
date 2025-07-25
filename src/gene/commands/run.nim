@@ -1,7 +1,6 @@
 import parseopt, times
 
 import ../types
-import ../parser
 import ../vm
 import ./base
 

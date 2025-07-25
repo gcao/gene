@@ -1,33 +1,50 @@
-import os, strutils
+import os, strutils, tables
+import gene/commands/base
+import gene/commands/[run, eval, repl, help]
 
-import ./gene/types
-import ./gene/commands/base
+var CommandMgr = CommandManager(data: initTable[string, Command](), help: "")
 
-let CommandMgr = CommandManager()
+# Initialize all commands
+run.init(CommandMgr)
+eval.init(CommandMgr)
+repl.init(CommandMgr)
+help.init(CommandMgr)
 
-import "./gene/commands/run" as run_cmd; run_cmd.init(CommandMgr)
-
-const HELP = """Usage: gene <command> <optional arguments specific to command>
-
-Available commands:
-"""
-
-# proc version*(cmd: string, args: seq[string]): string =
-#   echo VM.runtime.pkg.version
-
-# CommandMgr.register("version", version)
+proc main() =
+  var args = command_line_params()
+  
+  if args.len == 0:
+    # No arguments, show help
+    discard CommandMgr["help"]("help", @[])
+    return
+  
+  var cmd = args[0]
+  var cmd_args = args[1 .. ^1]
+  
+  # Handle .gene files automatically
+  if cmd.ends_with(".gene") or not CommandMgr.data.hasKey(cmd):
+    # Check if file exists
+    if file_exists(cmd):
+      # Route to run command
+      cmd_args = @[cmd] & cmd_args
+      cmd = "run"
+    elif not CommandMgr.data.hasKey(cmd):
+      # Unknown command
+      echo "Error: Unknown command: ", cmd
+      echo ""
+      discard CommandMgr["help"]("help", @[])
+      return
+  
+  # Execute the command
+  let handler = CommandMgr[cmd]
+  if handler.is_nil():
+    echo "Error: Unknown command: ", cmd
+    return
+  
+  let status = handler(cmd, cmd_args)
+  if status.len > 0:
+    echo status
+    quit(1)
 
 when isMainModule:
-  var args = command_line_params()
-  if args.len == 0:
-    echo HELP
-    echo CommandMgr.help
-  else:
-    var cmd = args[0]
-    var handler = CommandMgr[cmd]
-    if cmd.ends_with(".gene") or handler.is_nil:
-      cmd = "run"
-      handler = CommandMgr[cmd]
-    else:
-      args.delete(0)
-    discard handler(cmd, args)
+  main()

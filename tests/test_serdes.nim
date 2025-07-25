@@ -28,14 +28,14 @@ test_serdes """
   check r.gene_props == {"a": new_gene_int(2)}.toTable
   check r.gene_children == @[3, 4]
 
-test_interpreter """
+test_vm """
   (class A)
   (var x (gene/serdes/serialize A))
   (var A* (gene/serdes/deserialize x))
   A*/.name
 """, "A"
 
-test_interpreter """
+test_vm """
   (class A)
   (var a (new A))
   (var x (gene/serdes/serialize a))
@@ -43,7 +43,7 @@ test_interpreter """
   a*/.class/.name
 """, "A"
 
-test_interpreter """
+test_vm """
   (class A)
   (var a (new A))
   (a/test = 1)
@@ -52,14 +52,14 @@ test_interpreter """
   a*/test
 """, 1
 
-test_interpreter """
+test_vm """
   (fn f _ 1)
   (var x (gene/serdes/serialize f))
   (var f* (gene/serdes/deserialize x))
   (f*)
 """, 1
 
-# test_interpreter """
+# test_vm """
 #   (var f (fnx _ 1))
 #   (gene/serdes/ref "f" f) # Will add f to a global map like "<pkg>:<module>:_serdes/f" => f
 #   (var x (gene/serdes/serialize f))
@@ -67,7 +67,7 @@ test_interpreter """
 #   (f*)
 # """, 1
 
-test_interpreter """
+test_vm """
   (ns n
     (fn f _ 1)
   )
