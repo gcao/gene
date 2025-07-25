@@ -1,4 +1,4 @@
-import os, strutils, tables
+import os, tables
 import gene/commands/base
 import gene/commands/[run, eval, repl, help, parse, compile]
 

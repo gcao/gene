@@ -1,4 +1,4 @@
-import tables, strutils, os
+import tables, strutils
 
 import ../types
 import ../parser

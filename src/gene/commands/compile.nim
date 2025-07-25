@@ -71,6 +71,17 @@ proc parseArgs(args: seq[string]): CompileOptions =
     of cmdEnd:
       discard
 
+proc formatValue(value: Value): string =
+  case value.kind
+  of VkNil: result = "nil"
+  of VkBool: result = if value == TRUE: "true" else: "false"
+  of VkInt: result = $value.to_int()
+  of VkFloat: result = $value.to_float()
+  of VkChar: result = "'" & $value.char & "'"
+  of VkString: result = "\"" & value.str & "\""
+  of VkSymbol: result = value.str
+  else: result = $value
+
 proc formatInstruction(inst: Instruction, index: int, format: string, show_addresses: bool): string =
   case format
   of "bytecode":
@@ -105,38 +116,62 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
     
     result &= ($inst.kind).alignLeft(20)
     
-    # Add arguments based on instruction type
+    # Add arguments based on instruction type - only show args that are actually used
     case inst.kind
     of IkPushValue:
-      result &= " " & $inst.arg0
+      result &= formatValue(inst.arg0)
     of IkJump, IkJumpIfFalse, IkJumpIfMatchSuccess:
-      result &= " -> " & inst.arg0.int64.toHex(4)
+      result &= "-> " & inst.arg0.int64.toHex(4)
     of IkSetMember, IkGetMember, IkGetMemberOrNil, IkGetMemberDefault:
       let key = inst.arg0.Key
       let symbol_value = cast[Value](key)
       let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
-      result &= " ." & get_symbol(symbol_index.int)
+      result &= "." & get_symbol(symbol_index.int)
     of IkSetChild, IkGetChild:
-      result &= " [" & $inst.arg0.int64 & "]"
+      result &= "[" & $inst.arg0.int64 & "]"
     of IkCallInit:
-      result &= " <compiled unit>"
+      result &= "<compiled unit>"
     of IkClass:
       if inst.arg0.kind == VkString:
-        result &= " " & inst.arg0.str
+        result &= inst.arg0.str
     of IkNew:
       if inst.arg0.kind == VkInt:
-        result &= " argc=" & $inst.arg0.int64
+        result &= "argc=" & $inst.arg0.int64
     of IkThrow:
-      result &= " <exception>"
+      result &= "<exception>"
     of IkCallMethodNoArgs:
-      result &= " ." & inst.arg0.str & "()"
+      result &= "." & inst.arg0.str & "()"
     of IkCallerEval:
-      result &= " frames_back=" & $inst.arg0.int64
-    else:
+      result &= "frames_back=" & $inst.arg0.int64
+    of IkVar, IkVarValue, IkVarResolve, IkVarResolveInherited,
+       IkVarAssign, IkVarAssignInherited, IkResolveSymbol:
+      if inst.arg0.kind == VkSymbol:
+        result &= inst.arg0.str
+    of IkGeneStart, IkGeneStartDefault, IkGeneEnd:
+      # Show gene construction arguments if they're meaningful
+      if inst.arg0.kind == VkInt and inst.arg0.int64 > 0:
+        result &= "size=" & $inst.arg0.int64
+    of IkFunction:
+      # Show function source
       if inst.arg0.kind != VkNil:
-        result &= " " & $inst.arg0
+        result &= formatValue(inst.arg0)
+    of IkGeneAddChild, IkGeneSetType, IkGeneSetProp:
+      # These use the stack, don't show the nil arguments
+      discard
+    of IkStart, IkEnd, IkAdd, IkPop,
+       IkNoop, IkScopeStart, IkScopeEnd, IkSelf, IkSetSelf,
+       IkLoopStart, IkLoopEnd, IkContinue, IkBreak:
+      # These instructions have no arguments or don't use them
+      discard
+    else:
+      # For any other instructions, show non-nil arguments
+      var shown = false
+      if inst.arg0.kind != VkNil:
+        result &= formatValue(inst.arg0)
+        shown = true
       if inst.arg1.kind != VkNil:
-        result &= " " & $inst.arg1
+        if shown: result &= " "
+        result &= formatValue(inst.arg1)
 
 proc handle*(cmd: string, args: seq[string]): string =
   let options = parseArgs(args)
