@@ -1,54 +1,166 @@
 import unittest
 
 import gene/types
-import gene/vm
+import gene/interpreter
 
 import ./helpers
 
-# Module system tests for VM
-# The module system allows importing code from other files/modules
+# How module / import works:
+# import a, b from "module"
+# import from "module" a, b
+# import a, b # will import from root's parent ns (which
+#    could be the package ns or global ns or a intermediate ns)
+# import from "module" a/[b c], d:my_d
+# import a # will import from parent, and throw error if "a" not available, this can be useful to make sure the required resource is available when the module is initialized.
+# path <=> code mappings can be defined so that we don't need to depend on the file system
 
-# TODO: Implement import functionality
+test_vm """
+  (import a from "tests/fixtures/mod1")
+  a
+""", 1
+
+test_vm """
+  (import a:aa from "tests/fixtures/mod1")
+  aa
+""", 1
+
+test_vm """
+  (import a b from "tests/fixtures/mod1")
+  (a + b)
+""", 3
+
+test_vm """
+  (import a b:bb from "tests/fixtures/mod1")
+  (a + bb)
+""", 3
+
+test_vm """
+  (import a:aa b:bb from "tests/fixtures/mod1")
+  (aa + bb)
+""", 3
+
+test_vm """
+  (import n from "tests/fixtures/mod1")
+  (n/f 1)
+""", 1
+
+test_vm """
+  (import n/f from "tests/fixtures/mod1")
+  (f 1)
+""", 1
+
+test_vm """
+  (import n/f:ff from "tests/fixtures/mod1")
+  (ff 1)
+""", 1
+
+test_vm """
+  (import n/[one two] from "tests/fixtures/mod1")
+  (one + two)
+""", 3
+
+test_vm """
+  (import n/[one:x two] from "tests/fixtures/mod1")
+  (x + two)
+""", 3
+
+test_vm """
+  (import n/[one:x two:y] from "tests/fixtures/mod1")
+  (x + y)
+""", 3
+
+test_vm """
+  (ns n
+    (fn f _ 1)
+  )
+  (import g from "tests/fixtures/mod2" ^inherit n)
+  (g)
+""", 1
+
 # test_vm """
-#   (import "math" [pi e])
-#   pi
-# """, 3.14159
+#   (import * from "tests/fixtures/mod_break")
+#   (before_break)
+#   (try
+#     (after_break)
+#     (fail "after_break should not be available")
+#   catch *
+#     # pass
+#   )
+# """, 1
 
-# For now, let's test what we can with the current namespace system
-test_vm """
-  (ns math
-    (var pi 3.14159)
-    (var e 2.71828)
-  )
-  math/pi
-""", 3.14159
+# # test "Interpreter / eval: import":
+# #   init_all()
+# #   discard VM.import_module("file1", """
+# #     (ns n
+# #       (fn f a a)
+# #     )
+# #   """)
+# #   var result = VM.eval """
+# #     (import _ as x from "file1")  # Import root namespace
+# #     x/f
+# #   """
+# #   check result.internal.fn.name == "f"
 
-test_vm """
-  (ns math
-    (var pi 3.14159)
-    (fn circle_area r
-      (* pi r r)
-    )
-  )
-  (math/circle_area 2)
-""", proc(r: Value) =
-  check r.kind == VkFloat
-  check abs(r.float - 12.56636) < 0.00001
+# # test "Interpreter / eval: import":
+# #   init_all()
+# #   var result = VM.eval """
+# #     (import gene/Object)  # Import from parent namespace
+# #     Object
+# #   """
+# #   check result.internal.class.name == "Object"
 
-test_vm """
-  (ns outer
-    (var x 1)
-    (ns inner
-      (var y 2)
-    )
-  )
-  outer/inner/y
-""", 2
+# test_import_matcher "(import a b from \"module\")", proc(r: ImportMatcherRoot) =
+#   check r.from == "module"
+#   check r.children.len == 2
+#   check r.children[0].name == "a"
+#   check r.children[1].name == "b"
 
-test_vm """
-  (ns test
-    (fn get_x _ x)
-  )
-  (var x 42)
-  (test/get_x)
-""", 42
+# test_import_matcher "(import from \"module\" a b)", proc(r: ImportMatcherRoot) =
+#   check r.from == "module"
+#   check r.children.len == 2
+#   check r.children[0].name == "a"
+#   check r.children[1].name == "b"
+
+# test_import_matcher "(import a b/[c d])", proc(r: ImportMatcherRoot) =
+#   check r.children.len == 2
+#   check r.children[0].name == "a"
+#   check r.children[1].name == "b"
+#   check r.children[1].children.len == 2
+#   check r.children[1].children[0].name == "c"
+#   check r.children[1].children[1].name == "d"
+
+# test_import_matcher "(import a b/c)", proc(r: ImportMatcherRoot) =
+#   check r.children.len == 2
+#   check r.children[0].name == "a"
+#   check r.children[1].name == "b"
+#   check r.children[1].children.len == 1
+#   check r.children[1].children[0].name == "c"
+
+# # test_import_matcher "(import a: my_a b/c: my_c)", proc(r: ImportMatcherRoot) =
+# #   check r.children.len == 2
+# #   check r.children[0].name == "a"
+# #   check r.children[0].as == "my_a"
+# #   check r.children[1].name == "b"
+# #   check r.children[1].children.len == 1
+# #   check r.children[1].children[0].name == "c"
+# #   check r.children[1].children[0].as == "my_c"
+
+# test_core """
+#   (import gene/Class)
+#   (assert ((Class .name) == "Class"))
+# """
+
+# test_core """
+#   (import gene/*)
+#   (assert ((Class .name) == "Class"))
+# """
+
+# # test_core """
+# #   ($stop_inheritance)
+# #   (try
+# #     (assert true)  # assert is not inherited any more
+# #     1
+# #   catch *
+# #     2
+# #   )
+# # """, 2

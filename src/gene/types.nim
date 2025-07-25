@@ -672,6 +672,7 @@ type
     # IkModule
 
     IkNamespace
+    IkImport
 
     IkFunction
     IkReturn

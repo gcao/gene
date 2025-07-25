@@ -1,4 +1,4 @@
-import ./types
+import ../types
 
 # Initialize async support
 proc init_async*() =

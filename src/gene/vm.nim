@@ -4,7 +4,10 @@ import ./types
 import ./parser
 import ./compiler
 import ./vm/args
-import ./vm_async
+import ./vm/async
+import ./vm/module
+
+const DEBUG_VM = false
 
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
@@ -891,7 +894,11 @@ proc exec*(self: VirtualMachine): Value =
                 not_allowed("Method must be a function, got " & $target.kind)
 
           else:
-            discard
+            # For non-callable types (like integers, strings, etc.), 
+            # create a gene with this value as the type
+            var g = new_gene_value()
+            g.gene.type = gene_type
+            self.frame.push(g)
 
         {.pop.}
 
@@ -923,6 +930,8 @@ proc exec*(self: VirtualMachine): Value =
         var child: Value
         self.frame.pop2(child)
         let v = self.frame.current()
+        if DEBUG_VM:
+          echo "IkGeneAddChild: v.kind = ", v.kind, ", child = ", child
         case v.kind:
           of VkFrame:
             # For function calls, we need to set up the args gene with children
@@ -971,6 +980,8 @@ proc exec*(self: VirtualMachine): Value =
             # For now, treat similar to nil and skip
             discard
           else:
+            # For other value types, we can't add children directly
+            # This might be an error in the compilation or a special case
             todo("GeneAddChild: " & $v.kind)
         {.pop.}
 

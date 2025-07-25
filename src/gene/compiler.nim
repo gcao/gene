@@ -211,6 +211,7 @@ proc compile_await(self: Compiler, gene: ptr Gene)  # Forward declaration
 proc compile_selector(self: Compiler, gene: ptr Gene)  # Forward declaration
 proc compile_at_selector(self: Compiler, gene: ptr Gene)  # Forward declaration
 proc compile_set(self: Compiler, gene: ptr Gene)  # Forward declaration
+proc compile_import(self: Compiler, gene: ptr Gene)  # Forward declaration
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
@@ -1206,6 +1207,22 @@ proc compile_gene(self: Compiler, input: Value) =
 
   let `type` = gene.type
   
+  # Check for infix notation: (value operator args...)
+  # This handles cases like (6 / 2) or (i + 1)
+  if gene.children.len >= 1:
+    let first_child = gene.children[0]
+    if first_child.kind == VkSymbol and first_child.str in ["+", "-", "*", "/", "%", "**"]:
+      # Don't convert if the type is already an operator or special form
+      if `type`.kind != VkSymbol or `type`.str notin ["var", "if", "fn", "fnx", "fnxx", "macro", "do", "loop", "while", "for", "ns", "class", "try", "throw", "$", "."]:
+        # Convert infix to prefix notation and compile
+        # (6 / 2) becomes (/ 6 2)
+        # (i + 1) becomes (+ i 1)
+        let prefix_gene = create(Gene)
+        prefix_gene.type = first_child  # operator becomes the type
+        prefix_gene.children = @[`type`] & gene.children[1..^1]  # value and rest of args
+        self.compile_gene(prefix_gene.to_gene_value())
+        return
+  
   # Check if type is an arithmetic operator
   if `type`.kind == VkSymbol:
     case `type`.str:
@@ -1495,6 +1512,9 @@ proc compile_gene(self: Compiler, input: Value) =
               return
             of "$set":
               self.compile_set(gene)
+              return
+            of "import":
+              self.compile_import(gene)
               return
 
   self.compile_gene_unknown(gene)
@@ -1932,6 +1952,18 @@ proc compile_set(self: Compiler, gene: ptr Gene) =
   
   # Set the member
   self.output.instructions.add(Instruction(kind: IkSetMember, arg0: prop_key.to_value()))
+
+proc compile_import(self: Compiler, gene: ptr Gene) =
+  # (import a b from "module")
+  # (import from "module" a b)
+  # (import a:alias b from "module")
+  # (import n/f from "module")
+  # (import n/[one two] from "module")
+  
+  # For now, compile the entire import gene as a value and let the VM handle it
+  # This allows us to parse the complex import syntax at runtime
+  self.compile_gene_default(gene)
+  self.output.instructions.add(Instruction(kind: IkImport))
 
 proc compile_init*(input: Value): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())

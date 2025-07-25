@@ -1,0 +1,5 @@
+(fn before_break)
+
+($break_from_module)
+
+(fn after_break)
