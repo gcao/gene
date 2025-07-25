@@ -215,6 +215,28 @@ proc compile_import(self: Compiler, gene: ptr Gene)  # Forward declaration
 
 proc compile_var(self: Compiler, gene: ptr Gene) =
   let name = gene.children[0]
+  
+  # Handle namespace variables like $ns/a
+  if name.kind == VkComplexSymbol:
+    let parts = name.ref.csymbol
+    if parts.len >= 2 and parts[0] == "$ns":
+      # This is a namespace variable, store it directly in namespace
+      if gene.children.len > 1:
+        # Compile the value
+        self.compile(gene.children[1])
+      else:
+        # No value, use NIL
+        self.output.instructions.add(Instruction(kind: IkPushValue, arg0: NIL))
+      
+      # Store in namespace
+      let var_name = parts[1..^1].join("/")
+      self.output.instructions.add(Instruction(kind: IkNamespaceStore, arg0: var_name.to_symbol_value()))
+      return
+  
+  # Regular variable handling
+  if name.kind != VkSymbol:
+    not_allowed("Variable name must be a symbol")
+    
   let index = self.scope_tracker.next_index
   self.scope_tracker.mappings[name.str.to_key()] = index
   if gene.children.len > 1:
@@ -1481,6 +1503,9 @@ proc compile_gene(self: Compiler, input: Value) =
             if i < gene.children.len - 1:
               self.output.instructions.add(Instruction(kind: IkPop))
         return
+      of "import":
+        self.compile_import(gene)
+        return
       else:
         let s = `type`.str
         if s == "@":
@@ -1513,13 +1538,17 @@ proc compile_gene(self: Compiler, input: Value) =
             of "$set":
               self.compile_set(gene)
               return
-            of "import":
-              self.compile_import(gene)
-              return
 
   self.compile_gene_unknown(gene)
 
 proc compile*(self: Compiler, input: Value) =
+  when DEBUG:
+    echo "DEBUG compile: input.kind = ", input.kind
+    if input.kind == VkGene:
+      echo "  gene.type = ", input.gene.type
+      if input.gene.type.kind == VkSymbol:
+        echo "  gene.type.str = ", input.gene.type.str
+  
   case input.kind:
     of VkInt, VkBool, VkNil, VkFloat:
       self.compile_literal(input)
@@ -1960,9 +1989,41 @@ proc compile_import(self: Compiler, gene: ptr Gene) =
   # (import n/f from "module")
   # (import n/[one two] from "module")
   
-  # For now, compile the entire import gene as a value and let the VM handle it
-  # This allows us to parse the complex import syntax at runtime
-  self.compile_gene_default(gene)
+  # echo "DEBUG: compile_import called for ", gene
+  # echo "DEBUG: gene.children = ", gene.children
+  # echo "DEBUG: gene.props = ", gene.props
+  
+  # Compile a gene value for the import, but with "import" as a symbol type
+  self.output.instructions.add(Instruction(kind: IkGeneStart))
+  self.output.instructions.add(Instruction(kind: IkPushValue, arg0: "import".to_symbol_value()))
+  self.output.instructions.add(Instruction(kind: IkGeneSetType))
+  
+  # Compile the props
+  for k, v in gene.props:
+    self.output.instructions.add(Instruction(kind: IkPushValue, arg0: v))
+    self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
+  
+  # Compile the children - they should be treated as quoted values
+  for child in gene.children:
+    # Import arguments are data, not code to execute
+    # So compile them as literal values
+    case child.kind:
+    of VkSymbol, VkString:
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: child))
+    of VkComplexSymbol:
+      # Handle n/f syntax
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: child))
+    of VkArray:
+      # Handle [one two] part of n/[one two]
+      self.output.instructions.add(Instruction(kind: IkPushValue, arg0: child))
+    of VkGene:
+      # Handle complex forms like a:alias or n/[a b]
+      self.compile_gene_default(child.gene)
+    else:
+      self.compile(child)
+    self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+  
+  self.output.instructions.add(Instruction(kind: IkGeneEnd))
   self.output.instructions.add(Instruction(kind: IkImport))
 
 proc compile_init*(input: Value): CompilationUnit =

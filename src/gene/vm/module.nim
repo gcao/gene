@@ -34,34 +34,86 @@ proc parse_import_statement*(gene: ptr Gene): tuple[module_path: string, imports
     # Parse import items
     case child.kind:
       of VkSymbol:
-        var item = ImportItem(name: child.str)
+        let s = child.str
+        var item: ImportItem
         
-        # Check for alias syntax (a:b)
-        if i + 1 < gene.children.len and gene.children[i + 1].kind == VkGene:
-          let alias_gene = gene.children[i + 1].gene
-          if alias_gene.type.kind == VkSymbol and alias_gene.type.str == ":" and
-             alias_gene.children.len == 1 and alias_gene.children[0].kind == VkSymbol:
-            item.alias = alias_gene.children[0].str
-            i += 1
-        
-        imports.add(item)
-      
-      of VkComplexSymbol:
-        # Handle n/f or similar
-        let parts = child.ref.csymbol
-        if parts.len > 0:
-          # Create import item with full path as name
-          var item = ImportItem(name: parts.join("/"))
+        # Check if symbol contains : for alias syntax (a:alias)
+        let colonPos = s.find(':')
+        if colonPos > 0 and colonPos < s.len - 1:
+          # This is a:alias syntax
+          item.name = s[0..<colonPos]
+          item.alias = s[colonPos+1..^1]
+        else:
+          item.name = s
           
-          # Check for alias
+          # Check for alias syntax (a:b) as separate gene
           if i + 1 < gene.children.len and gene.children[i + 1].kind == VkGene:
             let alias_gene = gene.children[i + 1].gene
             if alias_gene.type.kind == VkSymbol and alias_gene.type.str == ":" and
                alias_gene.children.len == 1 and alias_gene.children[0].kind == VkSymbol:
               item.alias = alias_gene.children[0].str
               i += 1
-          
-          imports.add(item)
+        
+        imports.add(item)
+      
+      of VkComplexSymbol:
+        # Handle n/f or n/ followed by array
+        let parts = child.ref.csymbol
+        if parts.len > 0:
+          # Check if this is n/ followed by an array [a b]
+          if parts[^1] == "" and i + 1 < gene.children.len and gene.children[i + 1].kind == VkArray:
+            # This is n/[a b] syntax
+            let prefix = parts[0..^2].join("/")
+            i += 1  # Move to the array
+            let arr = gene.children[i].ref.arr
+            
+            for sub_child in arr:
+              if sub_child.kind == VkSymbol:
+                let s = sub_child.str
+                var item: ImportItem
+                
+                # Check for alias in symbol
+                let colonPos = s.find(':')
+                if colonPos > 0 and colonPos < s.len - 1:
+                  item.name = prefix & "/" & s[0..<colonPos]
+                  item.alias = s[colonPos+1..^1]
+                else:
+                  item.name = prefix & "/" & s
+                
+                imports.add(item)
+              elif sub_child.kind == VkGene:
+                # Could be a:alias inside the brackets
+                let sub_g = sub_child.gene
+                if sub_g.type.kind == VkSymbol and sub_g.children.len == 1 and
+                   sub_g.children[0].kind == VkSymbol:
+                  var item = ImportItem(
+                    name: prefix & "/" & sub_g.type.str,
+                    alias: sub_g.children[0].str
+                  )
+                  imports.add(item)
+          else:
+            # Regular n/f syntax
+            let fullPath = parts.join("/")
+            var item: ImportItem
+            
+            # Check if last part contains : for alias syntax
+            let colonPos = fullPath.find(':')
+            if colonPos > 0 and colonPos < fullPath.len - 1:
+              # This is n/f:alias syntax
+              item.name = fullPath[0..<colonPos]
+              item.alias = fullPath[colonPos+1..^1]
+            else:
+              item.name = fullPath
+              
+              # Check for alias as separate gene
+              if i + 1 < gene.children.len and gene.children[i + 1].kind == VkGene:
+                let alias_gene = gene.children[i + 1].gene
+                if alias_gene.type.kind == VkSymbol and alias_gene.type.str == ":" and
+                   alias_gene.children.len == 1 and alias_gene.children[0].kind == VkSymbol:
+                  item.alias = alias_gene.children[0].str
+                  i += 1
+            
+            imports.add(item)
       
       of VkGene:
         # Could be n/[a b] syntax or other complex forms
@@ -95,25 +147,50 @@ proc parse_import_statement*(gene: ptr Gene): tuple[module_path: string, imports
   
   return (module_path, imports)
 
+proc compile_module*(path: string): CompilationUnit =
+  ## Compile a module from file and return its compilation unit
+  # Read module file
+  var code: string
+  var actual_path = path
+  
+  # Try with .gene extension if not present
+  if not path.endsWith(".gene"):
+    actual_path = path & ".gene"
+  
+  try:
+    code = readFile(actual_path)
+  except IOError as e:
+    # Try without extension if .gene failed
+    if actual_path != path:
+      try:
+        code = readFile(path)
+      except IOError:
+        not_allowed("Failed to read module '" & path & "': " & e.msg)
+    else:
+      not_allowed("Failed to read module '" & path & "': " & e.msg)
+  
+  # Parse the module code
+  var parser = new_parser()
+  let parsed = parser.read_all(code)
+  
+  # Use the standard compile function
+  return compile(parsed)
+
 proc load_module*(vm: VirtualMachine, path: string): Namespace =
   ## Load a module from file and return its namespace
   # Check cache first
   if ModuleCache.hasKey(path):
     return ModuleCache[path]
   
-  # Read module file
-  var code: string
-  try:
-    code = readFile(path)
-  except IOError as e:
-    not_allowed("Failed to read module '" & path & "': " & e.msg)
-  
   # Create namespace for module
   let module_ns = new_namespace(path)
   
-  # For now, we'll just return an empty namespace
-  # The actual module execution will need to be handled by the VM
-  # when it processes import instructions
+  # Compile the module to ensure it's valid
+  discard compile_module(path)
+  
+  # The VM will execute this module when needed
+  # For now, just cache the empty namespace
+  # The actual execution will happen when the import is processed
   
   # Cache the module
   ModuleCache[path] = module_ns
@@ -124,7 +201,7 @@ proc resolve_import_value*(ns: Namespace, path: string): Value =
   ## Resolve a value from a namespace given a path like "n/f"
   let parts = path.split("/")
   var current_ns = ns
-  var result = NIL
+  var final_value = NIL
   
   for i, part in parts:
     let key = part.to_key()
@@ -135,36 +212,46 @@ proc resolve_import_value*(ns: Namespace, path: string): Value =
     
     if i == parts.len - 1:
       # Last part - this is our result
-      result = value
+      final_value = value
     else:
       # Intermediate part - must be a namespace
       if value.kind != VkNamespace:
         not_allowed("'" & part & "' is not a namespace")
       current_ns = value.ref.ns
   
-  return result
+  return final_value
 
-proc handle_import*(vm: VirtualMachine, import_gene: ptr Gene) =
-  ## Handle an import statement
+proc execute_module*(vm: VirtualMachine, path: string, module_ns: Namespace): Value =
+  ## Execute a module in its namespace context
+  # This will be called from vm.nim where exec is available
+  raise new_exception(types.Exception, "execute_module should be overridden by vm.nim")
+
+proc handle_import*(vm: VirtualMachine, import_gene: ptr Gene): tuple[path: string, imports: seq[ImportItem], ns: Namespace] =
+  ## Parse import statement and prepare for execution
   let (module_path, imports) = parse_import_statement(import_gene)
   
   if module_path == "":
     not_allowed("Module path not specified in import statement")
   
-  # Load the module
-  let module_ns = vm.load_module(module_path)
+  # Check cache first
+  if ModuleCache.hasKey(module_path):
+    let module_ns = ModuleCache[module_path]
+    # Import requested symbols
+    for item in imports:
+      let value = resolve_import_value(module_ns, item.name)
+      
+      # Determine the name to import as
+      let import_name = if item.alias != "": 
+        item.alias 
+      else:
+        # Use the last part of the path
+        let parts = item.name.split("/")
+        parts[^1]
+      
+      # Add to current namespace
+      vm.frame.ns.members[import_name.to_key()] = value
+    return (module_path, imports, module_ns)
   
-  # Import requested symbols
-  for item in imports:
-    let value = resolve_import_value(module_ns, item.name)
-    
-    # Determine the name to import as
-    let import_name = if item.alias != "": 
-      item.alias 
-    else:
-      # Use the last part of the path
-      let parts = item.name.split("/")
-      parts[^1]
-    
-    # Add to current namespace
-    vm.frame.ns.members[import_name.to_key()] = value
+  # Module not cached, need to compile and execute it
+  let module_ns = new_namespace(module_path)
+  return (module_path, imports, module_ns)

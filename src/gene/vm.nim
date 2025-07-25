@@ -1733,6 +1733,68 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.ns[name.Key] = v
         self.frame.push(v)
 
+      of IkImport:
+        let import_gene = self.frame.pop()
+        if import_gene.kind != VkGene:
+          not_allowed("Import expects a gene")
+        
+        # echo "DEBUG: Processing import ", import_gene
+        
+        let (module_path, imports, module_ns) = self.handle_import(import_gene.gene)
+        
+        # echo "DEBUG: Module path: ", module_path
+        # echo "DEBUG: Imports: ", imports  
+        # echo "DEBUG: Module namespace members: ", module_ns.members
+        
+        # If module is not cached, we need to execute it
+        if not ModuleCache.hasKey(module_path):
+          # Compile the module
+          let cu = compile_module(module_path)
+          
+          # Save current state
+          let saved_cu = self.cu
+          let saved_frame = self.frame
+          
+          # Create a new frame for module execution
+          self.frame = new_frame()
+          self.frame.ns = module_ns
+          self.frame.self = new_ref(VkNamespace).to_ref_value()
+          self.frame.self.ref.ns = module_ns
+          
+          # Execute the module
+          self.cu = cu
+          discard self.exec()
+          
+          # Restore the original state
+          self.cu = saved_cu
+          self.frame = saved_frame
+          
+          # Cache the module
+          ModuleCache[module_path] = module_ns
+          
+          # Import requested symbols
+          for item in imports:
+            let value = resolve_import_value(module_ns, item.name)
+            
+            # Determine the name to import as
+            let import_name = if item.alias != "": 
+              item.alias 
+            else:
+              # Use the last part of the path
+              let parts = item.name.split("/")
+              parts[^1]
+            
+            # Add to current namespace
+            self.frame.ns.members[import_name.to_key()] = value
+        
+        self.frame.push(NIL)
+
+      of IkNamespaceStore:
+        let value = self.frame.pop()
+        let name = inst.arg0
+        self.frame.ns[name.str.to_key()] = value
+        self.frame.push(value)
+
       of IkClass:
         let name = inst.arg0
         let class = new_class(name.str)

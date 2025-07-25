@@ -1,7 +1,4 @@
-import unittest
-
 import gene/types
-import gene/interpreter
 
 import ./helpers
 
