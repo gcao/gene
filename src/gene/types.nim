@@ -725,7 +725,7 @@ type
 
     IkSelf
     IkSetSelf      # Set new self value
-    IkRot          # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
+    IkRotate       # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
     IkParse        # Parse string to Gene value
     IkEval         # Evaluate a value
     IkCallerEval   # Evaluate expression in caller's context

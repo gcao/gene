@@ -1,4 +1,4 @@
-import parseopt, times, strformat
+import parseopt, times, strformat, terminal, os, strutils
 
 import ../types
 import ../vm
@@ -35,6 +35,11 @@ let long_no_val = @[
 proc parse_options(args: seq[string]): Options =
   result = Options()
   var found_file = false
+  
+  # Workaround: get_opt reads from command line when given empty args
+  if args.len == 0:
+    return
+  
   for kind, key, value in get_opt(args, short_no_val, long_no_val):
     case kind
     of cmdArgument:
@@ -74,7 +79,30 @@ proc handle*(cmd: string, args: seq[string]): string =
   # VM.repl_on_error = options.repl_on_error
   # VM.app.args = options.args
 
-  let file = options.file
+  var file = options.file
+  var code: string
+  
+  # Check if file is provided or read from stdin
+  if file == "":
+    # No file provided, try to read from stdin
+    if not stdin.isatty():
+      var lines: seq[string] = @[]
+      var line: string
+      while stdin.readLine(line):
+        lines.add(line)
+      if lines.len > 0:
+        code = lines.join("\n")
+        file = "<stdin>"
+      else:
+        return "Error: No input provided. Provide a file to run."
+    else:
+      return "Error: No file provided to run."
+  else:
+    # Read the file and execute it
+    if not fileExists(file):
+      return "Error: File not found: " & file
+    code = readFile(file)
+  
   let start = cpu_time()
   var value: Value
   
@@ -84,9 +112,6 @@ proc handle*(cmd: string, args: seq[string]): string =
   # Enable tracing if requested
   if options.trace:
     VM.trace = true
-
-  # Read the file and execute it
-  let code = read_file(file)
   
   if options.compile or options.debugging:
     echo "=== Compilation Output ==="

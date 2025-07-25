@@ -23,25 +23,18 @@ proc main() =
   var cmd = args[0]
   var cmd_args = args[1 .. ^1]
   
-  # Handle .gene files automatically
-  if cmd.ends_with(".gene") or not CommandMgr.data.hasKey(cmd):
-    # Check if file exists
-    if file_exists(cmd):
-      # Route to run command
-      cmd_args = @[cmd] & cmd_args
-      cmd = "run"
-    elif not CommandMgr.data.hasKey(cmd):
-      # Unknown command
-      echo "Error: Unknown command: ", cmd
-      echo ""
-      discard CommandMgr["help"]("help", @[])
-      return
+  # Check if it's a known command
+  if not CommandMgr.data.hasKey(cmd):
+    echo "Error: Unknown command: ", cmd
+    echo ""
+    discard CommandMgr["help"]("help", @[])
+    quit(1)
   
   # Execute the command
   let handler = CommandMgr[cmd]
   if handler.is_nil():
     echo "Error: Unknown command: ", cmd
-    return
+    quit(1)
   
   let status = handler(cmd, cmd_args)
   if status.len > 0:

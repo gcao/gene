@@ -1850,7 +1850,7 @@ proc compile_tap(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkSelf))
   
   # Set as new self
-  self.output.instructions.add(Instruction(kind: IkRot))  # Rotate: original_self, dup_value, value -> value, original_self, dup_value
+  self.output.instructions.add(Instruction(kind: IkRotate))  # Rotate: original_self, dup_value, value -> value, original_self, dup_value
   self.output.instructions.add(Instruction(kind: IkSetSelf))
   
   # If has binding, create a new scope and bind the value

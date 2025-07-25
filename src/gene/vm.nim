@@ -255,7 +255,7 @@ proc exec*(self: VirtualMachine): Value =
       of IkSetSelf:
         self.frame.self = self.frame.pop()
       
-      of IkRot:
+      of IkRotate:
         # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
         let c = self.frame.pop()
         let b = self.frame.pop()

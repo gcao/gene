@@ -42,6 +42,10 @@ proc parse_options(args: seq[string]): Options =
   result = Options()
   var code_parts: seq[string] = @[]
   
+  # Workaround: get_opt reads from command line when given empty args
+  if args.len == 0:
+    return
+  
   for kind, key, value in get_opt(args, short_no_val, long_no_val):
     case kind
     of cmdArgument:

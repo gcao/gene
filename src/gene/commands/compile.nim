@@ -1,4 +1,4 @@
-import parseopt, strutils, os
+import parseopt, strutils, os, terminal
 import ../types
 import ../parser
 import ../compiler
@@ -16,7 +16,7 @@ type
 
 proc handle*(cmd: string, args: seq[string]): string
 
-let short_no_val = @['h', 'a']
+let short_no_val = {'h', 'a'}
 let long_no_val = @[
   "help",
   "addresses",
@@ -43,54 +43,33 @@ Examples:
 proc parseArgs(args: seq[string]): CompileOptions =
   result.format = "pretty"
   
-  var p = initOptParser(args)
-  while true:
-    p.next()
-    case p.kind
-    of cmdEnd: break
-    of cmdShortOption, cmdLongOption:
-      if p.val == "":
-        case p.key
-        of "h", "help":
-          result.help = true
-        of "a", "addresses":
-          result.show_addresses = true
-        else:
-          # Check if next argument should be the value for this option
-          if p.key in ["e", "eval", "f", "format"]:
-            let option_key = p.key
-            p.next()
-            if p.kind == cmdArgument:
-              case option_key
-              of "e", "eval":
-                result.code = p.key
-              of "f", "format":
-                if p.key in ["pretty", "compact", "bytecode"]:
-                  result.format = p.key
-                else:
-                  stderr.writeLine("Error: Invalid format '" & p.key & "'. Must be: pretty, compact, or bytecode")
-                  quit(1)
-            else:
-              stderr.writeLine("Error: Option -" & option_key & " requires a value")
-              quit(1)
-          else:
-            stderr.writeLine("Error: Unknown option: " & p.key)
-            quit(1)
-      else:
-        case p.key
-        of "e", "eval":
-          result.code = p.val
-        of "f", "format":
-          if p.val in ["pretty", "compact", "bytecode"]:
-            result.format = p.val
-          else:
-            stderr.writeLine("Error: Invalid format '" & p.val & "'. Must be: pretty, compact, or bytecode")
-            quit(1)
-        else:
-          stderr.writeLine("Error: Unknown option: " & p.key)
-          quit(1)
+  # Workaround: get_opt reads from command line when given empty args
+  if args.len == 0:
+    return
+  
+  for kind, key, value in get_opt(args, short_no_val, long_no_val):
+    case kind
     of cmdArgument:
-      result.files.add(p.key)
+      result.files.add(key)
+    of cmdLongOption, cmdShortOption:
+      case key
+      of "h", "help":
+        result.help = true
+      of "a", "addresses":
+        result.show_addresses = true
+      of "e", "eval":
+        result.code = value
+      of "f", "format":
+        if value in ["pretty", "compact", "bytecode"]:
+          result.format = value
+        else:
+          stderr.writeLine("Error: Invalid format '" & value & "'. Must be: pretty, compact, or bytecode")
+          quit(1)
+      else:
+        stderr.writeLine("Error: Unknown option: " & key)
+        quit(1)
+    of cmdEnd:
+      discard
 
 proc formatInstruction(inst: Instruction, index: int, format: string, show_addresses: bool): string =
   case format
@@ -204,8 +183,21 @@ proc handle*(cmd: string, args: seq[string]): string =
     
     return ""
   else:
-    stderr.writeLine("Error: No input provided. Use -e for code or provide a file.")
-    quit(1)
+    # No code or files provided, try to read from stdin
+    if not stdin.isatty():
+      var lines: seq[string] = @[]
+      var line: string
+      while stdin.readLine(line):
+        lines.add(line)
+      if lines.len > 0:
+        code = lines.join("\n")
+        source_name = "<stdin>"
+      else:
+        stderr.writeLine("Error: No input provided. Use -e for code or provide a file.")
+        quit(1)
+    else:
+      stderr.writeLine("Error: No input provided. Use -e for code or provide a file.")
+      quit(1)
   
   # Compile single code string
   try:
