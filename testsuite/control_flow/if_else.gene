@@ -1,0 +1,27 @@
+#!/usr/bin/env gene run
+# TEST: if/else expressions
+
+# Simple if
+(print "if true: " (if true "yes" "no"))
+(print "if false: " (if false "yes" "no"))
+
+# if without else
+(print "if true no else: " (if true "only if true"))
+(print "if false no else: " (if false "should not print"))
+
+# Nested if
+(var x 10)
+(print "nested if: " 
+  (if (> x 5)
+    (if (< x 15)
+      "between 5 and 15"
+      "greater than 15")
+    "less than 5"))
+
+# if with complex condition
+(var a 3)
+(var b 7)
+(print "complex condition: "
+  (if (and (> a 0) (< b 10))
+    "both true"
+    "at least one false"))

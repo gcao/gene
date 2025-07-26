@@ -1,0 +1,39 @@
+#!/usr/bin/env gene run
+# TEST: Basic macros
+
+# Simple macro
+(defmacro when [condition body]
+  `(if ~condition ~body nil))
+
+(print "when true: " (when true "executed"))
+(print "when false: " (when false "not executed"))
+
+# Macro with multiple forms
+(defmacro unless [condition & body]
+  `(if ~condition nil (do ~@body)))
+
+(var x 5)
+(unless (< x 3)
+  (print "unless: x is not less than 3")
+  (set x 10))
+(print "x after unless: " x)
+
+# Macro generating code
+(defmacro defvar [name value]
+  `(do
+     (var ~name ~value)
+     (print ~(str "Defined " name " = ") ~name)))
+
+(defvar my_var 42)
+
+# Nested macro expansion
+(defmacro and2 [a b]
+  `(if ~a ~b false))
+
+(defmacro or2 [a b]
+  `(if ~a true ~b))
+
+(print "and2 true true: " (and2 true true))
+(print "and2 true false: " (and2 true false))
+(print "or2 false true: " (or2 false true))
+(print "or2 false false: " (or2 false false))

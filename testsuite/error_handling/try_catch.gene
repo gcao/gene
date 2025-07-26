@@ -1,0 +1,42 @@
+#!/usr/bin/env gene run
+# TEST: Exception handling
+
+# Basic try/catch
+(print "basic try/catch: "
+  (try
+    (/ 10 2)
+  catch e
+    "error caught"))
+
+# Catching division by zero
+(print "division by zero: "
+  (try
+    (/ 10 0)
+  catch e
+    "caught division by zero"))
+
+# Throwing custom error
+(print "custom error: "
+  (try
+    (throw "Something went wrong!")
+  catch e
+    (.concat "caught: " e)))
+
+# Finally block
+(var cleanup_ran false)
+(print "try/finally result: "
+  (try
+    "success"
+  finally
+    (set cleanup_ran true)))
+(print "cleanup ran: " cleanup_ran)
+
+# Nested try/catch
+(print "nested: "
+  (try
+    (try
+      (throw "inner error")
+    catch e
+      (throw (.concat "wrapped: " e)))
+  catch e
+    e))

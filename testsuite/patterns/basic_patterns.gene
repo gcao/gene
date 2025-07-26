@@ -1,0 +1,48 @@
+#!/usr/bin/env gene run
+# TEST: Pattern matching
+
+# Simple value matching
+(fn describe_number [n]
+  (match n
+    0 "zero"
+    1 "one"
+    2 "two"
+    _ "other"))
+
+(print "match 0: " (describe_number 0))
+(print "match 1: " (describe_number 1))
+(print "match 5: " (describe_number 5))
+
+# Array pattern matching
+(fn sum_pair [arr]
+  (match arr
+    [a b] (+ a b)
+    [a] a
+    [] 0
+    _ "not a valid pair"))
+
+(print "sum [3 4]: " (sum_pair [3 4]))
+(print "sum [5]: " (sum_pair [5]))
+(print "sum []: " (sum_pair []))
+
+# Map pattern matching
+(fn get_name [person]
+  (match person
+    {"name" n} n
+    _ "Anonymous"))
+
+(print "name from map: " (get_name {"name" "Alice" "age" 30}))
+(print "name missing: " (get_name {"age" 25}))
+
+# Guard clauses
+(fn classify [x]
+  (match x
+    n when (and (int? n) (> n 0)) "positive integer"
+    n when (and (int? n) (< n 0)) "negative integer"
+    0 "zero"
+    s when (string? s) "string"
+    _ "other"))
+
+(print "classify 5: " (classify 5))
+(print "classify -3: " (classify -3))
+(print "classify 'hello': " (classify "hello"))

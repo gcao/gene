@@ -1,0 +1,44 @@
+#!/usr/bin/env gene run
+# TEST: String operations
+
+# Basic strings
+(var str1 "Hello")
+(var str2 "World")
+(print "str1: " str1)
+(print "str2: " str2)
+
+# String concatenation
+(print "concat: " (.concat str1 " " str2))
+
+# String length
+(print "length of 'Hello': " (.length str1))
+(print "length of empty: " (.length ""))
+
+# String methods
+(var text "  Hello, World!  ")
+(print "trim: '" (.trim text) "'")
+(print "uppercase: " (.upper text))
+(print "lowercase: " (.lower text))
+
+# String indexing
+(var word "Gene")
+(print "word[0]: " (.char_at word 0))
+(print "word[2]: " (.char_at word 2))
+
+# Substring
+(var sentence "The quick brown fox")
+(print "substring(4, 9): " (.substring sentence 4 9))
+(print "substring(10): " (.substring sentence 10))
+
+# String comparison
+(print "'abc' < 'def': " (< "abc" "def"))
+(print "'hello' == 'hello': " (== "hello" "hello"))
+
+# String splitting
+(var csv "apple,banana,orange")
+(print "split by comma: " (.split csv ","))
+
+# String interpolation
+(var name "Gene")
+(var version 1)
+(print "interpolation: " #"Welcome to {name} v{version}!")

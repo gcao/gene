@@ -1,0 +1,36 @@
+#!/usr/bin/env gene run
+# TEST: Basic function definitions and calls
+
+# Simple function
+(fn add [a b]
+  (+ a b))
+
+(print "add(3, 4) = " (add 3 4))
+
+# Function with no parameters
+(fn get_greeting []
+  "Hello, World!")
+
+(print "greeting: " (get_greeting))
+
+# Function with local variables
+(fn calculate [x]
+  (var doubled (* x 2))
+  (var squared (* x x))
+  (+ doubled squared))
+
+(print "calculate(5) = " (calculate 5))
+
+# Nested function calls
+(fn double [x] (* x 2))
+(fn add_one [x] (+ x 1))
+
+(print "double(add_one(3)) = " (double (add_one 3)))
+
+# Recursive function
+(fn factorial [n]
+  (if (<= n 1)
+    1
+    (* n (factorial (- n 1)))))
+
+(print "factorial(5) = " (factorial 5))

@@ -1,0 +1,6 @@
+if true: yes
+if false: no
+if true no else: only if true
+if false no else: nil
+nested if: between 5 and 15
+complex condition: both true
