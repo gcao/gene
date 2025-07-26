@@ -43,6 +43,6 @@ when isMainModule:
   
   # Show operations per second for comparison
   if n == "24":
-    # fib(24) requires 75025 recursive calls
-    let ops = 75025.0 / duration
+    # fib(24) requires 150049 recursive calls
+    let ops = 150049.0 / duration
     echo fmt"Performance: {ops:.0f} function calls/second"

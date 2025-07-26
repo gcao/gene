@@ -1,0 +1,4 @@
+#!/usr/bin/env gene run
+
+# A simple Hello World program in Gene
+(print "Hello, World!")

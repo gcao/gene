@@ -1,0 +1,106 @@
+#!/bin/bash
+
+echo "=== Testing for Fibonacci Call Caching ==="
+echo ""
+
+# Ruby - count actual function calls
+cat > /tmp/fib_count.rb << 'EOF'
+$call_count = 0
+
+def fib(n)
+  $call_count += 1
+  n < 2 ? n : fib(n - 1) + fib(n - 2)
+end
+
+result = fib(24)
+puts "Ruby: Result=#{result}, Actual calls=#{$call_count}, Expected=75025"
+EOF
+
+# Python - count actual function calls
+cat > /tmp/fib_count.py << 'EOF'
+call_count = 0
+
+def fib(n):
+    global call_count
+    call_count += 1
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+result = fib(24)
+print(f"Python: Result={result}, Actual calls={call_count}, Expected=75025")
+EOF
+
+# JavaScript - count actual function calls
+cat > /tmp/fib_count.js << 'EOF'
+let callCount = 0;
+
+function fib(n) {
+    callCount++;
+    return n < 2 ? n : fib(n - 1) + fib(n - 2);
+}
+
+const result = fib(24);
+console.log(`Node.js: Result=${result}, Actual calls=${callCount}, Expected=75025`);
+EOF
+
+# Test with smaller values to see pattern
+echo "Testing fib(10) to verify call counting:"
+cat > /tmp/fib_small.py << 'EOF'
+call_count = 0
+def fib(n):
+    global call_count
+    call_count += 1
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+for i in range(11):
+    call_count = 0
+    result = fib(i)
+    print(f"fib({i})={result}, calls={call_count}")
+EOF
+
+python3 /tmp/fib_small.py
+echo ""
+
+echo "Testing fib(24) actual call counts:"
+ruby /tmp/fib_count.rb
+python3 /tmp/fib_count.py
+node /tmp/fib_count.js 2>/dev/null || echo "Node.js: (not installed)"
+
+# Let's also test if they optimize tail recursion or do any other optimizations
+echo ""
+echo "Testing with different implementation styles:"
+
+# Python with explicit memoization for comparison
+cat > /tmp/fib_memo.py << 'EOF'
+import time
+
+# Regular recursive
+def fib_regular(n):
+    return n if n < 2 else fib_regular(n - 1) + fib_regular(n - 2)
+
+# With memoization
+def fib_memo(n, cache={}):
+    if n in cache:
+        return cache[n]
+    if n < 2:
+        return n
+    cache[n] = fib_memo(n - 1, cache) + fib_memo(n - 2, cache)
+    return cache[n]
+
+# Time regular
+start = time.time()
+r1 = fib_regular(24)
+t1 = time.time() - start
+
+# Time memoized
+start = time.time()
+r2 = fib_memo(24)
+t2 = time.time() - start
+
+print(f"\nPython regular: {t1:.6f}s")
+print(f"Python memoized: {t2:.6f}s (speedup: {t1/t2:.0f}x)")
+EOF
+
+python3 /tmp/fib_memo.py
+
+# Clean up
+rm -f /tmp/fib_count.rb /tmp/fib_count.py /tmp/fib_count.js /tmp/fib_small.py /tmp/fib_memo.py
