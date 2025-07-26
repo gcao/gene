@@ -296,7 +296,7 @@ proc parse_string(self: var Parser, start: char, triple_mode: bool = false): Tok
           inc(pos, 2)
         of 'u':
           inc(pos, 2)
-          var r = parse_escaped_utf16(self.buf, pos)
+          var r = parse_escaped_utf16(cstring(self.buf), pos)
           if r < 0:
             self.error = ErrInvalidToken
             break
@@ -306,7 +306,7 @@ proc parse_string(self: var Parser, start: char, triple_mode: bool = false): Tok
               self.error = ErrInvalidToken
               break
             inc(pos, 2)
-            var s = parse_escaped_utf16(self.buf, pos)
+            var s = parse_escaped_utf16(cstring(self.buf), pos)
             if (s and 0xfc00) == 0xdc00 and s > 0:
               r = 0x10000 + (((r - 0xd800) shl 10) or (s - 0xdc00))
             else:
@@ -1268,7 +1268,7 @@ proc read_number(self: var Parser): Value =
       if not isDigit(self.buf[self.bufpos+1]):
         let e = err_info(self)
         raise new_exception(ParseError, "Error reading a ratio: " & $e)
-      var numerator = parse_biggest_int(self.str)
+      discard parse_biggest_int(self.str)  # numerator - will be used when ratio is implemented
       inc(self.bufpos)
       self.str = ""
       var denom_tok = parse_number(self)

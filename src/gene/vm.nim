@@ -4,7 +4,6 @@ import ./types
 import ./parser
 import ./compiler
 import ./vm/args
-import ./vm/async
 import ./vm/module
 
 const DEBUG_VM = false
@@ -1376,6 +1375,17 @@ proc exec*(self: VirtualMachine): Value =
                 todo("Unsupported second operand for division: " & $second)
           else:
             todo("Unsupported first operand for division: " & $first)
+
+      of IkNeg:
+        # Unary negation
+        let value = self.frame.pop()
+        case value.kind:
+          of VkInt:
+            self.frame.push(-value.int64)
+          of VkFloat:
+            self.frame.push(-value.float)
+          else:
+            todo("Unsupported operand for negation: " & $value)
 
       of IkLt:
         {.push checks: off}

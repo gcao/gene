@@ -42,13 +42,12 @@ proc gene_type*(v: Value): Value =
 
 proc gene_props*(v: Value): Table[string, Value] =
   if v.kind == VkGene:
-    var result = initTable[string, Value]()
+    result = initTable[string, Value]()
     for k, val in v.gene.props:
       # k is a Key (distinct int64), which is a packed symbol value
       let symbol_value = cast[Value](k)
       let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
       result[get_symbol(symbol_index.int)] = val
-    return result
   else:
     raise newException(ValueError, "Not a gene value")
 

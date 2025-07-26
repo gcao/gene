@@ -1,5 +1,3 @@
-import unittest
-
 import gene/types
 
 import ./helpers

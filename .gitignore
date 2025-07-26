@@ -25,3 +25,12 @@ scratch*
 .aider*
 
 gene-new/
+
+# Test executables
+tests/test_*
+!tests/test_*.nim
+!tests/test_*.sh
+
+# Nim cache
+nimcache/
+*.exe

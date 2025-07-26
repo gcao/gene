@@ -91,34 +91,57 @@ proc path_to_value*(path: string): Value =
   # Check if it's a namespaced path (e.g., "n/f")
   if "/" in path:
     let parts = path.split("/")
-    if parts.len == 2:
-      let ns_key = parts[0].to_key()
-      let item_key = parts[1].to_key()
+    if parts.len >= 2:
+      # Handle nested namespace paths
+      var current_ns: Namespace = nil
+      var search_namespaces: seq[Namespace] = @[]
       
-      # Look for namespace in global namespace
-      if App.app.global_ns.ref.ns.has_key(ns_key):
-        let ns_val = App.app.global_ns.ref.ns[ns_key]
-        if ns_val.kind == VkNamespace:
-          if ns_val.ref.ns.has_key(item_key):
-            return ns_val.ref.ns[item_key]
-      
-      # Also check VM's current namespace
+      # Add namespaces to search
+      if App.app.global_ns.kind == VkNamespace:
+        search_namespaces.add(App.app.global_ns.ref.ns)
       if VM != nil and VM.frame != nil and VM.frame.ns != nil:
-        if VM.frame.ns.has_key(ns_key):
-          let ns_val = VM.frame.ns[ns_key]
+        search_namespaces.add(VM.frame.ns)
+      
+      # Find the first namespace in the path
+      let first_key = parts[0].to_key()
+      for ns in search_namespaces:
+        if ns.members.has_key(first_key):
+          let ns_val = ns.members[first_key]
           if ns_val.kind == VkNamespace:
-            if ns_val.ref.ns.has_key(item_key):
-              return ns_val.ref.ns[item_key]
+            current_ns = ns_val.ref.ns
+            break
+      
+      if current_ns != nil:
+        # Navigate through nested namespaces
+        for i in 1..<parts.len-1:
+          let key = parts[i].to_key()
+          if current_ns.members.has_key(key):
+            let val = current_ns.members[key]
+            if val.kind == VkNamespace:
+              current_ns = val.ref.ns
+            else:
+              # Not a namespace, can't continue
+              break
+          else:
+            # Key not found
+            current_ns = nil
+            break
+        
+        # Look for the final item
+        if current_ns != nil:
+          let final_key = parts[^1].to_key()
+          if current_ns.members.has_key(final_key):
+            return current_ns.members[final_key]
   
   # Look in global namespace first
   let key = path.to_key()
-  if App.app.global_ns.ref.ns.has_key(key):
-    return App.app.global_ns.ref.ns[key]
+  if App.app.global_ns.kind == VkNamespace and App.app.global_ns.ref.ns.members.has_key(key):
+    return App.app.global_ns.ref.ns.members[key]
   
   # Also check if VM is running and has a current frame
   if VM != nil and VM.frame != nil and VM.frame.ns != nil:
-    if VM.frame.ns.has_key(key):
-      return VM.frame.ns[key]
+    if VM.frame.ns.members.has_key(key):
+      return VM.frame.ns.members[key]
   
   not_allowed("path_to_value: not found: " & path)
 

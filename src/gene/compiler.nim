@@ -715,7 +715,6 @@ proc compile_throw(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkThrow))
 
 proc compile_try(self: Compiler, gene: ptr Gene) =
-  let try_end_label = new_label()
   let catch_end_label = new_label()
   let finally_label = new_label()
   let end_label = new_label()
@@ -1298,10 +1297,9 @@ proc compile_gene(self: Compiler, input: Value) =
         if gene.children.len == 0:
           not_allowed("- requires at least one argument")
         elif gene.children.len == 1:
-          # Unary minus - use 0 - x for now
-          self.output.instructions.add(Instruction(kind: IkPushValue, arg0: 0.to_value()))
+          # Unary minus - use IkNeg instruction
           self.compile(gene.children[0])
-          self.output.instructions.add(Instruction(kind: IkSub))
+          self.output.instructions.add(Instruction(kind: IkNeg))
           return
         else:
           # Multi-arg subtraction

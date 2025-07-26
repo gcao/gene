@@ -1,4 +1,3 @@
-import tables
 import unittest
 
 import gene/types
