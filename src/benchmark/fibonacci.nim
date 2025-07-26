@@ -1,5 +1,5 @@
 when isMainModule:
-  import tables, times, os, strformat
+  import times, os, strformat
 
   import ../gene/types
   import ../gene/parser
@@ -33,5 +33,16 @@ when isMainModule:
 
   let start = cpuTime()
   let result = VM.exec()
-  echo "Time: " & $(cpuTime() - start)
-  echo fmt"fib({n}) = " & $result
+  let duration = cpuTime() - start
+  
+  # Convert result to int properly
+  let int_result = result.to_int()
+  
+  echo fmt"Result: fib({n}) = {int_result}"
+  echo fmt"Time: {duration:.6f} seconds"
+  
+  # Show operations per second for comparison
+  if n == "24":
+    # fib(24) requires 75025 recursive calls
+    let ops = 75025.0 / duration
+    echo fmt"Performance: {ops:.0f} function calls/second"
