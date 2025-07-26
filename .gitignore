@@ -21,6 +21,7 @@ benchmark-results/
 tests/test_wip.nim
 *.dylib
 callgrind.out*
+cachegrind.out*
 scratch*
 .aider*
 
