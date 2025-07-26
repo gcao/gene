@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 #< Demo how command line arguments work
 gene examples/parse_cmd_args.gene -d -i first -i second test.gene

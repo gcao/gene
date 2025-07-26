@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 #< USAGE:
 examples/http.gene | json_pp

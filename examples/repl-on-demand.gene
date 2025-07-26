@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 # (repl) to open a repl at the current location
 # if some global option is set, open repl on exception

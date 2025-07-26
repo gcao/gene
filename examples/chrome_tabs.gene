@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 (var output (gene/os/exec "examples/chrome_tabs.scpt"))
 (var rows (gene/csv/parse output))

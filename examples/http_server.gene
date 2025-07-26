@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 # Import all members from genex/http to current namespace
 (import genex/http/*)

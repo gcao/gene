@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 (import genex/mysql:DB)
 (import genex/http/*)

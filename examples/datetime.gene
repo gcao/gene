@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 (println (gene/today))
 (println ((gene/today) .year))

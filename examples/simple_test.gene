@@ -1,4 +1,4 @@
-#!/usr/bin/env gene
+#!/usr/bin/env gene run
 
 # Simple fibonacci without advanced features
 (fn fib n
