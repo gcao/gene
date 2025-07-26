@@ -6,6 +6,9 @@ import ./compiler
 import ./vm/args
 import ./vm/module
 
+when not defined(noExtensions):
+  import ./vm/extension
+
 const DEBUG_VM = false
 
 # Forward declaration
@@ -1890,7 +1893,7 @@ proc exec*(self: VirtualMachine): Value =
         
         # echo "DEBUG: Processing import ", import_gene
         
-        let (module_path, imports, module_ns) = self.handle_import(import_gene.gene)
+        let (module_path, imports, module_ns, is_native) = self.handle_import(import_gene.gene)
         
         # echo "DEBUG: Module path: ", module_path
         # echo "DEBUG: Imports: ", imports  
@@ -1898,44 +1901,67 @@ proc exec*(self: VirtualMachine): Value =
         
         # If module is not cached, we need to execute it
         if not ModuleCache.hasKey(module_path):
-          # Compile the module
-          let cu = compile_module(module_path)
-          
-          # Save current state
-          let saved_cu = self.cu
-          let saved_frame = self.frame
-          
-          # Create a new frame for module execution
-          self.frame = new_frame()
-          self.frame.ns = module_ns
-          self.frame.self = new_ref(VkNamespace).to_ref_value()
-          self.frame.self.ref.ns = module_ns
-          
-          # Execute the module
-          self.cu = cu
-          discard self.exec()
-          
-          # Restore the original state
-          self.cu = saved_cu
-          self.frame = saved_frame
-          
-          # Cache the module
-          ModuleCache[module_path] = module_ns
-          
-          # Import requested symbols
-          for item in imports:
-            let value = resolve_import_value(module_ns, item.name)
-            
-            # Determine the name to import as
-            let import_name = if item.alias != "": 
-              item.alias 
+          if is_native:
+            # Load native extension
+            when not defined(noExtensions):
+              let ext_ns = load_extension(self, module_path)
+              ModuleCache[module_path] = ext_ns
+              
+              # Import requested symbols
+              for item in imports:
+                let value = resolve_import_value(ext_ns, item.name)
+                
+                # Determine the name to import as
+                let import_name = if item.alias != "": 
+                  item.alias 
+                else:
+                  # Use the last part of the path
+                  let parts = item.name.split("/")
+                  parts[^1]
+                
+                # Add to current namespace
+                self.frame.ns.members[import_name.to_key()] = value
             else:
-              # Use the last part of the path
-              let parts = item.name.split("/")
-              parts[^1]
+              not_allowed("Native extensions are not supported in this build")
+          else:
+            # Compile the module
+            let cu = compile_module(module_path)
             
-            # Add to current namespace
-            self.frame.ns.members[import_name.to_key()] = value
+            # Save current state
+            let saved_cu = self.cu
+            let saved_frame = self.frame
+          
+            # Create a new frame for module execution
+            self.frame = new_frame()
+            self.frame.ns = module_ns
+            self.frame.self = new_ref(VkNamespace).to_ref_value()
+            self.frame.self.ref.ns = module_ns
+            
+            # Execute the module
+            self.cu = cu
+            discard self.exec()
+            
+            # Restore the original state
+            self.cu = saved_cu
+            self.frame = saved_frame
+            
+            # Cache the module
+            ModuleCache[module_path] = module_ns
+            
+            # Import requested symbols
+            for item in imports:
+              let value = resolve_import_value(module_ns, item.name)
+              
+              # Determine the name to import as
+              let import_name = if item.alias != "": 
+                item.alias 
+              else:
+                # Use the last part of the path
+                let parts = item.name.split("/")
+                parts[^1]
+              
+              # Add to current namespace
+              self.frame.ns.members[import_name.to_key()] = value
         
         self.frame.push(NIL)
 

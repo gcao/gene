@@ -1,4 +1,5 @@
 import tables, strutils
+import std/hashes
 
 import ../types
 import ../parser
@@ -226,12 +227,17 @@ proc execute_module*(vm: VirtualMachine, path: string, module_ns: Namespace): Va
   # This will be called from vm.nim where exec is available
   raise new_exception(types.Exception, "execute_module should be overridden by vm.nim")
 
-proc handle_import*(vm: VirtualMachine, import_gene: ptr Gene): tuple[path: string, imports: seq[ImportItem], ns: Namespace] =
+proc handle_import*(vm: VirtualMachine, import_gene: ptr Gene): tuple[path: string, imports: seq[ImportItem], ns: Namespace, is_native: bool] =
   ## Parse import statement and prepare for execution
   let (module_path, imports) = parse_import_statement(import_gene)
   
   if module_path == "":
     not_allowed("Module path not specified in import statement")
+  
+  # Check if this is a native extension
+  var is_native = false
+  if "native".to_key() in import_gene.props:
+    is_native = import_gene.props["native".to_key()].to_bool()
   
   # Check cache first
   if ModuleCache.hasKey(module_path):
@@ -250,8 +256,8 @@ proc handle_import*(vm: VirtualMachine, import_gene: ptr Gene): tuple[path: stri
       
       # Add to current namespace
       vm.frame.ns.members[import_name.to_key()] = value
-    return (module_path, imports, module_ns)
+    return (module_path, imports, module_ns, is_native)
   
-  # Module not cached, need to compile and execute it
+  # Module not cached, need to compile and execute it (or load as native)
   let module_ns = new_namespace(module_path)
-  return (module_path, imports, module_ns)
+  return (module_path, imports, module_ns, is_native)
