@@ -65,9 +65,26 @@ proc cleanup*(code: string): string =
 
 var initialized = false
 
+# Test-specific native functions
+proc test1(self: VirtualMachine, args: Value): Value =
+  1.to_value()
+
+proc test2(self: VirtualMachine, args: Value): Value =
+  # TODO: Implement instance_props access when needed
+  # For now, just add the two arguments
+  if args.gene.children.len >= 2:
+    let a = args.gene.children[0].to_int()
+    let b = args.gene.children[1].to_int() 
+    return (a + b).to_value()
+  else:
+    return 0.to_value()
+
 proc init_all*() =
   if not initialized:
     init_app_and_vm()
+    # Register test functions in gene namespace
+    App.app.gene_ns.ns["test1".to_key()] = test1
+    App.app.gene_ns.ns["test2".to_key()] = test2
     initialized = true
 
 proc test_parser*(code: string, result: Value) =

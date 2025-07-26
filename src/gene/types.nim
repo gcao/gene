@@ -1283,7 +1283,7 @@ proc str_no_quotes*(self: Value): string {.gcsafe.} =
       of VkBool:
         result = $(self == TRUE)
       of VkInt:
-        result = $self.int64
+        result = $(self.to_int())
       of VkFloat:
         result = $(cast[float64](self))
       of VkChar:
@@ -1356,7 +1356,7 @@ proc `$`*(self: Value): string {.gcsafe.} =
       of VkBool:
         result = $(self == TRUE)
       of VkInt:
-        result = $self.int64
+        result = $(self.int64)
       of VkFloat:
         result = $(cast[float64](self))
       of VkChar:

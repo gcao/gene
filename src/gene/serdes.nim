@@ -2,7 +2,6 @@ import tables, strutils
 
 import ./types
 import ./parser
-import ./vm
 
 type
   Serialization* = ref object
