@@ -12,17 +12,10 @@ Welcome to the Gene programming language documentation.
 - [Language Reference](language-reference.md) - Complete language specification
 - [Standard Library](stdlib.md) - Built-in functions and modules
 
-## Architecture & Design
+## Architecture & Performance
 
-- [VM Architecture](architecture.md) - How the Gene VM works
-- [Design Overview](design.md) - Language design decisions
-- [Design Introduction](design-intro.md) - High-level design philosophy
-
-## Performance
-
-- [Performance Analysis](performance_analysis.md) - Current performance metrics
-- [Performance Comparison](performance_comparison.md) - Comparison with other languages
-- [Optimization Guide](optimization.md) - Performance optimization strategies
+- [VM Architecture](architecture.md) - Complete VM architecture and design
+- [Performance Guide](performance.md) - Performance analysis, optimization, and benchmarking
 
 ## Development
 
@@ -32,13 +25,10 @@ Welcome to the Gene programming language documentation.
 
 ## Implementation Details
 
-- [Async Implementation](async_implementation_progress.md) - Async/await progress
-- [Async VM Design](async_vm_design.md) - Async implementation in the VM
-- [Caller Eval Design](caller_eval_design.md) - Caller evaluation feature
-
-## FAQ
-
-- [Questions](questions.md) - Frequently asked questions
+- [Async Progress](implementation/async_progress.md) - Async/await implementation status
+- [Async Design](implementation/async_design.md) - Async VM design details
+- [Caller Eval](implementation/caller_eval.md) - Caller evaluation feature design
+- [Development Notes](implementation/development_notes.md) - Technical notes and decisions
 
 ## Status
 
