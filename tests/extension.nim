@@ -1,5 +1,4 @@
 include ../src/gene/extension/boilerplate
-import hashes
 
 type
   Extension = ref object of CustomValue
@@ -44,7 +43,8 @@ proc init*(vm: ptr VirtualMachine): Namespace =
   # Register a simple test function first
   var test_ref = new_ref(VkNativeFn)
   test_ref.native_fn = test
-  result["test".to_key()] = test_ref.to_ref_value()
+  let test_key = "test".to_key()
+  result[test_key] = test_ref.to_ref_value()
   
   # For now, skip class creation as it requires App.app which might not be accessible
   # Just register the functions

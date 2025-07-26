@@ -803,6 +803,7 @@ type
     trace*: bool
     exception_handlers*: seq[ExceptionHandler]
     current_exception*: Value
+    symbols*: ptr ManagedSymbols  # Pointer to global symbol table
 
   VmCallback* = proc() {.gcsafe.}
 
@@ -2919,6 +2920,7 @@ proc init_app_and_vm*() =
   VM = VirtualMachine(
     exception_handlers: @[],
     current_exception: NIL,
+    symbols: addr SYMBOLS,
   )
   let r = new_ref(VkApplication)
   r.app = new_app()

@@ -9,6 +9,9 @@ var VM*: ptr VirtualMachine
 proc set_globals*(vm: ptr VirtualMachine) {.exportc, dynlib.} =
   ## Called by the main program to set global VM pointer
   VM = vm
+  # Replace the local symbol table with the shared one
+  if vm.symbols != nil:
+    SYMBOLS = vm.symbols[]
 
 # Helper to create native function value
 proc wrap_native_fn*(fn: NativeFn): Value =

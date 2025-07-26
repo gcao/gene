@@ -42,5 +42,6 @@ proc load_extension*(vm: VirtualMachine, path: string): Namespace =
   if result == nil:
     raise new_exception(types.Exception, "Extension init returned nil: " & path)
   
+  
 
 # No longer needed since we use deterministic hashing
