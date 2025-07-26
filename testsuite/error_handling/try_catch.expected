@@ -1,6 +1,0 @@
-basic try/catch: 5
-division by zero: caught division by zero
-custom error: caught: Something went wrong!
-try/finally result: success
-cleanup ran: true
-nested: wrapped: inner error

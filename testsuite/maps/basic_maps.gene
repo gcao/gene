@@ -1,0 +1,13 @@
+#!/usr/bin/env gene run
+# TEST: Basic map operations
+
+# Map creation
+(var person {
+  "name" "Alice"
+  "age" 30
+})
+(print person)
+
+# Map access
+(print (person "name"))
+(print (person "age"))

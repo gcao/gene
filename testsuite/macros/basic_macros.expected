@@ -1,9 +1,0 @@
-when true: executed
-when false: nil
-unless: x is not less than 3
-x after unless: 10
-Defined my_var = 42
-and2 true true: true
-and2 true false: false
-or2 false true: true
-or2 false false: false

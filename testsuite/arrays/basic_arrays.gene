@@ -1,0 +1,11 @@
+#!/usr/bin/env gene run
+# TEST: Basic array operations
+
+# Array creation
+(var arr [1 2 3 4 5])
+(print arr)
+
+# Array indexing
+(print (arr 0))
+(print (arr 2))
+(print (arr 4))
