@@ -40,22 +40,34 @@ run_test() {
         return
     fi
     
-    # Extract expected output if present
-    local expected_file="${test_file%.gene}.expected"
+    # Extract expected output from the test file
+    local has_expected=$(grep -q "^# Expected:" "$test_file" && echo "yes" || echo "no")
     
-    if [ -f "$expected_file" ]; then
+    if [ "$has_expected" = "yes" ]; then
+        # Extract expected output
+        local expected_output=$(grep "^# Expected:" "$test_file" | sed 's/^# Expected: //')
+        
         # Run test and compare output (ignoring trailing whitespace)
-        if $GENE run "$test_file" 2>&1 | diff -w "$expected_file" - > /dev/null; then
+        local actual_output=$($GENE run "$test_file" 2>&1)
+        
+        # Save outputs to temp files for comparison
+        echo "$expected_output" > /tmp/expected_$$.txt
+        echo "$actual_output" > /tmp/actual_$$.txt
+        
+        if diff -w /tmp/expected_$$.txt /tmp/actual_$$.txt > /dev/null; then
             echo -e "${GREEN}PASS${NC} $test_name"
             PASSED=$((PASSED + 1))
         else
             echo -e "${RED}FAIL${NC} $test_name"
             echo "  Expected output:"
-            cat "$expected_file" | sed 's/^/    /'
+            echo "$expected_output" | sed 's/^/    /'
             echo "  Actual output:"
-            $GENE run "$test_file" 2>&1 | sed 's/^/    /'
+            echo "$actual_output" | sed 's/^/    /'
             FAILED=$((FAILED + 1))
         fi
+        
+        # Clean up temp files
+        rm -f /tmp/expected_$$.txt /tmp/actual_$$.txt
     else
         # Just run the test and check exit code
         if $GENE run "$test_file" > /dev/null 2>&1; then

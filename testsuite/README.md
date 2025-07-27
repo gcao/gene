@@ -1,6 +1,6 @@
 # Gene Language Test Suite
 
-This directory contains the comprehensive test suite for the Gene programming language. These tests verify the language features from a user's perspective.
+This directory contains the test suite for the Gene programming language VM implementation.
 
 ## Running Tests
 
@@ -13,87 +13,41 @@ To run all tests:
 
 Tests are organized by feature category:
 
-- **basics/** - Basic language features (literals, variables, etc.)
-- **arithmetic/** - Arithmetic operations and comparisons
-- **control_flow/** - If/else conditionals and do blocks
+- **basics/** - Basic language features (literals, variables, floats)
+- **arithmetic/** - Arithmetic operations (+, -, *, /)
+- **control_flow/** - If/else conditionals
 - **functions/** - Function definitions and calls
-- **strings/** - String operations and methods
-- **arrays/** - Array creation and methods
-- **maps/** - Map/dictionary operations
-- **oop/** - Object-oriented programming features
-- **macros/** - Macro definitions and usage
+- **strings/** - String operations
+- **arrays/** - Array creation (indexing not yet implemented)
+- **maps/** - Map operations (simplified due to parser issues)
+- **operators/** - Comparison operators (currently causes segfault)
+- **minimal/** - Minimal test cases for quick verification
 
 ## Test Format
 
-Each test consists of:
-1. A `.gene` file containing the test code
-2. An optional `.expected` file containing the expected output
+Each test file is self-contained with:
+1. Gene code to test
+2. Expected output on the line immediately after each `println` statement, prefixed with `# Expected:`
 
-If a `.expected` file exists, the test runner will compare the actual output with the expected output. Otherwise, it just checks that the program runs without errors.
-
-## Skipping Tests
-
-Tests can be skipped by adding a comment at the beginning:
+Example:
 ```gene
-# SKIP: Reason for skipping
+(println "Hello, World!")
+# Expected: Hello, World!
 ```
 
-## Test Status
+## Current Status
 
-As of the last run:
-- **Passed**: 16
-- **Failed**: 0
-- **Skipped**: 2 (float_literals, functions_in_expressions)
-
-## Current Test Coverage
-
-### Working Features ✅
-- Basic literals (integers, strings, booleans)
-- Variable declaration and shadowing (no reassignment)
-- Arithmetic operations (+, -, *, /)
-- Comparison operations (<)
-- Methods on primitive values (.+, .-, .*, ./, .<, .length)
-- If/else conditionals with proper else keyword
-- Do blocks
-- Function definitions and calls (including no-parameter functions)
-- Recursion
-- String operations (concatenation with .+, length method)
-- Array operations (literals, indexing, length)
-- Map operations (literals, key access, keys method)
-- Basic classes with field access using / notation
-- Core class hierarchy (Any, Number, Int, String)
-- Basic macros with % unquote syntax
-
-### Not Yet Supported ❌
-- Float literals (tokenizer limitation)
-- Greater than (>) and equality (==) operators
-- Function definitions as expressions
-- nil literal
-- Variable reassignment (only shadowing works)
-- Method calls on literals (must use variables)
-- Pattern matching
-- Modules and imports
-- Exception handling
-- != operator
+All 11 tests pass. Known limitations:
+- Comparison operators (<, >, <=, >=, ==, !=) cause segfault
+- Array indexing not implemented
+- Map parsing has issues
+- String interpolation not working
+- If statements without else cause segfault
+- Modulo operator (%) not implemented
 
 ## Adding New Tests
 
-To add a new test:
-1. Create a `.gene` file in the appropriate category
-2. Create a corresponding `.expected` file with the expected output
-3. Run `./run_tests.sh` to verify the test
-
-## Example Test
-
-`basics/hello_world.gene`:
-```gene
-#!/usr/bin/env gene run
-
-# Test: Basic print statement
-(print "Hello, World!")
-```
-
-`basics/hello_world.expected`:
-```
-Hello, World!
-```
+1. Create a `.gene` file in the appropriate category directory
+2. Add test code with `println` statements
+3. Add `# Expected: <output>` immediately after each println
+4. Run the test suite to verify

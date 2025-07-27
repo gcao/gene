@@ -3,7 +3,10 @@
 
 # String literals
 (println "Hello")
+# Expected: Hello
 (println "World")
+# Expected: World
 
 # String interpolation - not working yet
 (println "Welcome to Gene v1!")
+# Expected: Welcome to Gene v1!

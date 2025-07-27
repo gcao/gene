@@ -21,3 +21,4 @@
 
 # For now, just print a message
 (println "Comparison operators test skipped - causes segfault")
+# Expected: Comparison operators test skipped - causes segfault

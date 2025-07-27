@@ -2,3 +2,4 @@
 
 # Test: Basic print statement
 (println "Hello, World!")
+# Expected: Hello, World!

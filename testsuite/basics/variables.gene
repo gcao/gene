@@ -4,8 +4,11 @@
 (var x 10)
 (var y 20)
 (println "x = " x)
+# Expected: x =  10
 (println "y = " y)
+# Expected: y =  20
 
 # Variable shadowing
 (var x 30)
 (println "x after shadowing = " x)
+# Expected: x after shadowing =  30

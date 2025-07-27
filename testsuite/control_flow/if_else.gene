@@ -3,7 +3,9 @@
 
 # Simple if with else keyword
 (println "if true: " (if true "yes" else "no"))
+# Expected: if true:  yes
 (println "if false: " (if false "yes" else "no"))
+# Expected: if false:  no
 
 # if without else - commented out as it causes segfault
 # (println "if true no else: " (if true "only if true"))

@@ -4,6 +4,7 @@
 # Array creation
 (var arr [1 2 3 4 5])
 (println arr)
+# Expected: [1 2 3 4 5]
 
 # Array indexing - not implemented yet
 # (println (arr 0))

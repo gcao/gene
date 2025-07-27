@@ -2,8 +2,12 @@
 
 # Test: Various literal types
 (println "Integer: " 42)
+# Expected: Integer:  42
 (println "String: " "Hello")
+# Expected: String:  Hello
 (println "Boolean true: " true)
+# Expected: Boolean true:  true
 (println "Boolean false: " false)
+# Expected: Boolean false:  false
 # nil is not yet a keyword, skip for now
 # (println "Nil: " nil)
