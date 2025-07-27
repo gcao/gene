@@ -2,21 +2,21 @@
 # TEST: Basic arithmetic operations
 
 # Addition
-(print "2 + 3 = " (+ 2 3))
-(print "10 + -5 = " (+ 10 -5))
+(println "2 + 3 = " (+ 2 3))
+(println "10 + -5 = " (+ 10 -5))
 
 # Subtraction  
-(print "7 - 4 = " (- 7 4))
-(print "3 - 8 = " (- 3 8))
+(println "7 - 4 = " (- 7 4))
+(println "3 - 8 = " (- 3 8))
 
 # Multiplication
-(print "6 * 7 = " (* 6 7))
-(print "3 * -4 = " (* 3 -4))
+(println "6 * 7 = " (* 6 7))
+(println "3 * -4 = " (* 3 -4))
 
 # Division
-(print "15 / 3 = " (/ 15 3))
-(print "7 / 2 = " (/ 7 2))  # Integer division
+(println "15 / 3 = " (/ 15 3))
+(println "7 / 2 = " (/ 7 2))  # Integer division
 
 # Modulo - TODO: Not implemented yet
-# (print "17 % 5 = " (% 17 5))
-# (print "20 % 4 = " (% 20 4))
+# (println "17 % 5 = " (% 17 5))
+# (println "20 % 4 = " (% 20 4))

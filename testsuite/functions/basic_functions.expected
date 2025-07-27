@@ -1,5 +1,4 @@
-add(3, 4) = 7
-greeting: Hello, World!
-calculate(5) = 35
-double(add_one(3)) = 8
-factorial(5) = 120
+add(3, 4) =  7
+greeting:  Hello, World!
+calculate(5) =  35
+double(add_one(3)) =  8

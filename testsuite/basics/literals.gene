@@ -1,9 +1,9 @@
 #!/usr/bin/env gene run
 
 # Test: Various literal types
-(print "Integer: " 42)
-(print "String: " "Hello")
-(print "Boolean true: " true)
-(print "Boolean false: " false)
+(println "Integer: " 42)
+(println "String: " "Hello")
+(println "Boolean true: " true)
+(println "Boolean false: " false)
 # nil is not yet a keyword, skip for now
-# (print "Nil: " nil)
+# (println "Nil: " nil)

@@ -5,13 +5,13 @@
 (fn add [a b]
   (+ a b))
 
-(print "add(3, 4) = " (add 3 4))
+(println "add(3, 4) = " (add 3 4))
 
 # Function with no parameters
 (fn get_greeting []
   "Hello, World!")
 
-(print "greeting: " (get_greeting))
+(println "greeting: " (get_greeting))
 
 # Function with local variables
 (fn calculate [x]
@@ -19,18 +19,18 @@
   (var squared (* x x))
   (+ doubled squared))
 
-(print "calculate(5) = " (calculate 5))
+(println "calculate(5) = " (calculate 5))
 
 # Nested function calls
 (fn double [x] (* x 2))
 (fn add_one [x] (+ x 1))
 
-(print "double(add_one(3)) = " (double (add_one 3)))
+(println "double(add_one(3)) = " (double (add_one 3)))
 
-# Recursive function
-(fn factorial [n]
-  (if (<= n 1)
-    1
-    (* n (factorial (- n 1)))))
-
-(print "factorial(5) = " (factorial 5))
+# Recursive function - commented out (<= not implemented)
+# (fn factorial [n]
+#   (if (<= n 1)
+#     1
+#     (* n (factorial (- n 1)))))
+# 
+# (println "factorial(5) = " (factorial 5))

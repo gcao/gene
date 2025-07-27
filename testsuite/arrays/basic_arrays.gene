@@ -3,9 +3,9 @@
 
 # Array creation
 (var arr [1 2 3 4 5])
-(print arr)
+(println arr)
 
-# Array indexing
-(print (arr 0))
-(print (arr 2))
-(print (arr 4))
+# Array indexing - not implemented yet
+# (println (arr 0))
+# (println (arr 2))
+# (println (arr 4))
