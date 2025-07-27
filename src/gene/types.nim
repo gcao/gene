@@ -1357,7 +1357,7 @@ proc `$`*(self: Value): string {.gcsafe.} =
       of VkBool:
         result = $(self == TRUE)
       of VkInt:
-        result = $(self.int64)
+        result = $(to_int(self))
       of VkFloat:
         result = $(cast[float64](self))
       of VkChar:

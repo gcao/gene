@@ -16,6 +16,7 @@ type
     print_result: bool
     repl_on_error: bool
     trace: bool
+    trace_instruction: bool
     compile: bool
     file: string
     args: seq[string]
@@ -30,6 +31,7 @@ let short_no_val = {'d'}
 let long_no_val = @[
   "repl-on-error",
   "trace",
+  "trace-instruction",
   "compile",
 ]
 proc parse_options(args: seq[string]): Options =
@@ -60,6 +62,8 @@ proc parse_options(args: seq[string]): Options =
           result.repl_on_error = true
         of "trace":
           result.trace = true
+        of "trace-instruction":
+          result.trace_instruction = true
         of "compile":
           result.compile = true
         else:
@@ -113,7 +117,22 @@ proc handle*(cmd: string, args: seq[string]): string =
   if options.trace:
     VM.trace = true
   
-  if options.compile or options.debugging:
+  if options.trace_instruction:
+    # Show both compilation and execution with trace
+    echo "=== Compilation Output ==="
+    let compiled = compile(read_all(code))
+    echo "Instructions:"
+    for i, instr in compiled.instructions:
+      echo fmt"{i:04X} {instr}"
+    echo ""
+    echo "=== Execution Trace ==="
+    VM.trace = true
+    # Initialize frame if needed
+    if VM.frame == nil:
+      VM.frame = new_frame(new_namespace(file))
+    VM.cu = compiled
+    value = VM.exec()
+  elif options.compile or options.debugging:
     echo "=== Compilation Output ==="
     let compiled = compile(read_all(code))
     echo "Instructions:"

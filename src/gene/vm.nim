@@ -158,7 +158,7 @@ proc exec*(self: VirtualMachine): Value =
         if inst.kind == IkStart: # This is part of INDENT_LOGIC
           indent &= "  "
         # self.print_stack()
-        echo fmt"{indent}{pc:03} {inst[]}"
+        echo fmt"{indent}{pc:04X} {inst[]}"
 
     {.computedGoto.}
     case inst.kind:

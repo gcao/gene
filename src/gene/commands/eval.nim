@@ -16,6 +16,7 @@ type
     gene: bool
     line: bool
     trace: bool
+    trace_instruction: bool
     compile: bool
     code: string
 
@@ -35,6 +36,7 @@ let long_no_val = @[
   "gene",
   "line",
   "trace",
+  "trace-instruction",
   "compile",
 ]
 
@@ -62,6 +64,8 @@ proc parse_options(args: seq[string]): Options =
         result.line = true
       of "trace":
         result.trace = true
+      of "trace-instruction":
+        result.trace_instruction = true
       of "compile":
         result.compile = true
       else:
@@ -99,8 +103,26 @@ proc handle*(cmd: string, args: seq[string]): string =
     if options.trace:
       VM.trace = true
     
+    # Handle trace-instruction option
+    if options.trace_instruction:
+      # Show both compilation and execution with trace
+      let compiled = compile(read_all(code))
+      echo "=== Compilation Output ==="
+      echo "Instructions:"
+      for i, instr in compiled.instructions:
+        echo fmt"{i:04X} {instr}"
+      echo ""
+      echo "=== Execution Trace ==="
+      VM.trace = true
+      # Initialize frame if needed
+      if VM.frame == nil:
+        VM.frame = new_frame(new_namespace("<eval>"))
+      VM.cu = compiled
+      let value = VM.exec()
+      echo "=== Final Result ==="
+      echo $value
     # Show compilation details if requested
-    if options.compile or options.debugging:
+    elif options.compile or options.debugging:
       let compiled = compile(read_all(code))
       echo "=== Compilation Output ==="
       echo "Instructions:"
