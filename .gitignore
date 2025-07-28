@@ -20,8 +20,8 @@ benchmark-results/
 .lsp/
 tests/test_wip.nim
 *.dylib
-callgrind.out*
-cachegrind.out*
+callgrind.*
+cachegrind.*
 scratch*
 .aider*
 
