@@ -5,6 +5,7 @@ import ./parser
 import ./compiler
 import ./vm/args
 import ./vm/module
+import ./optimizer
 
 when not defined(noExtensions):
   import ./vm/extension
@@ -143,6 +144,22 @@ proc render_template(self: VirtualMachine, tpl: Value): Value =
       # Other values pass through unchanged
       return tpl
 
+proc should_profile(self: VirtualMachine): bool {.inline.} =
+  # Check if current frame is executing a function that needs profiling
+  if self.frame.kind == FkFunction and self.frame.target.kind == VkFunction:
+    let fn = self.frame.target.ref.fn
+    # Profile if not already optimized and execution count is high enough
+    return not fn.is_optimized and fn.profile_data != nil
+  return false
+
+proc record_symbol_resolution(self: VirtualMachine, pc: int, resolved: Value) {.inline.} =
+  if self.should_profile():
+    let fn = self.frame.target.ref.fn
+    if fn.profile_data == nil:
+      fn.profile_data = ProfileData()
+    fn.profile_data.symbol_resolutions[pc] = resolved
+
+
 proc exec*(self: VirtualMachine): Value =
   var pc = 0
   if pc >= self.cu.instructions.len:
@@ -151,6 +168,7 @@ proc exec*(self: VirtualMachine): Value =
 
   when not defined(release):
     var indent = ""
+
 
   while true:
     when not defined(release):
@@ -382,6 +400,8 @@ proc exec*(self: VirtualMachine): Value =
                 if self.trace:
                   echo "  Found in current namespace: ", value.kind
             self.frame.push(value)
+            # Record symbol resolution for profiling
+            self.record_symbol_resolution(pc, value)
 
       of IkSelf:
         self.frame.push(self.frame.self)
@@ -1139,6 +1159,19 @@ proc exec*(self: VirtualMachine): Value =
                 if f.body_compiled == nil:
                   f.compile()
 
+                # Initialize profiling if needed
+                if f.profile_data == nil and not f.is_optimized:
+                  if not f.body_compiled.is_nil:
+                    f.profile_data = ProfileData()
+                
+                # Update execution count and check for optimization
+                if f.profile_data != nil:
+                  f.profile_data.execution_count.inc()
+                  # Check if we should optimize this function
+                  if should_optimize(f):
+                    optimize_function(f)
+
+
                 pc.inc()
                 frame.caller_frame.update(self.frame)
                 frame.caller_address = Address(cu: self.cu, pc: pc)
@@ -1146,7 +1179,12 @@ proc exec*(self: VirtualMachine): Value =
                 # Pop the frame from the stack before switching context
                 discard self.frame.pop()
                 self.frame.update(frame)
-                self.cu = f.body_compiled
+                
+                # Use optimized bytecode if available
+                if f.is_optimized and f.optimized_cu != nil:
+                  self.cu = f.optimized_cu
+                else:
+                  self.cu = f.body_compiled
                 
                 # Process arguments if matcher exists
                 if not f.matcher.is_empty():

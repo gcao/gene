@@ -486,6 +486,10 @@ type
     # class*: Class       # Note that class may be different from method.class
     `method`*: Method
 
+  ProfileData* = ref object
+    symbol_resolutions*: Table[int, Value]   # PC -> resolved value
+    execution_count*: int                    # How many times this function was called
+
   Function* = ref object
     async*: bool
     name*: string
@@ -496,6 +500,9 @@ type
     # matching_hint*: MatchingHint
     body*: seq[Value]
     body_compiled*: CompilationUnit
+    profile_data*: ProfileData  # Runtime profiling data
+    optimized_cu*: CompilationUnit  # Optimized bytecode after rewriting
+    is_optimized*: bool  # Whether this function has been optimized
     # ret*: Expr
 
   CompileFn* = ref object
