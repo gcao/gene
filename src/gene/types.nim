@@ -2839,9 +2839,9 @@ proc `$`*(self: Instruction): string =
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
     of IkJump, IkJumpIfFalse:
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {self.arg0.int:03}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {self.arg0.int64:04X}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {self.arg0.int:03}"
+        result = fmt"         {($self.kind)[2..^1]} {self.arg0.int64:04X}"
     of IkJumpIfMatchSuccess:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
