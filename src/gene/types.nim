@@ -637,8 +637,10 @@ type
 
     IkAdd
     IkAddValue    # args: literal value
+    IkAddVarConst # Add constant to variable: var + const
     IkSub
     IkSubValue
+    IkSubVarConst  # Subtract constant from variable: var - const
     IkNeg          # Unary negation
     IkMul
     IkDiv
@@ -646,6 +648,7 @@ type
 
     IkLt
     IkLtValue
+    IkLtVarConst    # Compare variable with constant: var < const
     IkLe
     IkGt
     IkGe
@@ -1075,41 +1078,41 @@ template destroy(self: Value) =
   # else: regular float - no deallocation needed
   {.pop.}
 
-proc `=destroy`*(self: Value) =
-  destroy(self)
+# Value is a distinct int64, no custom destructor needed
 
-proc `=copy`*(a: var Value, b: Value) =
-  {.push checks: off, optimization: speed.}
-  if cast[int64](a) == cast[int64](b):
-    return
-  if cast[int64](a) != 0:
-    destroy(a)
-  
-  let u = cast[uint64](b)
-  
-  # Only need to increment ref count for heap-allocated values
-  if (u and NAN_MASK) == NAN_MASK:  # In NaN space
-    case u and 0xFFFF_0000_0000_0000u64:
-      of REF_TAG:
-        let x = cast[ptr Reference](u and PAYLOAD_MASK)
-        x.ref_count.inc()
-        `=sink`(a, b)
-        {.linearScanEnd.}
-      of GENE_TAG:
-        let x = cast[ptr Gene](u and PAYLOAD_MASK)
-        x.ref_count.inc()
-        `=sink`(a, b)
-      of LONG_STR_TAG:
-        let x = cast[ptr String](u and PAYLOAD_MASK)
-        x.ref_count.inc()
-        `=sink`(a, b)
-      else:
-        # Small ints, symbols, short strings, special values - just copy
-        `=sink`(a, b)
-  else:
-    # Regular float - just copy
-    `=sink`(a, b)
-  {.pop.}
+# Custom copy semantics are handled by inc_ref/dec_ref
+# proc `=copy`*(a: var Value, b: Value) =
+#   {.push checks: off, optimization: speed.}
+#   if cast[int64](a) == cast[int64](b):
+#     return
+#   if cast[int64](a) != 0:
+#     destroy(a)
+#   
+#   let u = cast[uint64](b)
+#   
+#   # Only need to increment ref count for heap-allocated values
+#   if (u and NAN_MASK) == NAN_MASK:  # In NaN space
+#     case u and 0xFFFF_0000_0000_0000u64:
+#       of REF_TAG:
+#         let x = cast[ptr Reference](u and PAYLOAD_MASK)
+#         x.ref_count.inc()
+#         `=sink`(a, b)
+#         {.linearScanEnd.}
+#       of GENE_TAG:
+#         let x = cast[ptr Gene](u and PAYLOAD_MASK)
+#         x.ref_count.inc()
+#         `=sink`(a, b)
+#       of LONG_STR_TAG:
+#         let x = cast[ptr String](u and PAYLOAD_MASK)
+#         x.ref_count.inc()
+#         `=sink`(a, b)
+#       else:
+#         # Small ints, symbols, short strings, special values - just copy
+#         `=sink`(a, b)
+#   else:
+#     # Regular float - just copy
+#     `=sink`(a, b)
+#   {.pop.}
 
 converter to_value*(k: Key): Value {.inline.} =
   cast[Value](k)
@@ -1143,7 +1146,7 @@ proc `$`*(self: ptr Reference): string =
 
 proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
   result = cast[ptr Reference](alloc0(sizeof(Reference)))
-  copy_mem(result, kind.addr, 2)
+  copy_mem(result, kind.unsafeAddr, 2)
   result.ref_count = 1
 
 proc `ref`*(v: Value): ptr Reference {.inline.} =
@@ -1683,25 +1686,25 @@ proc str*(v: Value): string =
             if x > 0xFFFF_FFFF:
               if x > 0xFF_FFFF_FFFF: # 6 chars
                 result = new_string(6)
-                copy_mem(result[0].addr, x.addr, 6)
+                copy_mem(result[0].addr, x.unsafeAddr, 6)
               else: # 5 chars
                 result = new_string(5)
-                copy_mem(result[0].addr, x.addr, 5)
+                copy_mem(result[0].addr, x.unsafeAddr, 5)
             else: # 4 chars
               result = new_string(4)
-              copy_mem(result[0].addr, x.addr, 4)
+              copy_mem(result[0].addr, x.unsafeAddr, 4)
           else:
             if x > 0xFF:
               if x > 0xFFFF: # 3 chars
                 result = new_string(3)
-                copy_mem(result[0].addr, x.addr, 3)
+                copy_mem(result[0].addr, x.unsafeAddr, 3)
               else: # 2 chars
                 result = new_string(2)
-                copy_mem(result[0].addr, x.addr, 2)
+                copy_mem(result[0].addr, x.unsafeAddr, 2)
             else:
               if x > 0: # 1 chars
                 result = new_string(1)
-                copy_mem(result[0].addr, x.addr, 1)
+                copy_mem(result[0].addr, x.unsafeAddr, 1)
               else: # 0 char
                 result = ""
           {.pop.}
@@ -1712,7 +1715,7 @@ proc str*(v: Value): string =
 
         of SYMBOL_TAG:
           let x = cast[int64](u and PAYLOAD_MASK)
-          result = get_symbol(x)
+          result = get_symbol(x.int)
 
         else:
           not_allowed(fmt"{v} is not a string.")
@@ -1866,7 +1869,7 @@ proc to_gene_value*(v: ptr Gene): Value {.inline.} =
 proc `$`*(self: ptr Gene): string =
   result = "(" & $self.type
   for k, v in self.props:
-    result &= " ^" & get_symbol(k.int64) & " " & $v
+    result &= " ^" & get_symbol(k.int64.int) & " " & $v
   for child in self.children:
     result &= " " & $child
   result &= ")"
@@ -2849,6 +2852,9 @@ proc `$`*(self: Instruction): string =
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
     of IkVarResolveInherited, IkVarAssignInherited:
       result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1}"
+    of IkLtVarConst, IkSubVarConst, IkAddVarConst:
+      # These instructions have variable index in arg0 and constant in arg1
+      result = fmt"         {($self.kind)[2..^1]} var[{self.arg0.int}] {self.arg1.int64.to_value()}"
     else:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"

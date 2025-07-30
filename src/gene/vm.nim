@@ -723,7 +723,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkRange:
             # Calculate the i-th element in the range
             let start = collection.ref.range_start.int64
-            let step = if collection.ref.range_step == NIL: 1 else: collection.ref.range_step.int64
+            let step = if collection.ref.range_step == NIL: 1'i64 else: collection.ref.range_step.int64
             let value = start + (i * step)
             self.frame.push(value.to_value())
           else:
@@ -795,6 +795,9 @@ proc exec*(self: VirtualMachine): Value =
       of IkBreak:
         {.push checks: off}
         let label = inst.arg0.int64.int
+        when not defined(release):
+          if self.trace:
+            echo fmt"IkBreak: jumping to PC {label}"
         
         # Check if this is a break outside of a loop
         if label == -1:
@@ -815,6 +818,9 @@ proc exec*(self: VirtualMachine): Value =
             not_allowed("break used outside of a loop")
         else:
           # Normal break - jump to the end label
+          when not defined(release):
+            if self.trace:
+              echo fmt"IkBreak: jumping from PC {pc} to PC {label}"
           pc = label
           inst = self.cu.instructions[pc].addr
           continue
@@ -1321,6 +1327,32 @@ proc exec*(self: VirtualMachine): Value =
             todo("Unsupported first operand for addition: " & $first)
         {.pop.}
 
+      of IkAddVarConst:
+        {.push checks: off}
+        # Add constant to variable: var + const
+        let var_value = self.frame.scope.members[inst.arg0.int64.int]
+        let const_value = inst.arg1.int64.to_value()
+        case var_value.kind:
+          of VkInt:
+            case const_value.kind:
+              of VkInt:
+                self.frame.push(var_value.int64 + const_value.int64)
+              of VkFloat:
+                self.frame.push(var_value.int64.float64 + const_value.float)
+              else:
+                todo("Unsupported constant type for IkAddVarConst: " & $const_value.kind)
+          of VkFloat:
+            case const_value.kind:
+              of VkInt:
+                self.frame.push(var_value.float + const_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.float + const_value.float)
+              else:
+                todo("Unsupported constant type for IkAddVarConst: " & $const_value.kind)
+          else:
+            todo("Unsupported variable type for IkAddVarConst: " & $var_value.kind)
+        {.pop.}
+
       of IkSub:
         {.push checks: off}
         let second = self.frame.pop()
@@ -1367,6 +1399,32 @@ proc exec*(self: VirtualMachine): Value =
                 todo("Unsupported arg0 type for IkSubValue: " & $inst.arg0.kind)
           else:
             todo("Unsupported operand type for IkSubValue: " & $first.kind)
+        {.pop.}
+
+      of IkSubVarConst:
+        {.push checks: off}
+        # Subtract constant from variable: var - const
+        let var_value = self.frame.scope.members[inst.arg0.int64.int]
+        let const_value = inst.arg1.int64.to_value()
+        case var_value.kind:
+          of VkInt:
+            case const_value.kind:
+              of VkInt:
+                self.frame.push(var_value.int64 - const_value.int64)
+              of VkFloat:
+                self.frame.push(var_value.int64.float64 - const_value.float)
+              else:
+                todo("Unsupported constant type for IkSubVarConst: " & $const_value.kind)
+          of VkFloat:
+            case const_value.kind:
+              of VkInt:
+                self.frame.push(var_value.float - const_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.float - const_value.float)
+              else:
+                todo("Unsupported constant type for IkSubVarConst: " & $const_value.kind)
+          else:
+            todo("Unsupported variable type for IkSubVarConst: " & $var_value.kind)
         {.pop.}
 
       of IkMul:
@@ -1480,6 +1538,32 @@ proc exec*(self: VirtualMachine): Value =
                 not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
           else:
             not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
+
+      of IkLtVarConst:
+        {.push checks: off}
+        # Compare variable with constant: var < const
+        let var_value = self.frame.scope.members[inst.arg0.int64.int]
+        let const_value = inst.arg1.int64.to_value()
+        case var_value.kind:
+          of VkInt:
+            case const_value.kind:
+              of VkInt:
+                self.frame.push((var_value.int64 < const_value.int64).to_value())
+              of VkFloat:
+                self.frame.push((var_value.int64.float64 < const_value.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $var_value.kind & " < " & $const_value.kind)
+          of VkFloat:
+            case const_value.kind:
+              of VkInt:
+                self.frame.push((var_value.float < const_value.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((var_value.float < const_value.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $var_value.kind & " < " & $const_value.kind)
+          else:
+            not_allowed("Cannot compare " & $var_value.kind & " < " & $const_value.kind)
+        {.pop.}
 
       of IkLe:
         let second = self.frame.pop()

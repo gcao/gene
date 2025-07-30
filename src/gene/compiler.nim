@@ -1,4 +1,4 @@
-import tables, strutils
+import tables, strutils, strformat
 
 import ./types
 import "./compiler/if"
@@ -1672,6 +1672,73 @@ proc optimize_noops(self: CompilationUnit) =
   
   self.instructions = new_instructions
 
+# Apply peephole optimizations to combine common instruction sequences
+proc apply_peephole_optimizations(self: CompilationUnit) =
+  var i = 0
+  var new_instructions: seq[Instruction] = @[]
+  var optimized_count = 0
+  
+  while i < self.instructions.len:
+    # Pattern: IkVarResolve + IkPushValue + IkLt -> IkLtVarConst
+    if i + 2 < self.instructions.len and
+       self.instructions[i].kind == IkVarResolve and
+       self.instructions[i+1].kind == IkPushValue and
+       self.instructions[i+2].kind == IkLt:
+      # Check if the pushed value is a small integer constant
+      let const_val = self.instructions[i+1].arg0
+      if const_val.kind == VkInt:
+        # Replace with IkLtVarConst
+        new_instructions.add(Instruction(
+          kind: IkLtVarConst,
+          arg0: self.instructions[i].arg0,  # variable index
+          arg1: const_val.int64.int32        # constant value as int32
+        ))
+        i += 3
+        optimized_count += 1
+        continue
+    
+    # Pattern: IkVarResolve + IkPushValue + IkSub -> IkSubVarConst
+    if i + 2 < self.instructions.len and
+       self.instructions[i].kind == IkVarResolve and
+       self.instructions[i+1].kind == IkPushValue and
+       self.instructions[i+2].kind == IkSub:
+      let const_val = self.instructions[i+1].arg0
+      if const_val.kind == VkInt:
+        new_instructions.add(Instruction(
+          kind: IkSubVarConst,
+          arg0: self.instructions[i].arg0,  # variable index
+          arg1: const_val.int64.int32        # constant value as int32
+        ))
+        i += 3
+        optimized_count += 1
+        continue
+    
+    # Pattern: IkVarResolve + IkPushValue + IkAdd -> IkAddVarConst
+    if i + 2 < self.instructions.len and
+       self.instructions[i].kind == IkVarResolve and
+       self.instructions[i+1].kind == IkPushValue and
+       self.instructions[i+2].kind == IkAdd:
+      let const_val = self.instructions[i+1].arg0
+      if const_val.kind == VkInt:
+        new_instructions.add(Instruction(
+          kind: IkAddVarConst,
+          arg0: self.instructions[i].arg0,  # variable index
+          arg1: const_val.int64.int32        # constant value as int32
+        ))
+        i += 3
+        optimized_count += 1
+        continue
+    
+    # No pattern matched, keep original instruction
+    new_instructions.add(self.instructions[i])
+    i += 1
+  
+  self.instructions = new_instructions
+  
+  when not defined(release):
+    if optimized_count > 0:
+      echo fmt"Peephole optimizations applied: {optimized_count}"
+
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit())
   self.output.instructions.add(Instruction(kind: IkStart))
@@ -1684,6 +1751,8 @@ proc compile*(input: seq[Value]): CompilationUnit =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  # Apply peephole optimizations BEFORE resolving jumps
+  self.output.apply_peephole_optimizations()
   self.output.update_jumps()
   self.output.optimize_noops()
   result = self.output
@@ -2154,6 +2223,8 @@ proc compile_init*(input: Value): CompilationUnit =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  # Apply peephole optimizations BEFORE resolving jumps
+  self.output.apply_peephole_optimizations()
   self.output.update_jumps()
   self.output.optimize_noops()
   result = self.output

@@ -31,14 +31,14 @@ proc load_extension*(vm: VirtualMachine, path: string): Namespace =
   if set_globals == nil:
     raise new_exception(types.Exception, "set_globals not found in extension: " & path)
   
-  set_globals(vm.addr)
+  set_globals(vm.unsafeAddr)
   
   # Call init to get the extension's namespace
   let init = cast[Init](handle.symAddr("init"))
   if init == nil:
     raise new_exception(types.Exception, "init not found in extension: " & path)
   
-  result = init(vm.addr)
+  result = init(vm.unsafeAddr)
   if result == nil:
     raise new_exception(types.Exception, "Extension init returned nil: " & path)
   
