@@ -1078,8 +1078,8 @@ template destroy(self: Value) =
   # else: regular float - no deallocation needed
   {.pop.}
 
-proc `=destroy`*(self: Value) =
-  destroy(self)
+# proc `=destroy`*(self: Value) =
+#   destroy(self)
 
 proc `=copy`*(a: var Value, b: Value) =
   {.push checks: off, optimization: speed.}
