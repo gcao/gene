@@ -1078,41 +1078,41 @@ template destroy(self: Value) =
   # else: regular float - no deallocation needed
   {.pop.}
 
-# Value is a distinct int64, no custom destructor needed
+proc `=destroy`*(self: Value) =
+  destroy(self)
 
-# Custom copy semantics are handled by inc_ref/dec_ref
-# proc `=copy`*(a: var Value, b: Value) =
-#   {.push checks: off, optimization: speed.}
-#   if cast[int64](a) == cast[int64](b):
-#     return
-#   if cast[int64](a) != 0:
-#     destroy(a)
-#   
-#   let u = cast[uint64](b)
-#   
-#   # Only need to increment ref count for heap-allocated values
-#   if (u and NAN_MASK) == NAN_MASK:  # In NaN space
-#     case u and 0xFFFF_0000_0000_0000u64:
-#       of REF_TAG:
-#         let x = cast[ptr Reference](u and PAYLOAD_MASK)
-#         x.ref_count.inc()
-#         `=sink`(a, b)
-#         {.linearScanEnd.}
-#       of GENE_TAG:
-#         let x = cast[ptr Gene](u and PAYLOAD_MASK)
-#         x.ref_count.inc()
-#         `=sink`(a, b)
-#       of LONG_STR_TAG:
-#         let x = cast[ptr String](u and PAYLOAD_MASK)
-#         x.ref_count.inc()
-#         `=sink`(a, b)
-#       else:
-#         # Small ints, symbols, short strings, special values - just copy
-#         `=sink`(a, b)
-#   else:
-#     # Regular float - just copy
-#     `=sink`(a, b)
-#   {.pop.}
+proc `=copy`*(a: var Value, b: Value) =
+  {.push checks: off, optimization: speed.}
+  if cast[int64](a) == cast[int64](b):
+    return
+  if cast[int64](a) != 0:
+    destroy(a)
+  
+  let u = cast[uint64](b)
+  
+  # Only need to increment ref count for heap-allocated values
+  if (u and NAN_MASK) == NAN_MASK:  # In NaN space
+    case u and 0xFFFF_0000_0000_0000u64:
+      of REF_TAG:
+        let x = cast[ptr Reference](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+        `=sink`(a, b)
+        {.linearScanEnd.}
+      of GENE_TAG:
+        let x = cast[ptr Gene](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+        `=sink`(a, b)
+      of LONG_STR_TAG:
+        let x = cast[ptr String](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+        `=sink`(a, b)
+      else:
+        # Small ints, symbols, short strings, special values - just copy
+        `=sink`(a, b)
+  else:
+    # Regular float - just copy
+    `=sink`(a, b)
+  {.pop.}
 
 converter to_value*(k: Key): Value {.inline.} =
   cast[Value](k)
