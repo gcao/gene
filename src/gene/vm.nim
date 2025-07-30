@@ -553,6 +553,8 @@ proc exec*(self: VirtualMachine): Value =
               self.frame.push(value.ref.instance_props[name])
             else:
               self.frame.push(NIL)
+          of VkNil:
+            not_allowed("Cannot access member on nil")
           else:
             todo($value.kind)
 

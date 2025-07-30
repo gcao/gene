@@ -1733,6 +1733,10 @@ proc apply_peephole_optimizations(self: CompilationUnit) =
     new_instructions.add(self.instructions[i])
     i += 1
   
+  # Clear arg0 values in old instructions to prevent double-free with =destroy
+  for inst in self.instructions.mitems:
+    inst.arg0 = NIL
+  
   self.instructions = new_instructions
   
   when not defined(release):
