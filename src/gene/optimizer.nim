@@ -202,13 +202,66 @@ proc optimize*(cu: CompilationUnit): CompilationUnit =
       result.instructions.add(cu.instructions[i])
       i += 1
   
+  # Mapping from old to new instruction positions
+  var old_to_new = initTable[int, int]()
+  
   # Update labels if we optimized
   if optimized:
-    # Need to properly recalculate label positions
-    # For now, just copy the labels and let the VM handle it
-    result.labels = cu.labels
+    # Recalculate label positions based on new instruction layout
+    var old_pos = 0
+    var new_pos = 0
+    
+    while old_pos < cu.instructions.len:
+      old_to_new[old_pos] = new_pos
+      
+      # Check if this position was optimized
+      var was_optimized = false
+      for pattern in optimization_patterns:
+        if old_pos + pattern.pattern.len <= cu.instructions.len:
+          var matches = true
+          for j, kind in pattern.pattern:
+            if cu.instructions[old_pos + j].kind != kind:
+              matches = false
+              break
+          
+          if matches:
+            let replacement = pattern.replacement(cu.instructions, old_pos)
+            if replacement.len >= 0:
+              new_pos += replacement.len
+              old_pos += pattern.pattern.len
+              was_optimized = true
+              break
+      
+      if not was_optimized:
+        old_pos += 1
+        new_pos += 1
+    
+    # Update labels with new positions
+    for label, pos in cu.labels:
+      if pos in old_to_new:
+        result.labels[label] = old_to_new[pos]
+      else:
+        # If the exact position isn't in mapping, find the nearest one
+        var best_pos = pos
+        while best_pos >= 0 and best_pos notin old_to_new:
+          best_pos -= 1
+        if best_pos >= 0:
+          result.labels[label] = old_to_new[best_pos]
+        else:
+          result.labels[label] = 0
   else:
     result.labels = cu.labels
+  
+  # Update jump targets in optimized instructions
+  if optimized:
+    for i in 0..<result.instructions.len:
+      case result.instructions[i].kind
+      of IkJump, IkJumpIfFalse, IkContinue, IkBreak, IkGeneStartDefault:
+        let old_target = result.instructions[i].arg0.int64
+        if old_target != -1 and old_target in old_to_new:
+          result.instructions[i].arg0 = old_to_new[old_target].to_value()
+      else:
+        discard
   
   # Multi-pass optimization - disabled for now to avoid potential infinite loops
   # if optimized:
@@ -219,7 +272,7 @@ proc optimize*(cu: CompilationUnit): CompilationUnit =
   return result
 
 # Public API for enabling/disabling optimization
-var optimization_enabled* = false  # Disabled until we fix label/scope tracking issues
+var optimization_enabled* = true
 
 proc enable_optimization*() =
   optimization_enabled = true
