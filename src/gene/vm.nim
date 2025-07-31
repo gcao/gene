@@ -391,9 +391,12 @@ proc exec*(self: VirtualMachine): Value =
                     echo "  Found in gene namespace: ", value.kind
                 if value == NIL:
                   let symbol_name = try:
-                    get_symbol(name.int)
-                  except:
-                    "<invalid key: " & $name.int & ">"
+                    # Extract symbol index from the Key (which is a symbol value)
+                    let symbol_key_uint = cast[uint64](name)
+                    let symbol_index = (symbol_key_uint and PAYLOAD_MASK).int
+                    get_symbol(symbol_index)
+                  except types.Exception as e:
+                    raise e  # Re-raise to see the actual error
                   not_allowed("Unknown symbol: " & symbol_name)
             else:
               when not defined(release):
@@ -1107,6 +1110,9 @@ proc exec*(self: VirtualMachine): Value =
             # For function calls, we need to set up the args gene with properties
             if current.ref.frame.args.kind != VkGene:
               current.ref.frame.args = new_gene_value()
+            # Ensure args gene is writable before modifying
+            if is_singleton_gene(current.ref.frame.args):
+              current.ref.frame.args = ensure_gene_writable(current.ref.frame.args)
             current.ref.frame.args.gene.props[key] = value
           of VkNativeFrame:
             # For native function calls, ignore property setting for now
@@ -1126,6 +1132,9 @@ proc exec*(self: VirtualMachine): Value =
             # For function calls, we need to set up the args gene with children
             if v.ref.frame.args.kind != VkGene:
               v.ref.frame.args = new_gene_value()
+            # Ensure args gene is writable before modifying
+            if is_singleton_gene(v.ref.frame.args):
+              v.ref.frame.args = ensure_gene_writable(v.ref.frame.args)
             case child.kind:
               of VkExplode:
                 # Expand the exploded array into individual elements

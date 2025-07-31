@@ -62,7 +62,7 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
     elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].to_value()))
     else:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: key.to_value()))
     for s in r.csymbol[1..^1]:
       let (is_int, i) = to_int(s)
       if is_int:
@@ -128,7 +128,7 @@ proc compile_symbol(self: Compiler, input: Value) =
           else:
             self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
         else:
-          self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
+          self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: key.to_value()))
         self.output.instructions.add(Instruction(kind: IkSpread))
         return
       let key = input.str.to_key()
@@ -139,7 +139,7 @@ proc compile_symbol(self: Compiler, input: Value) =
         else:
           self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
       else:
-        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
+        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: key.to_value()))
     elif input.kind == VkComplexSymbol:
       self.compile_complex_symbol(input)
 
@@ -293,7 +293,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
         else:
           self.output.instructions.add(Instruction(kind: IkVarResolveInherited, arg0: found.local_index.to_value(), arg1: found.parent_index))
       else:
-        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
+        self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: key.to_value()))
       
       # Compile the right-hand side value
       self.compile(gene.children[1])
@@ -330,7 +330,7 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
     elif self.scope_tracker.mappings.has_key(key):
       self.output.instructions.add(Instruction(kind: IkVarResolve, arg0: self.scope_tracker.mappings[key].to_value()))
     else:
-      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: cast[Value](key)))
+      self.output.instructions.add(Instruction(kind: IkResolveSymbol, arg0: key.to_value()))
       
     # Navigate to parent object (if nested property access)
     if r.csymbol.len > 2:

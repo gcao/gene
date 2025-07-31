@@ -79,7 +79,7 @@ test_vm """
 test_vm """
   (class A
     (.ctor _
-      (/a = 1)
+      (self/a = 1)
     )
   )
   (var x (new A))

@@ -1768,7 +1768,10 @@ converter to_value*(v: Rune): Value =
 var SYMBOLS*: ManagedSymbols
 
 proc get_symbol*(i: int): string {.inline.} =
-  SYMBOLS.store[i]
+  if i >= 0 and i < SYMBOLS.store.len:
+    SYMBOLS.store[i]
+  else:
+    raise new_exception(Exception, "Invalid symbol index: " & $i & " (total symbols: " & $SYMBOLS.store.len & ")")
 
 proc to_symbol_value*(s: string): Value =
   {.cast(gcsafe).}:
@@ -1783,6 +1786,8 @@ proc to_symbol_value*(s: string): Value =
       result = cast[Value](SYMBOL_TAG or new_id)
       SYMBOLS.map[s] = SYMBOLS.store.len
       SYMBOLS.store.add(s)
+      when defined(debugSymbols):
+        echo "Created symbol ", new_id, ": '", s, "'"
 
 proc to_key*(s: string): Key {.inline.} =
   cast[Key](to_symbol_value(s))
