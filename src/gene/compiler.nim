@@ -914,8 +914,8 @@ proc compile_constructor_definition(self: Compiler, gene: ptr Gene) =
   # We'll use a regular function but with a flag to skip namespace registration
   var fn_value = new_gene_value()
   fn_value.gene.type = "fn".to_symbol_value()
-  # Use empty string as the name to indicate this is a constructor
-  fn_value.gene.children.add("".to_symbol_value())
+  # Use a special internal name for constructors
+  fn_value.gene.children.add("__constructor__".to_symbol_value())
   # Add remaining children (args and body)
   for i in 0..<gene.children.len:
     fn_value.gene.children.add(gene.children[i])

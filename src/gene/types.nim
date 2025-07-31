@@ -2592,6 +2592,11 @@ proc has_method*(self: Class, name: string): bool {.inline.} =
   self.has_method(name.to_key)
 
 proc get_method*(self: Class, name: Key): Method =
+  when defined(debugOop):
+    echo "get_method: looking for method in class ", self.name
+    echo "  Class has ", self.methods.len, " methods"
+    for k, v in self.methods:
+      echo "    Method key: ", k
   let found = self.methods.get_or_default(name, nil)
   if not found.is_nil:
     return found

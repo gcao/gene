@@ -1778,6 +1778,9 @@ proc exec*(self: VirtualMachine): Value =
         # Set the function's namespace to the class namespace
         fn_value.ref.fn.ns = class.ns
         
+        when defined(debugOop):
+          echo "IkDefineMethod: defined method ", name.str, " for class ", class.name
+        
         # Return the method
         let r = new_ref(VkMethod)
         r.`method` = m
@@ -1804,6 +1807,10 @@ proc exec*(self: VirtualMachine): Value =
         
         # Set the function's namespace to the class namespace
         fn_value.ref.fn.ns = class.ns
+        
+        when defined(debugOop):
+          echo "IkDefineConstructor: set constructor for class ", class.name
+          echo "  Constructor function name: ", fn_value.ref.fn.name
         
         # Don't push anything - the constructor is stored in the class
       
@@ -1926,8 +1933,8 @@ proc exec*(self: VirtualMachine): Value =
             f.ns[f.name.to_key()] = v
         else:
           # Fallback for other cases
-          # Don't register constructors in the namespace (empty name)
-          if f.name != "":
+          # Don't register constructors in the namespace
+          if f.name != "__constructor__":
             f.ns[f.name.to_key()] = v
         
         self.frame.push(v)
