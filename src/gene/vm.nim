@@ -890,17 +890,22 @@ proc exec*(self: VirtualMachine): Value =
       of IkArrayAddChild:
         var child: Value
         self.frame.pop2(child)
+        # Ensure array is writable before modifying
+        var arr = self.frame.current()
+        if is_singleton_array(arr):
+          arr = ensure_array_writable(arr)
+          self.frame.replace(arr)
         case child.kind:
           of VkExplode:
             # Expand the exploded array into individual elements
             case child.ref.explode_value.kind:
               of VkArray:
                 for item in child.ref.explode_value.ref.arr:
-                  self.frame.current().ref.arr.add(item)
+                  arr.ref.arr.add(item)
               else:
                 not_allowed("Can only explode arrays")
           else:
-            self.frame.current().ref.arr.add(child)
+            arr.ref.arr.add(child)
       of IkArrayEnd:
         when not defined(release):
           if self.trace:
@@ -914,7 +919,12 @@ proc exec*(self: VirtualMachine): Value =
         let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
-        self.frame.current().ref.map[key] = value
+        # Ensure map is writable before modifying
+        var map = self.frame.current()
+        if is_singleton_map(map):
+          map = ensure_map_writable(map)
+          self.frame.replace(map)
+        map.ref.map[key] = value
       of IkMapEnd:
         discard
 
@@ -1073,16 +1083,25 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var value: Value
         self.frame.pop2(value)
-        self.frame.current().gene.type = value
+        # Ensure gene is writable before modifying
+        var gene = self.frame.current()
+        if is_singleton_gene(gene):
+          gene = ensure_gene_writable(gene)
+          self.frame.replace(gene)
+        gene.gene.type = value
         {.pop.}
       of IkGeneSetProp:
         {.push checks: off}
         let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
-        let current = self.frame.current()
+        var current = self.frame.current()
         case current.kind:
           of VkGene:
+            # Ensure gene is writable before modifying
+            if is_singleton_gene(current):
+              current = ensure_gene_writable(current)
+              self.frame.replace(current)
             current.gene.props[key] = value
           of VkFrame:
             # For function calls, we need to set up the args gene with properties
@@ -1099,7 +1118,7 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var child: Value
         self.frame.pop2(child)
-        let v = self.frame.current()
+        var v = self.frame.current()
         if DEBUG_VM:
           echo "IkGeneAddChild: v.kind = ", v.kind, ", child = ", child
         case v.kind:
@@ -1131,6 +1150,10 @@ proc exec*(self: VirtualMachine): Value =
               else:
                 v.ref.native_frame.args.gene.children.add(child)
           of VkGene:
+            # Ensure gene is writable before modifying
+            if is_singleton_gene(v):
+              v = ensure_gene_writable(v)
+              self.frame.replace(v)
             case child.kind:
               of VkExplode:
                 # Expand the exploded array into individual elements

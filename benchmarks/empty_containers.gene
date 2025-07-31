@@ -1,0 +1,31 @@
+# Benchmark for empty container creation
+
+# Test 1: Creating many empty arrays
+(do
+  (var i 0)
+  (while (i < 1000)
+    []  # Create and discard
+    (i += 1)
+  )
+  ($print "Created 1000 empty arrays\n")
+)
+
+# Test 2: Creating many empty maps  
+(do
+  (var j 0)
+  (while (j < 1000)
+    {}  # Create and discard
+    (j += 1)
+  )
+  ($print "Created 1000 empty maps\n")
+)
+
+# Test 3: Creating empty genes
+(do
+  (var k 0)
+  (while (k < 1000)
+    ()  # Create and discard
+    (k += 1)  
+  )
+  ($print "Created 1000 empty genes\n")
+)

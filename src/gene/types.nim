@@ -1796,10 +1796,83 @@ proc to_complex_symbol*(parts: seq[string]): Value {.inline.} =
 
 #################### Array #######################
 
+# Singleton empty containers to avoid allocations
+var EMPTY_ARRAY_REF: ptr Reference
+var EMPTY_MAP_REF: ptr Reference  
+var EMPTY_SET_REF: ptr Reference
+var EMPTY_GENE_REF: ptr Gene
+var SINGLETONS_INITIALIZED = false
+
+# Forward declaration - will be defined after new_gene
+proc init_empty_singletons()
+
+proc is_singleton_array*(v: Value): bool {.inline.} =
+  v.kind == VkArray and v.ref == EMPTY_ARRAY_REF
+
+proc is_singleton_map*(v: Value): bool {.inline.} =
+  v.kind == VkMap and v.ref == EMPTY_MAP_REF
+
+proc is_singleton_set*(v: Value): bool {.inline.} =
+  v.kind == VkSet and v.ref == EMPTY_SET_REF
+
+proc is_singleton_gene*(v: Value): bool {.inline.} =
+  v.kind == VkGene and v.gene == EMPTY_GENE_REF
+
+proc ensure_array_writable*(v: Value): Value =
+  ## Ensure array is writable (copy-on-write for singletons)
+  if is_singleton_array(v):
+    # Create a new writable array
+    let r = new_ref(VkArray)
+    r.arr = @[]
+    result = r.to_ref_value()
+  else:
+    result = v
+
+proc ensure_map_writable*(v: Value): Value =
+  ## Ensure map is writable (copy-on-write for singletons)
+  if is_singleton_map(v):
+    # Create a new writable map
+    let r = new_ref(VkMap)
+    r.map = initTable[Key, Value]()
+    result = r.to_ref_value()
+  else:
+    result = v
+
+proc ensure_set_writable*(v: Value): Value =
+  ## Ensure set is writable (copy-on-write for singletons)
+  if is_singleton_set(v):
+    # Create a new writable set
+    let r = new_ref(VkSet)
+    r.set = initHashSet[Value]()
+    result = r.to_ref_value()
+  else:
+    result = v
+
+proc ensure_gene_writable*(v: Value): Value =
+  ## Ensure gene is writable (copy-on-write for singletons)
+  if is_singleton_gene(v):
+    # Create a new writable gene by allocating directly
+    let g = cast[ptr Gene](alloc0(sizeof(Gene)))
+    g.ref_count = 1
+    g.type = NIL
+    g.props = initTable[Key, Value]()
+    g.children = @[]
+    # Inline to_gene_value
+    let ptr_addr = cast[uint64](g)
+    assert (ptr_addr and 0xFFFF_0000_0000_0000u64) == 0, "Gene pointer too large for NaN boxing"
+    result = cast[Value](GENE_TAG or ptr_addr)
+  else:
+    result = v
+
 proc new_array_value*(v: varargs[Value]): Value =
-  let r = new_ref(VkArray)
-  r.arr = @v
-  result = r.to_ref_value()
+  if v.len == 0:
+    init_empty_singletons()
+    # Return singleton empty array
+    result = EMPTY_ARRAY_REF.to_ref_value()
+  else:
+    let r = new_ref(VkArray)
+    r.arr = @v
+    result = r.to_ref_value()
 
 proc len*(self: Value): int =
   case self.kind
@@ -1834,14 +1907,16 @@ proc new_stream_value*(v: varargs[Value]): Value =
 #################### Set #########################
 
 proc new_set_value*(): Value =
-  let r = new_ref(VkSet)
-  result = r.to_ref_value()
+  init_empty_singletons()
+  # Always return singleton for empty set
+  result = EMPTY_SET_REF.to_ref_value()
 
 #################### Map #########################
 
 proc new_map_value*(): Value =
-  let r = new_ref(VkMap)
-  result = r.to_ref_value()
+  init_empty_singletons()
+  # Always return singleton for empty map
+  result = EMPTY_MAP_REF.to_ref_value()
 
 proc new_map_value*(map: Table[Key, Value]): Value =
   let r = new_ref(VkMap)
@@ -1889,7 +1964,9 @@ proc new_gene*(`type`: Value): ptr Gene =
   result.children = @[]
 
 proc new_gene_value*(): Value {.inline.} =
-  new_gene().to_gene_value()
+  init_empty_singletons()
+  # Return singleton empty gene
+  EMPTY_GENE_REF.to_gene_value()
 
 proc new_gene_value*(`type`: Value): Value {.inline.} =
   new_gene(`type`).to_gene_value()
@@ -1902,6 +1979,27 @@ proc new_gene_value*(`type`: Value): Value {.inline.} =
 #     if not v.is_literal():
 #       return false
 #   true
+
+# Implementation of singleton initialization (after new_gene is defined)
+proc init_empty_singletons() =
+  # Initialize empty singletons once
+  if not SINGLETONS_INITIALIZED:
+    EMPTY_ARRAY_REF = new_ref(VkArray)
+    EMPTY_ARRAY_REF.arr = @[]
+    EMPTY_ARRAY_REF.ref_count = 1000000  # Never free
+    
+    EMPTY_MAP_REF = new_ref(VkMap) 
+    EMPTY_MAP_REF.map = initTable[Key, Value]()
+    EMPTY_MAP_REF.ref_count = 1000000  # Never free
+    
+    EMPTY_SET_REF = new_ref(VkSet)
+    EMPTY_SET_REF.set = initHashSet[Value]()
+    EMPTY_SET_REF.ref_count = 1000000  # Never free
+    
+    EMPTY_GENE_REF = new_gene()
+    EMPTY_GENE_REF.ref_count = 1000000  # Never free
+    
+    SINGLETONS_INITIALIZED = true
 
 #################### Application #################
 

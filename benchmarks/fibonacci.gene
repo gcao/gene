@@ -1,0 +1,16 @@
+# Fibonacci benchmark
+
+(fn fib n
+  (if (n < 2)
+    n
+  else
+    ((fib (n - 1)) + (fib (n - 2)))
+  )
+)
+
+# Calculate fib(25) 
+($print "Calculating fib(25)...\n")
+(var result (fib 25))
+($print "fib(25) = ")
+($print result)
+($print "\n")
