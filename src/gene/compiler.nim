@@ -1725,7 +1725,12 @@ proc compile*(f: Function) =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   self.output.optimize_noops()
-  f.body_compiled = self.output
+  
+  # Apply peephole optimization if enabled
+  if optimization_enabled:
+    f.body_compiled = optimize(self.output)
+  else:
+    f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
 
 proc compile*(m: Macro) =
@@ -1760,7 +1765,12 @@ proc compile*(m: Macro) =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   self.output.optimize_noops()
-  m.body_compiled = self.output
+  
+  # Apply peephole optimization if enabled
+  if optimization_enabled:
+    m.body_compiled = optimize(self.output)
+  else:
+    m.body_compiled = self.output
   m.body_compiled.kind = CkMacro
   m.body_compiled.matcher = m.matcher
 
@@ -1796,7 +1806,12 @@ proc compile*(b: Block) =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   self.output.optimize_noops()
-  b.body_compiled = self.output
+  
+  # Apply peephole optimization if enabled
+  if optimization_enabled:
+    b.body_compiled = optimize(self.output)
+  else:
+    b.body_compiled = self.output
   b.body_compiled.matcher = b.matcher
 
 proc compile*(f: CompileFn) =
@@ -1831,7 +1846,12 @@ proc compile*(f: CompileFn) =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   self.output.optimize_noops()
-  f.body_compiled = self.output
+  
+  # Apply peephole optimization if enabled
+  if optimization_enabled:
+    f.body_compiled = optimize(self.output)
+  else:
+    f.body_compiled = self.output
   f.body_compiled.kind = CkCompileFn
   f.body_compiled.matcher = f.matcher
 

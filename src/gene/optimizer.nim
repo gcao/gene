@@ -113,32 +113,35 @@ proc init_patterns() =
   )
   
   # Pattern: VarResolve + VarResolve (same index) -> VarResolve + Dup
-  register_pattern("optimize_duplicate_loads", @[IkVarResolve, IkVarResolve],
-    proc(instructions: seq[Instruction], start: int): seq[Instruction] =
-      if instructions[start].arg0.int64 == instructions[start + 1].arg0.int64:
-        @[instructions[start], Instruction(kind: IkDup)]
-      else:
-        @[] # Cannot optimize
-  )
+  # DISABLED: May cause issues with instruction alignment
+  # register_pattern("optimize_duplicate_loads", @[IkVarResolve, IkVarResolve],
+  #   proc(instructions: seq[Instruction], start: int): seq[Instruction] =
+  #     if instructions[start].arg0.int64 == instructions[start + 1].arg0.int64:
+  #       @[instructions[start], Instruction(kind: IkDup)]
+  #     else:
+  #       @[] # Cannot optimize
+  # )
   
   # Pattern: Var + VarResolve (same index) -> Dup + Var  
-  register_pattern("store_load_same", @[IkVar, IkVarResolve],
-    proc(instructions: seq[Instruction], start: int): seq[Instruction] =
-      if instructions[start].arg0.int64 == instructions[start + 1].arg0.int64:
-        @[Instruction(kind: IkDup), instructions[start]]
-      else:
-        @[] # Cannot optimize
-  )
+  # DISABLED: May cause issues with instruction alignment
+  # register_pattern("store_load_same", @[IkVar, IkVarResolve],
+  #   proc(instructions: seq[Instruction], start: int): seq[Instruction] =
+  #     if instructions[start].arg0.int64 == instructions[start + 1].arg0.int64:
+  #       @[Instruction(kind: IkDup), instructions[start]]
+  #     else:
+  #       @[] # Cannot optimize
+  # )
   
   # Pattern: JumpIfFalse to a Jump -> conditional jump to final target
-  register_pattern("optimize_jump_chain", @[IkJumpIfFalse],
-    proc(instructions: seq[Instruction], start: int): seq[Instruction] =
-      let target = instructions[start].arg0.int64
-      if target < instructions.len and instructions[target].kind == IkJump:
-        @[Instruction(kind: IkJumpIfFalse, arg0: instructions[target].arg0)]
-      else:
-        @[] # Cannot optimize
-  )
+  # DISABLED: This breaks if-statement logic
+  # register_pattern("optimize_jump_chain", @[IkJumpIfFalse],
+  #   proc(instructions: seq[Instruction], start: int): seq[Instruction] =
+  #     let target = instructions[start].arg0.int64
+  #     if target < instructions.len and instructions[target].kind == IkJump:
+  #       @[Instruction(kind: IkJumpIfFalse, arg0: instructions[target].arg0)]
+  #     else:
+  #       @[] # Cannot optimize
+  # )
   
   # Pattern: Not + JumpIfFalse -> JumpIfTrue (invert condition)
   register_pattern("optimize_not_jump", @[IkNot, IkJumpIfFalse],
@@ -152,6 +155,10 @@ proc init_patterns() =
     proc(instructions: seq[Instruction], start: int): seq[Instruction] =
       @[]
   )
+  
+  # Don't optimize if-statement conditions for now
+  # The issue is that optimizing conditions breaks the if-statement structure
+  # This needs a more sophisticated approach that understands the full if-statement pattern
 
 # Optimize a compilation unit
 proc optimize*(cu: CompilationUnit): CompilationUnit =
@@ -262,12 +269,6 @@ proc optimize*(cu: CompilationUnit): CompilationUnit =
           result.instructions[i].arg0 = old_to_new[old_target].to_value()
       else:
         discard
-  
-  # Multi-pass optimization - disabled for now to avoid potential infinite loops
-  # if optimized:
-  #   let second_pass = optimize(result)
-  #   if second_pass.instructions.len < result.instructions.len:
-  #     return second_pass
   
   return result
 
