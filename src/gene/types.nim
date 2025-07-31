@@ -1870,14 +1870,10 @@ proc ensure_gene_writable*(v: Value): Value =
     result = v
 
 proc new_array_value*(v: varargs[Value]): Value =
-  if v.len == 0:
-    init_empty_singletons()
-    # Return singleton empty array
-    result = EMPTY_ARRAY_REF.to_ref_value()
-  else:
-    let r = new_ref(VkArray)
-    r.arr = @v
-    result = r.to_ref_value()
+  # Always create a new array to avoid mutation issues
+  let r = new_ref(VkArray)
+  r.arr = @v
+  result = r.to_ref_value()
 
 proc len*(self: Value): int =
   case self.kind
@@ -1912,16 +1908,18 @@ proc new_stream_value*(v: varargs[Value]): Value =
 #################### Set #########################
 
 proc new_set_value*(): Value =
-  init_empty_singletons()
-  # Always return singleton for empty set
-  result = EMPTY_SET_REF.to_ref_value()
+  # Always create a new set to avoid mutation issues
+  let r = new_ref(VkSet)
+  r.set = initHashSet[Value]()
+  result = r.to_ref_value()
 
 #################### Map #########################
 
 proc new_map_value*(): Value =
-  init_empty_singletons()
-  # Always return singleton for empty map
-  result = EMPTY_MAP_REF.to_ref_value()
+  # Always create a new map to avoid mutation issues
+  let r = new_ref(VkMap)
+  r.map = initTable[Key, Value]()
+  result = r.to_ref_value()
 
 proc new_map_value*(map: Table[Key, Value]): Value =
   let r = new_ref(VkMap)
@@ -1969,9 +1967,8 @@ proc new_gene*(`type`: Value): ptr Gene =
   result.children = @[]
 
 proc new_gene_value*(): Value {.inline.} =
-  init_empty_singletons()
-  # Return singleton empty gene
-  EMPTY_GENE_REF.to_gene_value()
+  # Create new gene each time to avoid mutation checks
+  new_gene().to_gene_value()
 
 proc new_gene_value*(`type`: Value): Value {.inline.} =
   new_gene(`type`).to_gene_value()

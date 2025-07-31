@@ -5,7 +5,7 @@ import ./parser
 import ./compiler
 import ./vm/args
 import ./vm/module
-import ./optimizer
+# import ./optimizer
 
 when not defined(noExtensions):
   import ./vm/extension
@@ -145,19 +145,20 @@ proc render_template(self: VirtualMachine, tpl: Value): Value =
       return tpl
 
 proc should_profile(self: VirtualMachine): bool {.inline.} =
-  # Check if current frame is executing a function that needs profiling
-  if self.frame.kind == FkFunction and self.frame.target.kind == VkFunction:
-    let fn = self.frame.target.ref.fn
-    # Profile if not already optimized and execution count is high enough
-    return not fn.is_optimized and fn.profile_data != nil
+  # # Check if current frame is executing a function that needs profiling
+  # if self.frame.kind == FkFunction and self.frame.target.kind == VkFunction:
+  #   let fn = self.frame.target.ref.fn
+  #   # Profile if not already optimized and execution count is high enough
+  #   return not fn.is_optimized and fn.profile_data != nil
   return false
 
 proc record_symbol_resolution(self: VirtualMachine, pc: int, resolved: Value) {.inline.} =
-  if self.should_profile():
-    let fn = self.frame.target.ref.fn
-    if fn.profile_data == nil:
-      fn.profile_data = ProfileData()
-    fn.profile_data.symbol_resolutions[pc] = resolved
+  # if self.should_profile():
+  #   let fn = self.frame.target.ref.fn
+  #   if fn.profile_data == nil:
+  #     fn.profile_data = ProfileData()
+  #   fn.profile_data.symbol_resolutions[pc] = resolved
+  discard
 
 
 proc exec*(self: VirtualMachine): Value =
@@ -403,8 +404,8 @@ proc exec*(self: VirtualMachine): Value =
                 if self.trace:
                   echo "  Found in current namespace: ", value.kind
             self.frame.push(value)
-            # Record symbol resolution for profiling
-            self.record_symbol_resolution(pc, value)
+            # # Record symbol resolution for profiling
+            # self.record_symbol_resolution(pc, value)
 
       of IkSelf:
         self.frame.push(self.frame.self)
@@ -893,22 +894,17 @@ proc exec*(self: VirtualMachine): Value =
       of IkArrayAddChild:
         var child: Value
         self.frame.pop2(child)
-        # Ensure array is writable before modifying
-        var arr = self.frame.current()
-        if is_singleton_array(arr):
-          arr = ensure_array_writable(arr)
-          self.frame.replace(arr)
         case child.kind:
           of VkExplode:
             # Expand the exploded array into individual elements
             case child.ref.explode_value.kind:
               of VkArray:
                 for item in child.ref.explode_value.ref.arr:
-                  arr.ref.arr.add(item)
+                  self.frame.current().ref.arr.add(item)
               else:
                 not_allowed("Can only explode arrays")
           else:
-            arr.ref.arr.add(child)
+            self.frame.current().ref.arr.add(child)
       of IkArrayEnd:
         when not defined(release):
           if self.trace:
@@ -922,12 +918,7 @@ proc exec*(self: VirtualMachine): Value =
         let key = inst.arg0.Key
         var value: Value
         self.frame.pop2(value)
-        # Ensure map is writable before modifying
-        var map = self.frame.current()
-        if is_singleton_map(map):
-          map = ensure_map_writable(map)
-          self.frame.replace(map)
-        map.ref.map[key] = value
+        self.frame.current().ref.map[key] = value
       of IkMapEnd:
         discard
 
@@ -1086,12 +1077,7 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var value: Value
         self.frame.pop2(value)
-        # Ensure gene is writable before modifying
-        var gene = self.frame.current()
-        if is_singleton_gene(gene):
-          gene = ensure_gene_writable(gene)
-          self.frame.replace(gene)
-        gene.gene.type = value
+        self.frame.current().gene.type = value
         {.pop.}
       of IkGeneSetProp:
         {.push checks: off}
@@ -1101,18 +1087,11 @@ proc exec*(self: VirtualMachine): Value =
         var current = self.frame.current()
         case current.kind:
           of VkGene:
-            # Ensure gene is writable before modifying
-            if is_singleton_gene(current):
-              current = ensure_gene_writable(current)
-              self.frame.replace(current)
             current.gene.props[key] = value
           of VkFrame:
             # For function calls, we need to set up the args gene with properties
             if current.ref.frame.args.kind != VkGene:
               current.ref.frame.args = new_gene_value()
-            # Ensure args gene is writable before modifying
-            if is_singleton_gene(current.ref.frame.args):
-              current.ref.frame.args = ensure_gene_writable(current.ref.frame.args)
             current.ref.frame.args.gene.props[key] = value
           of VkNativeFrame:
             # For native function calls, ignore property setting for now
@@ -1132,9 +1111,6 @@ proc exec*(self: VirtualMachine): Value =
             # For function calls, we need to set up the args gene with children
             if v.ref.frame.args.kind != VkGene:
               v.ref.frame.args = new_gene_value()
-            # Ensure args gene is writable before modifying
-            if is_singleton_gene(v.ref.frame.args):
-              v.ref.frame.args = ensure_gene_writable(v.ref.frame.args)
             case child.kind:
               of VkExplode:
                 # Expand the exploded array into individual elements
@@ -1159,10 +1135,6 @@ proc exec*(self: VirtualMachine): Value =
               else:
                 v.ref.native_frame.args.gene.children.add(child)
           of VkGene:
-            # Ensure gene is writable before modifying
-            if is_singleton_gene(v):
-              v = ensure_gene_writable(v)
-              self.frame.replace(v)
             case child.kind:
               of VkExplode:
                 # Expand the exploded array into individual elements
@@ -1199,17 +1171,17 @@ proc exec*(self: VirtualMachine): Value =
                 if f.body_compiled == nil:
                   f.compile()
 
-                # Initialize profiling if needed
-                if f.profile_data == nil and not f.is_optimized:
-                  if not f.body_compiled.is_nil:
-                    f.profile_data = ProfileData()
-                
-                # Update execution count and check for optimization
-                if f.profile_data != nil:
-                  f.profile_data.execution_count.inc()
-                  # Check if we should optimize this function
-                  if should_optimize(f):
-                    optimize_function(f)
+                # # Initialize profiling if needed
+                # if f.profile_data == nil and not f.is_optimized:
+                #   if not f.body_compiled.is_nil:
+                #     f.profile_data = ProfileData()
+                # 
+                # # Update execution count and check for optimization
+                # if f.profile_data != nil:
+                #   f.profile_data.execution_count.inc()
+                #   # Check if we should optimize this function
+                #   if should_optimize(f):
+                #     optimize_function(f)
 
 
                 pc.inc()
@@ -1321,9 +1293,6 @@ proc exec*(self: VirtualMachine): Value =
               of NfFunction:
                 let f = frame.target.ref.native_fn
                 let fn_result = f(self, frame.args)
-                # Clear args to prevent accumulation if using singleton
-                if is_singleton_gene(frame.args):
-                  frame.args.gene.children.setLen(0)
                 self.frame.replace(fn_result)
               else:
                 todo($frame.kind)
