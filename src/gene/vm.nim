@@ -1805,8 +1805,7 @@ proc exec*(self: VirtualMachine): Value =
         # Set the function's namespace to the class namespace
         fn_value.ref.fn.ns = class.ns
         
-        # Return the function
-        self.frame.push(fn_value)
+        # Don't push anything - the constructor is stored in the class
       
       of IkSuper:
         # Super - returns the parent class
@@ -1927,7 +1926,9 @@ proc exec*(self: VirtualMachine): Value =
             f.ns[f.name.to_key()] = v
         else:
           # Fallback for other cases
-          f.ns[f.name.to_key()] = v
+          # Don't register constructors in the namespace (empty name)
+          if f.name != "":
+            f.ns[f.name.to_key()] = v
         
         self.frame.push(v)
         {.pop.}

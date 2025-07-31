@@ -910,16 +910,17 @@ proc compile_constructor_definition(self: Compiler, gene: ptr Gene) =
   if gene.children.len < 2:
     not_allowed("Constructor definition requires at least args and body")
   
-  # Create a function from the constructor definition
-  # Use fnx (anonymous function) to avoid symbol resolution issues
+  # Create a special constructor function that won't be registered in namespace
+  # We'll use a regular function but with a flag to skip namespace registration
   var fn_value = new_gene_value()
-  fn_value.gene.type = "fnx".to_symbol_value()
-  # For fnx, the first child is the args, not the name
+  fn_value.gene.type = "fn".to_symbol_value()
+  # Use empty string as the name to indicate this is a constructor
+  fn_value.gene.children.add("".to_symbol_value())
   # Add remaining children (args and body)
   for i in 0..<gene.children.len:
     fn_value.gene.children.add(gene.children[i])
   
-  # Compile the function definition
+  # Compile the function
   self.compile_fn(fn_value)
   
   # Set as constructor for the class
