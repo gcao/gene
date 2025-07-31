@@ -1036,7 +1036,7 @@ proc exec*(self: VirtualMachine): Value =
             r.native_frame = NativeFrame(
               kind: NfFunction,
               target: gene_type,
-              args: new_gene_value(),
+              args: new_gene(NIL).to_gene_value(),  # Create a new gene instead of using singleton
             )
             self.frame.replace(r.to_ref_value())
             pc = inst.arg0.int64.int64.int

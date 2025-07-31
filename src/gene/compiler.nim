@@ -892,8 +892,7 @@ proc compile_method_definition(self: Compiler, gene: ptr Gene) =
   
   # Create a function from the method definition
   # The method is similar to (fn name args body...) but bound to the class
-  var fn_value = new_gene_value()
-  fn_value.gene.type = "fn".to_symbol_value()
+  var fn_value = new_gene_value("fn".to_symbol_value())
   for i in 0..<gene.children.len:
     fn_value.gene.children.add(gene.children[i])
   
@@ -907,18 +906,25 @@ proc compile_constructor_definition(self: Compiler, gene: ptr Gene) =
   # Constructor definition: (.ctor args body...)
   when defined(debugOop):
     echo "compile_constructor_definition called with ", gene.children.len, " children"
+    for i, child in gene.children:
+      echo "  Child ", i, ": ", child
   if gene.children.len < 2:
     not_allowed("Constructor definition requires at least args and body")
   
   # Create a special constructor function that won't be registered in namespace
   # We'll use a regular function but with a flag to skip namespace registration
-  var fn_value = new_gene_value()
-  fn_value.gene.type = "fn".to_symbol_value()
+  var fn_value = new_gene_value("fn".to_symbol_value())
   # Use a special internal name for constructors
   fn_value.gene.children.add("__constructor__".to_symbol_value())
-  # Add remaining children (args and body)
-  for i in 0..<gene.children.len:
+  # Add args and body from the .ctor gene
+  fn_value.gene.children.add(gene.children[0])  # args
+  for i in 1..<gene.children.len:  # body
     fn_value.gene.children.add(gene.children[i])
+  
+  when defined(debugOop):
+    echo "  Created fn_value with ", fn_value.gene.children.len, " children"
+    for i, child in fn_value.gene.children:
+      echo "    Child ", i, ": ", child
   
   # Compile the function
   self.compile_fn(fn_value)

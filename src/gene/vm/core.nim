@@ -12,6 +12,7 @@ proc println(self: VirtualMachine, args: Value): Value =
     if i < args.gene.children.len - 1:
       s &= " "
   echo s
+  return NIL
 
 proc print(self: VirtualMachine, args: Value): Value =
   var s = ""
@@ -20,6 +21,7 @@ proc print(self: VirtualMachine, args: Value): Value =
     if i < args.gene.children.len - 1:
       s &= " "
   stdout.write(s)
+  return NIL
 
 proc gene_assert(self: VirtualMachine, args: Value): Value =
   if args.gene.children.len > 0:
