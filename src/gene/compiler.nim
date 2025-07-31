@@ -2,6 +2,7 @@ import tables, strutils
 
 import ./types
 import "./compiler/if"
+import ./optimizer
 
 const DEBUG = false
 
@@ -1687,6 +1688,10 @@ proc compile*(input: seq[Value]): CompilationUnit =
   self.output.update_jumps()
   self.output.optimize_noops()
   result = self.output
+  
+  # Apply peephole optimization if enabled
+  if optimization_enabled:
+    result = optimize(result)
 
 proc compile*(f: Function) =
   if f.body_compiled != nil:
@@ -2157,6 +2162,10 @@ proc compile_init*(input: Value): CompilationUnit =
   self.output.update_jumps()
   self.output.optimize_noops()
   result = self.output
+  
+  # Apply peephole optimization if enabled
+  if optimization_enabled:
+    result = optimize(result)
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
