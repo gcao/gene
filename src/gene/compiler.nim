@@ -905,15 +905,16 @@ proc compile_method_definition(self: Compiler, gene: ptr Gene) =
 
 proc compile_constructor_definition(self: Compiler, gene: ptr Gene) =
   # Constructor definition: (.ctor args body...)
+  when defined(debugOop):
+    echo "compile_constructor_definition called with ", gene.children.len, " children"
   if gene.children.len < 2:
     not_allowed("Constructor definition requires at least args and body")
   
   # Create a function from the constructor definition
-  # The constructor is similar to (fn new args body...) but bound to the class
+  # Use fnx (anonymous function) to avoid symbol resolution issues
   var fn_value = new_gene_value()
-  fn_value.gene.type = "fn".to_symbol_value()
-  # Add "new" as the function name
-  fn_value.gene.children.add("new".to_symbol_value())
+  fn_value.gene.type = "fnx".to_symbol_value()
+  # For fnx, the first child is the args, not the name
   # Add remaining children (args and body)
   for i in 0..<gene.children.len:
     fn_value.gene.children.add(gene.children[i])
@@ -1542,8 +1543,11 @@ proc compile_gene(self: Compiler, input: Value) =
           return
         elif s.starts_with("."):
           # Check if this is a method definition (e.g., .fn, .ctor) or a method call
-          if s == ".fn" or s == ".ctor":
+          if s == ".fn":
             self.compile_method_definition(gene)
+            return
+          elif s == ".ctor":
+            self.compile_constructor_definition(gene)
             return
           else:
             self.compile_method_call(gene)

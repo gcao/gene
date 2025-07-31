@@ -1743,6 +1743,8 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkCompileInit:
         let input = self.frame.pop()
+        when defined(debugOop):
+          echo "IkCompileInit: compiling ", input
         let compiled = compile_init(input)
         let r = new_ref(VkCompiledUnit)
         r.cu = compiled
