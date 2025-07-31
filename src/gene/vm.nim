@@ -1036,7 +1036,7 @@ proc exec*(self: VirtualMachine): Value =
             r.native_frame = NativeFrame(
               kind: NfFunction,
               target: gene_type,
-              args: new_gene(NIL).to_gene_value(),  # Create a new gene instead of using singleton
+              args: new_gene_value(),  # Use singleton for performance
             )
             self.frame.replace(r.to_ref_value())
             pc = inst.arg0.int64.int64.int
@@ -1320,7 +1320,11 @@ proc exec*(self: VirtualMachine): Value =
             case frame.kind:
               of NfFunction:
                 let f = frame.target.ref.native_fn
-                self.frame.replace(f(self, frame.args))
+                let fn_result = f(self, frame.args)
+                # Clear args to prevent accumulation if using singleton
+                if is_singleton_gene(frame.args):
+                  frame.args.gene.children.setLen(0)
+                self.frame.replace(fn_result)
               else:
                 todo($frame.kind)
 
