@@ -1547,6 +1547,44 @@ proc exec*(self: VirtualMachine): Value =
           self.frame.push(FALSE)
         else:
           self.frame.push(TRUE)
+      
+      # Fused instructions
+      of IkVarLtValue:
+        # arg0: value to compare against
+        # arg1: variable index
+        {.push checks: off.}
+        let var_index = inst.arg1
+        var scope = self.frame.scope
+        if scope.isNil or var_index >= scope.members.len:
+          not_allowed("Variable index out of bounds")
+        let var_value = scope.members[var_index]
+        
+        # Compare variable < value
+        case var_value.kind:
+          of VkInt:
+            case inst.arg0.kind:
+              of VkInt:
+                self.frame.push((var_value.int64 < inst.arg0.int64).to_value())
+              of VkFloat:
+                self.frame.push((var_value.int64.float64 < inst.arg0.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $var_value.kind & " < " & $inst.arg0.kind)
+          of VkFloat:
+            case inst.arg0.kind:
+              of VkInt:
+                self.frame.push((var_value.float < inst.arg0.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((var_value.float < inst.arg0.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $var_value.kind & " < " & $inst.arg0.kind)
+          else:
+            not_allowed("Cannot compare " & $var_value.kind & " < " & $inst.arg0.kind)
+        {.pop.}
+      
+      of IkVarLeValue, IkVarGtValue, IkVarGeValue, IkVarEqValue, IkVarNeValue,
+         IkVarAddValue, IkVarSubValue:
+        # TODO: Implement other fused instructions
+        not_allowed($inst.kind & " not implemented yet")
 
       of IkSpread:
         # Spread operator - pop array and create explode marker

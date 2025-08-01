@@ -649,6 +649,16 @@ type
     IkOr
     IkNot
 
+    # Fused instructions for common patterns
+    IkVarLtValue   # Variable < Value in one instruction
+    IkVarLeValue   # Variable <= Value
+    IkVarGtValue   # Variable > Value
+    IkVarGeValue   # Variable >= Value
+    IkVarEqValue   # Variable == Value
+    IkVarNeValue   # Variable != Value
+    IkVarAddValue  # Variable + Value
+    IkVarSubValue  # Variable - Value
+
     IkSpread      # Spread operator (...)
     IkCreateRange
     IkCreateEnum
@@ -2842,6 +2852,10 @@ proc `$`*(self: Instruction): string =
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
     of IkVarResolveInherited, IkVarAssignInherited:
       result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1}"
+    of IkVarLtValue, IkVarLeValue, IkVarGtValue, IkVarGeValue, 
+       IkVarEqValue, IkVarNeValue, IkVarAddValue, IkVarSubValue:
+      # Fused instructions: arg0 is value, arg1 is variable index
+      result = fmt"         {($self.kind)[2..^1]} {$self.arg0} var[{self.arg1}]"
     else:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"

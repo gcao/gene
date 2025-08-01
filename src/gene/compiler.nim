@@ -2,6 +2,7 @@ import tables, strutils
 
 import ./types
 import "./compiler/if"
+import ./fusion
 
 const DEBUG = false
 
@@ -2156,7 +2157,7 @@ proc compile_init*(input: Value): CompilationUnit =
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.update_jumps()
   self.output.optimize_noops()
-  result = self.output
+  result = apply_fusion(self.output)
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
