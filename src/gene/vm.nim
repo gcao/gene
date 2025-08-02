@@ -1390,6 +1390,158 @@ proc exec*(self: VirtualMachine): Value =
           else:
             todo("Unsupported operand for negation: " & $value)
 
+      of IkVarAddValue:
+        {.push checks: off}
+        # Get variable value based on parent index (stored in arg1)
+        let var_value = if inst.arg1 == 0:
+          self.frame.scope.members[inst.arg0.int64]
+        else:
+          var scope = self.frame.scope
+          for _ in 0..<inst.arg1:
+            scope = scope.parent
+          scope.members[inst.arg0.int64]
+        
+        # Get literal value from next instruction
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        let literal_value = inst.arg0
+        
+        # Add variable and literal
+        case var_value.kind:
+          of VkInt:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.int64 + literal_value.int64)
+              of VkFloat:
+                self.frame.push(var_value.int64.float64 + literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarAddValue: " & $literal_value)
+          of VkFloat:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.float + literal_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.float + literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarAddValue: " & $literal_value)
+          else:
+            todo("Unsupported variable operand for VarAddValue: " & $var_value)
+        {.pop.}
+
+      of IkVarSubValue:
+        {.push checks: off}
+        # Get variable value based on parent index (stored in arg1)
+        let var_value = if inst.arg1 == 0:
+          self.frame.scope.members[inst.arg0.int64]
+        else:
+          var scope = self.frame.scope
+          for _ in 0..<inst.arg1:
+            scope = scope.parent
+          scope.members[inst.arg0.int64]
+        
+        # Get literal value from next instruction
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        let literal_value = inst.arg0
+        
+        # Subtract literal from variable
+        case var_value.kind:
+          of VkInt:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.int64 - literal_value.int64)
+              of VkFloat:
+                self.frame.push(var_value.int64.float64 - literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarSubValue: " & $literal_value)
+          of VkFloat:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.float - literal_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.float - literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarSubValue: " & $literal_value)
+          else:
+            todo("Unsupported variable operand for VarSubValue: " & $var_value)
+        {.pop.}
+
+      of IkVarMulValue:
+        {.push checks: off}
+        # Get variable value based on parent index (stored in arg1)
+        let var_value = if inst.arg1 == 0:
+          self.frame.scope.members[inst.arg0.int64]
+        else:
+          var scope = self.frame.scope
+          for _ in 0..<inst.arg1:
+            scope = scope.parent
+          scope.members[inst.arg0.int64]
+        
+        # Get literal value from next instruction
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        let literal_value = inst.arg0
+        
+        # Multiply variable by literal
+        case var_value.kind:
+          of VkInt:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.int64 * literal_value.int64)
+              of VkFloat:
+                self.frame.push(var_value.int64.float64 * literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarMulValue: " & $literal_value)
+          of VkFloat:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.float * literal_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.float * literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarMulValue: " & $literal_value)
+          else:
+            todo("Unsupported variable operand for VarMulValue: " & $var_value)
+        {.pop.}
+
+      of IkVarDivValue:
+        {.push checks: off}
+        # Get variable value based on parent index (stored in arg1)
+        let var_value = if inst.arg1 == 0:
+          self.frame.scope.members[inst.arg0.int64]
+        else:
+          var scope = self.frame.scope
+          for _ in 0..<inst.arg1:
+            scope = scope.parent
+          scope.members[inst.arg0.int64]
+        
+        # Get literal value from next instruction
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        let literal_value = inst.arg0
+        
+        # Divide variable by literal
+        case var_value.kind:
+          of VkInt:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.int64.float64 / literal_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.int64.float64 / literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarDivValue: " & $literal_value)
+          of VkFloat:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push(var_value.float / literal_value.int64.float64)
+              of VkFloat:
+                self.frame.push(var_value.float / literal_value.float)
+              else:
+                todo("Unsupported literal operand for VarDivValue: " & $literal_value)
+          else:
+            todo("Unsupported variable operand for VarDivValue: " & $var_value)
+        {.pop.}
+
       of IkLt:
         {.push checks: off}
         var second: Value
@@ -1419,6 +1571,44 @@ proc exec*(self: VirtualMachine): Value =
           else:
             not_allowed("Cannot compare " & $first.kind & " < " & $second.kind)
         {.pop.}
+      of IkVarLtValue:
+        {.push checks: off}
+        # Get variable value based on parent index (stored in arg1)
+        let var_value = if inst.arg1 == 0:
+          self.frame.scope.members[inst.arg0.int64]
+        else:
+          var scope = self.frame.scope
+          for _ in 0..<inst.arg1:
+            scope = scope.parent
+          scope.members[inst.arg0.int64]
+        
+        # Get literal value from next instruction
+        pc.inc()
+        inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        let literal_value = inst.arg0
+        
+        # Compare with literal value
+        case var_value.kind:
+          of VkInt:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push((var_value.int64 < literal_value.int64).to_value())
+              of VkFloat:
+                self.frame.push((var_value.int64.float64 < literal_value.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $var_value.kind & " < " & $literal_value.kind)
+          of VkFloat:
+            case literal_value.kind:
+              of VkInt:
+                self.frame.push((var_value.float < literal_value.int64.float64).to_value())
+              of VkFloat:
+                self.frame.push((var_value.float < literal_value.float).to_value())
+              else:
+                not_allowed("Cannot compare " & $var_value.kind & " < " & $literal_value.kind)
+          else:
+            not_allowed("Cannot compare " & $var_value.kind & " < " & $literal_value.kind)
+        {.pop.}
+
       of IkLtValue:
         var first: Value
         self.frame.pop2(first)

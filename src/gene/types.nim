@@ -630,15 +630,20 @@ type
 
     IkAdd
     IkAddValue    # args: literal value
+    IkVarAddValue # variable + literal value
     IkSub
     IkSubValue
+    IkVarSubValue # variable - literal value
     IkNeg          # Unary negation
     IkMul
+    IkVarMulValue # variable * literal value
     IkDiv
+    IkVarDivValue # variable / literal value
     IkPow
 
     IkLt
     IkLtValue
+    IkVarLtValue
     IkLe
     IkGt
     IkGe
@@ -2820,7 +2825,8 @@ proc `$`*(self: Instruction): string =
   case self.kind
     of IkPushValue,
       IkVar, IkVarResolve, IkVarAssign,
-      IkAddValue, IkLtValue,
+      IkAddValue, IkVarAddValue, IkVarSubValue, IkVarMulValue, IkVarDivValue,
+      IkLtValue, IkVarLtValue,
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,
       IkResolveSymbol, IkResolveMethod,
