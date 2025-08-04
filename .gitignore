@@ -26,6 +26,7 @@ scratch*
 .aider*
 
 gene-new/
+gene-rust/
 
 # Test executables
 tests/test_*
