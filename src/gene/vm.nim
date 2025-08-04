@@ -203,16 +203,18 @@ proc exec*(self: VirtualMachine): Value =
             self.cu = self.frame.caller_address.cu
             pc = start_pos
             inst = self.cu.instructions[pc].addr
-            self.frame.update(self.frame.caller_frame)
-            self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+            var old_frame = self.frame
+            self.frame = self.frame.caller_frame
+            old_frame.free()
             continue
           elif self.cu.kind == CkMacro:
             # Return to caller who will handle macro expansion
             self.cu = self.frame.caller_address.cu
             pc = self.frame.caller_address.pc
             inst = self.cu.instructions[pc].addr
-            self.frame.update(self.frame.caller_frame)
-            self.frame.ref_count.dec()
+            var old_frame = self.frame
+            self.frame = self.frame.caller_frame
+            old_frame.free()
             # Push the macro result for the caller to process
             self.frame.push(v)
             continue
@@ -232,8 +234,9 @@ proc exec*(self: VirtualMachine): Value =
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
-          self.frame.update(self.frame.caller_frame)
-          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+          var old_frame = self.frame
+          self.frame = self.frame.caller_frame
+          old_frame.free()
           if not skip_return:
             self.frame.push(result_val)
           continue
@@ -1140,12 +1143,14 @@ proc exec*(self: VirtualMachine): Value =
                   f.compile()
 
                 pc.inc()
-                frame.caller_frame.update(self.frame)
+                # Pop the VkFrame value from the stack before switching context
+                discard self.frame.pop()
+                # Set up caller info and switch to the new frame
+                frame.caller_frame = self.frame
+                self.frame.ref_count.inc()  # Increment ref count since we're storing a reference
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = f.ns
-                # Pop the frame from the stack before switching context
-                discard self.frame.pop()
-                self.frame.update(frame)
+                self.frame = frame
                 self.cu = f.body_compiled
                 
                 # Process arguments if matcher exists
@@ -2061,8 +2066,9 @@ proc exec*(self: VirtualMachine): Value =
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
-          self.frame.update(self.frame.caller_frame)
-          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
+          var old_frame = self.frame
+          self.frame = self.frame.caller_frame
+          old_frame.free()  # Properly release the frame
           self.frame.push(v)
           continue
         {.pop.}
@@ -2266,8 +2272,9 @@ proc exec*(self: VirtualMachine): Value =
               self.cu = self.frame.caller_address.cu
               pc = self.frame.caller_address.pc
               inst = self.cu.instructions[pc].addr
-              self.frame.update(self.frame.caller_frame)
-              self.frame.ref_count.dec()
+              var old_frame = self.frame
+              self.frame = self.frame.caller_frame
+              old_frame.free()
               self.frame.push(future_val)
             continue
           else:
@@ -2726,7 +2733,6 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
     self.frame = new_frame(ns)
   else:
     self.frame.update(new_frame(ns))
-    self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
   
   self.frame.self = NIL  # Set default self to nil
   self.cu = compiled

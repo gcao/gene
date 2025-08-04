@@ -1038,6 +1038,10 @@ proc to_binstr*(v: int64): string =
 proc new_id*(): Id =
   cast[Id](rand(BIGGEST_INT))
 
+# Memory pool for reference objects
+var REF_POOL {.threadvar.}: seq[ptr Reference]
+const INITIAL_REF_POOL_SIZE = 2048
+
 template destroy(self: Value) =
   {.push checks: off, optimization: speed.}
   let u = cast[uint64](self)
@@ -1049,7 +1053,11 @@ template destroy(self: Value) =
         let x = cast[ptr Reference](u and PAYLOAD_MASK)
         if x.ref_count == 1:
           # echo "destroy " & $x.kind
-          dealloc(x)
+          # Return to pool instead of deallocating
+          if REF_POOL.len < INITIAL_REF_POOL_SIZE * 2:
+            REF_POOL.add(x)
+          else:
+            dealloc(x)
         else:
           x.ref_count.dec()
         {.linearScanEnd.}
@@ -1140,7 +1148,11 @@ proc `$`*(self: ptr Reference): string =
   $self.kind
 
 proc new_ref*(kind: ValueKind): ptr Reference {.inline.} =
-  result = cast[ptr Reference](alloc0(sizeof(Reference)))
+  if REF_POOL.len > 0:
+    result = REF_POOL.pop()
+    result[].reset()
+  else:
+    result = cast[ptr Reference](alloc0(sizeof(Reference)))
   copy_mem(result, kind.addr, 2)
   result.ref_count = 1
 
@@ -2016,7 +2028,13 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 #################### Scope #######################
 
-var SCOPES: seq[Scope] = @[]
+var SCOPES {.threadvar.}: seq[Scope]
+
+proc reset_scope*(self: Scope) {.inline.} =
+  # Reset only necessary fields
+  self.tracker = nil
+  self.parent = nil
+  self.members.set_len(0)
 
 proc free*(self: Scope) =
   {.push checks: off, optimization: speed.}
@@ -2024,8 +2042,7 @@ proc free*(self: Scope) =
   if self.ref_count == 0:
     if self.parent != nil:
       self.parent.free()
-    self.parent = nil
-    self.members.set_len(0)
+    self.reset_scope()
     SCOPES.add(self)
   {.pop.}
 
@@ -2739,7 +2756,25 @@ converter to_value*(f: NativeFn): Value {.inline.} =
 #################### Frame #######################
 
 # const REG_DEFAULT = 6
-var FRAMES: seq[Frame] = @[]
+const INITIAL_FRAME_POOL_SIZE = 1024
+const INITIAL_SCOPE_POOL_SIZE = 512
+
+var FRAMES {.threadvar.}: seq[Frame]
+
+proc reset_frame*(self: Frame) {.inline.} =
+  # Reset only necessary fields, avoiding full memory clear
+  self.kind = FkFunction
+  self.caller_frame = nil
+  self.caller_address = Address()
+  self.caller_context = nil
+  self.ns = nil
+  self.scope = nil
+  self.target = NIL
+  self.self = NIL
+  self.args = NIL
+  self.current_method = nil
+  self.stack_index = 0
+  # Stack array will be overwritten as needed, no need to clear
 
 proc free*(self: var Frame) =
   {.push checks: off, optimization: speed.}
@@ -2749,15 +2784,20 @@ proc free*(self: var Frame) =
       self.caller_frame.free()
     if self.scope != nil:
       self.scope.free()
-    self[].reset()
+    self.reset_frame()
     FRAMES.add(self)
   {.pop.}
+
+var FRAME_ALLOCS* = 0
+var FRAME_REUSES* = 0
 
 proc new_frame*(): Frame =
   if FRAMES.len > 0:
     result = FRAMES.pop()
+    FRAME_REUSES.inc()
   else:
     result = cast[Frame](alloc0(sizeof(FrameObj)))
+    FRAME_ALLOCS.inc()
   result.ref_count = 1
   # result.stack_index = REG_DEFAULT
 
@@ -2928,6 +2968,24 @@ proc init_app_and_vm*() =
     current_exception: NIL,
     symbols: addr SYMBOLS,
   )
+  
+  # Pre-allocate frame and scope pools
+  if FRAMES.len == 0:
+    FRAMES = newSeqOfCap[Frame](INITIAL_FRAME_POOL_SIZE)
+    for i in 0..<INITIAL_FRAME_POOL_SIZE:
+      FRAMES.add(cast[Frame](alloc0(sizeof(FrameObj))))
+      FRAME_ALLOCS.inc()  # Count the pre-allocated frames
+  
+  if SCOPES.len == 0:
+    SCOPES = newSeqOfCap[Scope](INITIAL_SCOPE_POOL_SIZE)
+    for i in 0..<INITIAL_SCOPE_POOL_SIZE:
+      SCOPES.add(cast[Scope](alloc0(sizeof(ScopeObj))))
+  
+  if REF_POOL.len == 0:
+    REF_POOL = newSeqOfCap[ptr Reference](INITIAL_REF_POOL_SIZE)
+    for i in 0..<INITIAL_REF_POOL_SIZE:
+      REF_POOL.add(cast[ptr Reference](alloc0(sizeof(Reference))))
+  
   let r = new_ref(VkApplication)
   r.app = new_app()
   r.app.global_ns = new_namespace("global").to_value()

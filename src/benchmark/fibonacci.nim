@@ -41,6 +41,13 @@ when isMainModule:
   echo fmt"Result: fib({n}) = {int_result}"
   echo fmt"Time: {duration:.6f} seconds"
   
+  # Show memory statistics
+  echo fmt"Frame allocations: {FRAME_ALLOCS}"
+  echo fmt"Frame reuses: {FRAME_REUSES}"
+  if FRAME_ALLOCS + FRAME_REUSES > 0:
+    let reuse_rate = (FRAME_REUSES.float / (FRAME_ALLOCS + FRAME_REUSES).float) * 100
+    echo fmt"Frame reuse rate: {reuse_rate:.1f}%"
+  
   # Show operations per second for comparison
   if n == "24":
     # fib(24) requires 150049 recursive calls
