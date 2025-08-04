@@ -2028,16 +2028,7 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 #################### Scope #######################
 
-var SCOPES {.threadvar.}: seq[Scope]
 
-var SCOPE_ALLOCS* = 0
-var SCOPE_REUSES* = 0
-
-proc reset_scope*(self: Scope) {.inline.} =
-  # Reset only necessary fields
-  self.tracker = nil
-  self.parent = nil
-  self.members.set_len(0)
 
 proc free*(self: Scope) =
   {.push checks: off, optimization: speed.}
@@ -2045,8 +2036,7 @@ proc free*(self: Scope) =
   if self.ref_count == 0:
     if self.parent != nil:
       self.parent.free()
-    self.reset_scope()
-    SCOPES.add(self)
+    dealloc(self)
   {.pop.}
 
 proc update*(self: var Scope, scope: Scope) {.inline.} =
@@ -2059,12 +2049,7 @@ proc update*(self: var Scope, scope: Scope) {.inline.} =
   {.pop.}
 
 proc new_scope*(tracker: ScopeTracker): Scope =
-  if SCOPES.len > 0:
-    result = SCOPES.pop()
-    SCOPE_REUSES.inc()
-  else:
-    result = cast[Scope](alloc0(sizeof(ScopeObj)))
-    SCOPE_ALLOCS.inc()
+  result = cast[Scope](alloc0(sizeof(ScopeObj)))
   result.ref_count = 1
   result.tracker = tracker
 
@@ -2762,7 +2747,6 @@ converter to_value*(f: NativeFn): Value {.inline.} =
 
 # const REG_DEFAULT = 6
 const INITIAL_FRAME_POOL_SIZE = 1024
-const INITIAL_SCOPE_POOL_SIZE = 512
 
 var FRAMES {.threadvar.}: seq[Frame]
 
@@ -2981,10 +2965,6 @@ proc init_app_and_vm*() =
       FRAMES.add(cast[Frame](alloc0(sizeof(FrameObj))))
       FRAME_ALLOCS.inc()  # Count the pre-allocated frames
   
-  if SCOPES.len == 0:
-    SCOPES = newSeqOfCap[Scope](INITIAL_SCOPE_POOL_SIZE)
-    for i in 0..<INITIAL_SCOPE_POOL_SIZE:
-      SCOPES.add(cast[Scope](alloc0(sizeof(ScopeObj))))
   
   if REF_POOL.len == 0:
     REF_POOL = newSeqOfCap[ptr Reference](INITIAL_REF_POOL_SIZE)

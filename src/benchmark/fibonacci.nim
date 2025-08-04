@@ -48,12 +48,6 @@ when isMainModule:
     let reuse_rate = (FRAME_REUSES.float / (FRAME_ALLOCS + FRAME_REUSES).float) * 100
     echo fmt"Frame reuse rate: {reuse_rate:.1f}%"
   
-  echo fmt"Scope allocations: {SCOPE_ALLOCS}"
-  echo fmt"Scope reuses: {SCOPE_REUSES}"
-  if SCOPE_ALLOCS + SCOPE_REUSES > 0:
-    let scope_reuse_rate = (SCOPE_REUSES.float / (SCOPE_ALLOCS + SCOPE_REUSES).float) * 100
-    echo fmt"Scope reuse rate: {scope_reuse_rate:.1f}%"
-  
   # Show operations per second for comparison
   if n == "24":
     # fib(24) requires 150049 recursive calls
