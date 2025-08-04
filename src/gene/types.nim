@@ -2030,6 +2030,9 @@ proc on_member_missing*(vm_data: VirtualMachine, args: Value): Value =
 
 var SCOPES {.threadvar.}: seq[Scope]
 
+var SCOPE_ALLOCS* = 0
+var SCOPE_REUSES* = 0
+
 proc reset_scope*(self: Scope) {.inline.} =
   # Reset only necessary fields
   self.tracker = nil
@@ -2058,8 +2061,10 @@ proc update*(self: var Scope, scope: Scope) {.inline.} =
 proc new_scope*(tracker: ScopeTracker): Scope =
   if SCOPES.len > 0:
     result = SCOPES.pop()
+    SCOPE_REUSES.inc()
   else:
     result = cast[Scope](alloc0(sizeof(ScopeObj)))
+    SCOPE_ALLOCS.inc()
   result.ref_count = 1
   result.tracker = tracker
 

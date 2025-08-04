@@ -247,8 +247,9 @@ proc exec*(self: VirtualMachine): Value =
           not_allowed("IkScopeStart: expected ScopeTracker, got " & $inst.arg0.kind)
         self.frame.scope = new_scope(inst.arg0.ref.scope_tracker, self.frame.scope)
       of IkScopeEnd:
+        var old_scope = self.frame.scope
         self.frame.scope = self.frame.scope.parent
-        discard
+        old_scope.free()
 
       of IkVar:
         {.push checks: off.}
