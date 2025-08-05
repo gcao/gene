@@ -178,7 +178,7 @@ proc exec*(self: VirtualMachine): Value =
           if indent.len >= 2:
             indent.delete(indent.len-2..indent.len-1)
         # TODO: validate that there is only one value on the stack
-        let v = self.frame.current
+        let v = move(self.frame.current)
         if self.frame.caller_frame == nil:
           return v
         else:

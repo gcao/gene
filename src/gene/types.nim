@@ -5,8 +5,10 @@ import times
 
 # Forward declarations for new types
 type
-  Value* = distinct int64  # Move this first
+  Value* {.bycopy, shallow.} = distinct int64  # No copy/destroy hooks needed for POD type
   CustomValue* = ref object of RootObj
+
+type
   Mixin* = ref object
   EnumDef* = ref object
     name*: string
@@ -1042,85 +1044,111 @@ proc new_id*(): Id =
 var REF_POOL {.threadvar.}: seq[ptr Reference]
 const INITIAL_REF_POOL_SIZE = 2048
 
-template destroy(self: Value) =
-  {.push checks: off, optimization: speed.}
-  let u = cast[uint64](self)
-  
-  # Only need to destroy heap-allocated values
+# DEPRECATED: This destroy template is no longer needed
+# Reference counting is now handled by proper =destroy hooks on ptr types
+# template destroy(self: Value) =
+#   {.push checks: off, optimization: speed.}
+#   let u = cast[uint64](self)
+#   
+#   # Only need to destroy heap-allocated values
+#   if (u and NAN_MASK) == NAN_MASK:  # In NaN space
+#     case u and 0xFFFF_0000_0000_0000u64:
+#       of REF_TAG:
+#         let x = cast[ptr Reference](u and PAYLOAD_MASK)
+#         if x.ref_count == 1:
+#           # echo "destroy " & $x.kind
+#           # Return to pool instead of deallocating
+#           if REF_POOL.len < INITIAL_REF_POOL_SIZE * 2:
+#             REF_POOL.add(x)
+#           else:
+#             dealloc(x)
+#         else:
+#           x.ref_count.dec()
+#         {.linearScanEnd.}
+#       of GENE_TAG:
+#         let x = cast[ptr Gene](u and PAYLOAD_MASK)
+#         if x.ref_count == 1:
+#           # echo "destroy gene"
+#           dealloc(x)
+#         else:
+#           x.ref_count.dec()
+#       of LONG_STR_TAG:
+#         let x = cast[ptr String](u and PAYLOAD_MASK)
+#         if x.ref_count == 1:
+#           # echo "destroy long string"
+#           dealloc(x)
+#         else:
+#           x.ref_count.dec()
+#       else:
+#         # Small ints, symbols, short strings, special values - no deallocation needed
+#         discard
+#   # else: regular float - no deallocation needed
+#   {.pop.}
+
+# Removed =destroy for Value - not needed for inlined values
+# Reference counting is handled at the Reference/Gene level
+
+# Removed =copy for Value - not needed since Value is a POD type
+# For inlined values (ints, floats, etc), simple bit copy is sufficient
+# Reference counting should be handled at the Reference/Gene/String level
+
+# Manual reference counting for Values
+proc retain*(v: Value) {.inline.} =
+  {.push checks: off.}
+  let u = cast[uint64](v)
+  if (u and NAN_MASK) == NAN_MASK:  # In NaN space
+    case u and 0xFFFF_0000_0000_0000u64:
+      of REF_TAG:
+        let x = cast[ptr Reference](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+      of GENE_TAG:
+        let x = cast[ptr Gene](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+      of LONG_STR_TAG:
+        let x = cast[ptr String](u and PAYLOAD_MASK)
+        x.ref_count.inc()
+      else:
+        discard  # No ref counting for other types
+  {.pop.}
+
+proc release*(v: Value) {.inline.} =
+  {.push checks: off.}
+  let u = cast[uint64](v)
   if (u and NAN_MASK) == NAN_MASK:  # In NaN space
     case u and 0xFFFF_0000_0000_0000u64:
       of REF_TAG:
         let x = cast[ptr Reference](u and PAYLOAD_MASK)
         if x.ref_count == 1:
-          # echo "destroy " & $x.kind
-          # Return to pool instead of deallocating
           if REF_POOL.len < INITIAL_REF_POOL_SIZE * 2:
             REF_POOL.add(x)
           else:
             dealloc(x)
         else:
           x.ref_count.dec()
-        {.linearScanEnd.}
       of GENE_TAG:
         let x = cast[ptr Gene](u and PAYLOAD_MASK)
         if x.ref_count == 1:
-          # echo "destroy gene"
           dealloc(x)
         else:
           x.ref_count.dec()
       of LONG_STR_TAG:
         let x = cast[ptr String](u and PAYLOAD_MASK)
         if x.ref_count == 1:
-          # echo "destroy long string"
           dealloc(x)
         else:
           x.ref_count.dec()
       else:
-        # Small ints, symbols, short strings, special values - no deallocation needed
-        discard
-  # else: regular float - no deallocation needed
-  {.pop.}
-
-proc `=destroy`*(self: Value) =
-  destroy(self)
-
-proc `=copy`*(a: var Value, b: Value) =
-  {.push checks: off, optimization: speed.}
-  if cast[int64](a) == cast[int64](b):
-    return
-  if cast[int64](a) != 0:
-    destroy(a)
-  
-  let u = cast[uint64](b)
-  
-  # Only need to increment ref count for heap-allocated values
-  if (u and NAN_MASK) == NAN_MASK:  # In NaN space
-    case u and 0xFFFF_0000_0000_0000u64:
-      of REF_TAG:
-        let x = cast[ptr Reference](u and PAYLOAD_MASK)
-        x.ref_count.inc()
-        `=sink`(a, b)
-        {.linearScanEnd.}
-      of GENE_TAG:
-        let x = cast[ptr Gene](u and PAYLOAD_MASK)
-        x.ref_count.inc()
-        `=sink`(a, b)
-      of LONG_STR_TAG:
-        let x = cast[ptr String](u and PAYLOAD_MASK)
-        x.ref_count.inc()
-        `=sink`(a, b)
-      else:
-        # Small ints, symbols, short strings, special values - just copy
-        `=sink`(a, b)
-  else:
-    # Regular float - just copy
-    `=sink`(a, b)
+        discard  # No ref counting for other types
   {.pop.}
 
 converter to_value*(k: Key): Value {.inline.} =
   cast[Value](k)
 
 #################### Reference ###################
+
+# NOTE: Reference, Gene, and String are manually managed ptr types
+# They use manual ref counting, not Nim's ARC/ORC
+# The ref counting is handled when creating Values from these types
 
 proc `==`*(a, b: ptr Reference): bool =
   if a.is_nil:
@@ -1186,7 +1214,7 @@ proc `==`*(a, b: Value): bool {.no_side_effect.} =
   
   # Default to false
 
-proc is_float*(v: Value): bool {.inline.} =
+proc is_float*(v: Value): bool {.inline, noSideEffect.} =
   let u = cast[uint64](v)
   # A value is a float if it's NOT in our NaN boxing space (0xFFF0-0xFFFF prefix)
   # The only exceptions are actual float NaN/infinity values
@@ -1198,11 +1226,11 @@ proc is_float*(v: Value): bool {.inline.} =
   # Everything else in NaN space is not a float
   return false
 
-proc is_small_int*(v: Value): bool {.inline.} =
+proc is_small_int*(v: Value): bool {.inline, noSideEffect.} =
   (cast[uint64](v) and 0xFFFF_0000_0000_0000u64) == SMALL_INT_TAG
 
 # Forward declaration
-converter to_int*(v: Value): int64 {.inline.}
+converter to_int*(v: Value): int64 {.inline, noSideEffect.}
 
 proc kind*(v: Value): ValueKind =
   {.cast(gcsafe).}:
@@ -1619,7 +1647,7 @@ proc size*(self: Value): int =
 
 # NaN boxing for integers - supports 48-bit immediate values
 
-converter to_value*(v: int): Value {.inline.} =
+converter to_value*(v: int): Value {.inline, noSideEffect.} =
   let i = v.int64
   if i >= SMALL_INT_MIN and i <= SMALL_INT_MAX:
     # Fits in 48 bits - use NaN boxing
@@ -1628,15 +1656,15 @@ converter to_value*(v: int): Value {.inline.} =
     # TODO: Allocate BigInt for values outside 48-bit range
     raise newException(OverflowDefect, "Integer " & $i & " outside supported range")
 
-converter to_value*(v: int16): Value {.inline.} =
+converter to_value*(v: int16): Value {.inline, noSideEffect.} =
   # int16 always fits in 48 bits
   result = cast[Value](SMALL_INT_TAG or (cast[uint64](v.int64) and PAYLOAD_MASK))
 
-converter to_value*(v: int32): Value {.inline.} =
+converter to_value*(v: int32): Value {.inline, noSideEffect.} =
   # int32 always fits in 48 bits
   result = cast[Value](SMALL_INT_TAG or (cast[uint64](v.int64) and PAYLOAD_MASK))
 
-converter to_value*(v: int64): Value {.inline.} =
+converter to_value*(v: int64): Value {.inline, noSideEffect.} =
   if v >= SMALL_INT_MIN and v <= SMALL_INT_MAX:
     # Fits in 48 bits - use NaN boxing
     result = cast[Value](SMALL_INT_TAG or (cast[uint64](v) and PAYLOAD_MASK))
@@ -1644,7 +1672,7 @@ converter to_value*(v: int64): Value {.inline.} =
     # TODO: Allocate BigInt for values outside 48-bit range
     raise newException(OverflowDefect, "Integer " & $v & " outside supported range")
 
-converter to_int*(v: Value): int64 {.inline.} =
+converter to_int*(v: Value): int64 {.inline, noSideEffect.} =
   if is_small_int(v):
     # Extract and sign-extend from 48 bits
     let raw = cast[uint64](v) and PAYLOAD_MASK
