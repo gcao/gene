@@ -845,9 +845,9 @@ type
     scope*: Scope
     target*: Value  # target of the invocation
     args*: Value
-    stack*: array[100, Value]
+    stack*: array[1024, Value]
     current_method*: Method  # Currently executing method (for super calls)
-    stack_index*: uint8
+    stack_index*: uint16
 
   Frame* = ptr FrameObj
 

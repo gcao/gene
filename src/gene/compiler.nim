@@ -423,14 +423,19 @@ proc compile_while(self: Compiler, gene: ptr Gene) =
   
   # Compile body (remaining children)
   if gene.children.len > 1:
-    for i in 1..<gene.children.len:
-      self.compile(gene.children[i])
+    # Use the seq compile method which handles popping correctly
+    self.compile(gene.children[1..^1])
+    # Pop the final value from the loop body since we don't need it
+    self.output.instructions.add(Instruction(kind: IkPop))
   
   # Jump back to condition
   self.output.instructions.add(Instruction(kind: IkContinue, arg0: label.to_value()))
   
   # Mark loop end
   self.output.instructions.add(Instruction(kind: IkLoopEnd, label: end_label))
+  
+  # Push NIL as the result of the while loop
+  self.output.instructions.add(Instruction(kind: IkPushNil))
   
   # Pop loop from stack
   discard self.loop_stack.pop()
