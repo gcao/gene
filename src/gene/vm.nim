@@ -5,6 +5,7 @@ import ./parser
 import ./compiler
 import ./vm/args
 import ./vm/module
+import ./vm/arithmetic
 
 when not defined(noExtensions):
   import ./vm/extension
@@ -1287,21 +1288,21 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(first.int64 + second.int64)
+                self.frame.push(add_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.push(first.int64.float64 + second.float)
+                self.frame.push(add_mixed(first.int64, second.float))
               else:
                 todo("Unsupported second operand for addition: " & $second)
           of VkFloat:
             case second.kind:
               of VkInt:
-                let r = first.float + second.int64.float64
+                let r = add_mixed(second.int64, first.float)
                 when not defined(release):
                   if self.trace:
                     echo fmt"IkAdd float+int: {first.float} + {second.int64.float64} = {r}"
                 self.frame.push(r)
               of VkFloat:
-                self.frame.push(first.float + second.float)
+                self.frame.push(add_float_fast(first.float, second.float))
               else:
                 todo("Unsupported second operand for addition: " & $second)
           else:
@@ -1316,17 +1317,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(first.int64 - second.int64)
+                self.frame.push(sub_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.push(first.int64.float64 - second.float)
+                self.frame.push(sub_mixed(first.int64, second.float))
               else:
                 todo("Unsupported second operand for subtraction: " & $second)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.push(first.float - second.int64.float64)
+                self.frame.push(sub_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.push(first.float - second.float)
+                self.frame.push(sub_float_fast(first.float, second.float))
               else:
                 todo("Unsupported second operand for subtraction: " & $second)
           else:
@@ -1339,17 +1340,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case inst.arg0.kind:
               of VkInt:
-                self.frame.replace(first.int64 - inst.arg0.int64)
+                self.frame.replace(sub_int_fast(first.int64, inst.arg0.int64))
               of VkFloat:
-                self.frame.replace(first.int64.float64 - inst.arg0.float)
+                self.frame.replace(sub_mixed(first.int64, inst.arg0.float))
               else:
                 todo("Unsupported arg0 type for IkSubValue: " & $inst.arg0.kind)
           of VkFloat:
             case inst.arg0.kind:
               of VkInt:
-                self.frame.replace(first.float - inst.arg0.int64.float64)
+                self.frame.replace(sub_float_fast(first.float, inst.arg0.int64.float64))
               of VkFloat:
-                self.frame.replace(first.float - inst.arg0.float)
+                self.frame.replace(sub_float_fast(first.float, inst.arg0.float))
               else:
                 todo("Unsupported arg0 type for IkSubValue: " & $inst.arg0.kind)
           else:
@@ -1364,17 +1365,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(first.int64 * second.int64)
+                self.frame.push(mul_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.push(first.int64.float64 * second.float)
+                self.frame.push(mul_mixed(first.int64, second.float))
               else:
                 todo("Unsupported second operand for multiplication: " & $second)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.push(first.float * second.int64.float64)
+                self.frame.push(mul_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.push(first.float * second.float)
+                self.frame.push(mul_float_fast(first.float, second.float))
               else:
                 todo("Unsupported second operand for multiplication: " & $second)
           else:
@@ -1388,17 +1389,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(first.int64.float64 / second.int64.float64)
+                self.frame.push(div_mixed(first.int64, second.int64.float64))
               of VkFloat:
-                self.frame.push(first.int64.float64 / second.float)
+                self.frame.push(div_mixed(first.int64, second.float))
               else:
                 todo("Unsupported second operand for division: " & $second)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.push(first.float / second.int64.float64)
+                self.frame.push(div_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.push(first.float / second.float)
+                self.frame.push(div_float_fast(first.float, second.float))
               else:
                 todo("Unsupported second operand for division: " & $second)
           else:
@@ -1409,9 +1410,9 @@ proc exec*(self: VirtualMachine): Value =
         let value = self.frame.pop()
         case value.kind:
           of VkInt:
-            self.frame.push(-value.int64)
+            self.frame.push(neg_int_fast(value.int64))
           of VkFloat:
-            self.frame.push(-value.float)
+            self.frame.push(neg_float_fast(value.float))
           else:
             todo("Unsupported operand for negation: " & $value)
 
@@ -1436,17 +1437,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case literal_value.kind:
               of VkInt:
-                self.frame.push(var_value.int64 + literal_value.int64)
+                self.frame.push(add_int_fast(var_value.int64, literal_value.int64))
               of VkFloat:
-                self.frame.push(var_value.int64.float64 + literal_value.float)
+                self.frame.push(add_mixed(var_value.int64, literal_value.float))
               else:
                 todo("Unsupported literal operand for VarAddValue: " & $literal_value)
           of VkFloat:
             case literal_value.kind:
               of VkInt:
-                self.frame.push(var_value.float + literal_value.int64.float64)
+                self.frame.push(add_mixed(literal_value.int64, var_value.float))
               of VkFloat:
-                self.frame.push(var_value.float + literal_value.float)
+                self.frame.push(add_float_fast(var_value.float, literal_value.float))
               else:
                 todo("Unsupported literal operand for VarAddValue: " & $literal_value)
           else:
@@ -1474,17 +1475,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case literal_value.kind:
               of VkInt:
-                self.frame.push(var_value.int64 - literal_value.int64)
+                self.frame.push(sub_int_fast(var_value.int64, literal_value.int64))
               of VkFloat:
-                self.frame.push(var_value.int64.float64 - literal_value.float)
+                self.frame.push(sub_mixed(var_value.int64, literal_value.float))
               else:
                 todo("Unsupported literal operand for VarSubValue: " & $literal_value)
           of VkFloat:
             case literal_value.kind:
               of VkInt:
-                self.frame.push(var_value.float - literal_value.int64.float64)
+                self.frame.push(sub_float_fast(var_value.float, literal_value.int64.float64))
               of VkFloat:
-                self.frame.push(var_value.float - literal_value.float)
+                self.frame.push(sub_float_fast(var_value.float, literal_value.float))
               else:
                 todo("Unsupported literal operand for VarSubValue: " & $literal_value)
           else:
@@ -1512,7 +1513,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case literal_value.kind:
               of VkInt:
-                self.frame.push(var_value.int64 * literal_value.int64)
+                self.frame.push(mul_int_fast(var_value.int64, literal_value.int64))
               of VkFloat:
                 self.frame.push(var_value.int64.float64 * literal_value.float)
               else:
@@ -1580,17 +1581,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.replace((first.int64 < second.int64).to_value())
+                self.frame.replace(lt_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.replace((first.int64.float64 < second.float).to_value())
+                self.frame.replace(lt_mixed(first.int64, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " < " & $second.kind)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.replace((first.float < second.int64.float64).to_value())
+                self.frame.replace(lt_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.replace((first.float < second.float).to_value())
+                self.frame.replace(lt_float_fast(first.float, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " < " & $second.kind)
           else:
@@ -1617,17 +1618,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case literal_value.kind:
               of VkInt:
-                self.frame.push((var_value.int64 < literal_value.int64).to_value())
+                self.frame.push(lt_int_fast(var_value.int64, literal_value.int64))
               of VkFloat:
-                self.frame.push((var_value.int64.float64 < literal_value.float).to_value())
+                self.frame.push(lt_mixed(var_value.int64, literal_value.float))
               else:
                 not_allowed("Cannot compare " & $var_value.kind & " < " & $literal_value.kind)
           of VkFloat:
             case literal_value.kind:
               of VkInt:
-                self.frame.push((var_value.float < literal_value.int64.float64).to_value())
+                self.frame.push(lt_float_fast(var_value.float, literal_value.int64.float64))
               of VkFloat:
-                self.frame.push((var_value.float < literal_value.float).to_value())
+                self.frame.push(lt_float_fast(var_value.float, literal_value.float))
               else:
                 not_allowed("Cannot compare " & $var_value.kind & " < " & $literal_value.kind)
           else:
@@ -1642,17 +1643,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case inst.arg0.kind:
               of VkInt:
-                self.frame.push((first.int64 < inst.arg0.int64).to_value())
+                self.frame.push(lt_int_fast(first.int64, inst.arg0.int64))
               of VkFloat:
-                self.frame.push((first.int64.float64 < inst.arg0.float).to_value())
+                self.frame.push(lt_mixed(first.int64, inst.arg0.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
           of VkFloat:
             case inst.arg0.kind:
               of VkInt:
-                self.frame.push((first.float < inst.arg0.int64.float64).to_value())
+                self.frame.push(lt_float_fast(first.float, inst.arg0.int64.float64))
               of VkFloat:
-                self.frame.push((first.float < inst.arg0.float).to_value())
+                self.frame.push(lt_float_fast(first.float, inst.arg0.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " < " & $inst.arg0.kind)
           else:
@@ -1666,17 +1667,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push((first.int64 <= second.int64).to_value())
+                self.frame.push(lte_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.push((first.int64.float64 <= second.float).to_value())
+                self.frame.push(lte_float_fast(first.int64.float64, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " <= " & $second.kind)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.push((first.float <= second.int64.float64).to_value())
+                self.frame.push(lte_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.push((first.float <= second.float).to_value())
+                self.frame.push(lte_float_fast(first.float, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " <= " & $second.kind)
           else:
@@ -1690,17 +1691,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push((first.int64 > second.int64).to_value())
+                self.frame.push(gt_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.push((first.int64.float64 > second.float).to_value())
+                self.frame.push(gt_float_fast(first.int64.float64, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " > " & $second.kind)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.push((first.float > second.int64.float64).to_value())
+                self.frame.push(gt_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.push((first.float > second.float).to_value())
+                self.frame.push(gt_float_fast(first.float, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " > " & $second.kind)
           else:
@@ -1714,17 +1715,17 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push((first.int64 >= second.int64).to_value())
+                self.frame.push(gte_int_fast(first.int64, second.int64))
               of VkFloat:
-                self.frame.push((first.int64.float64 >= second.float).to_value())
+                self.frame.push(gte_float_fast(first.int64.float64, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " >= " & $second.kind)
           of VkFloat:
             case second.kind:
               of VkInt:
-                self.frame.push((first.float >= second.int64.float64).to_value())
+                self.frame.push(gte_float_fast(first.float, second.int64.float64))
               of VkFloat:
-                self.frame.push((first.float >= second.float).to_value())
+                self.frame.push(gte_float_fast(first.float, second.float))
               else:
                 not_allowed("Cannot compare " & $first.kind & " >= " & $second.kind)
           else:
@@ -1733,12 +1734,24 @@ proc exec*(self: VirtualMachine): Value =
       of IkEq:
         let second = self.frame.pop()
         let first = self.frame.pop()
-        self.frame.push((first == second).to_value())
+        # Use fast path for numeric types
+        if first.kind == VkInt and second.kind == VkInt:
+          self.frame.push(eq_int_fast(first.int64, second.int64))
+        elif first.kind == VkFloat and second.kind == VkFloat:
+          self.frame.push(eq_float_fast(first.float, second.float))
+        else:
+          self.frame.push((first == second).to_value())
 
       of IkNe:
         let second = self.frame.pop()
         let first = self.frame.pop()
-        self.frame.push((first != second).to_value())
+        # Use fast path for numeric types
+        if first.kind == VkInt and second.kind == VkInt:
+          self.frame.push(neq_int_fast(first.int64, second.int64))
+        elif first.kind == VkFloat and second.kind == VkFloat:
+          self.frame.push(neq_float_fast(first.float, second.float))
+        else:
+          self.frame.push((first != second).to_value())
 
       of IkAnd:
         let second = self.frame.pop()
