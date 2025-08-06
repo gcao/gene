@@ -847,7 +847,7 @@ type
     scope*: Scope
     target*: Value  # target of the invocation
     args*: Value
-    stack*: array[1024, Value]
+    stack*: array[256, Value]
     current_method*: Method  # Currently executing method (for super calls)
     stack_index*: uint16
 
@@ -2895,11 +2895,12 @@ proc `$`*(self: Instruction): string =
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0}"
       else:
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
-    of IkJump, IkJumpIfFalse:
+    of IkJump, IkJumpIfFalse, IkContinue:
+      let target_label = self.arg0.int64.Label
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {self.arg0.int:03}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {target_label.int32.to_hex()}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {self.arg0.int:03}"
+        result = fmt"         {($self.kind)[2..^1]} {target_label.int32.to_hex()}"
     of IkJumpIfMatchSuccess:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
