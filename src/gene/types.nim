@@ -2895,12 +2895,12 @@ proc `$`*(self: Instruction): string =
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0}"
       else:
         result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
-    of IkJump, IkJumpIfFalse, IkContinue:
+    of IkJump, IkJumpIfFalse, IkContinue, IkBreak:
       let target_label = self.arg0.int64.Label
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {target_label.int32.to_hex()}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {target_label.int:04X}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {target_label.int32.to_hex()}"
+        result = fmt"         {($self.kind)[2..^1]} {target_label.int:04X}"
     of IkJumpIfMatchSuccess:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
