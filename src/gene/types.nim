@@ -2892,22 +2892,23 @@ proc `$`*(self: Instruction): string =
       IkSetMember, IkGetMember, IkGetMemberOrNil, IkGetMemberDefault,
       IkSetChild, IkGetChild:
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]:<20} {$self.arg0}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0}"
+        result = fmt"         {($self.kind)[2..^1]:<20} {$self.arg0}"
     of IkJump, IkJumpIfFalse, IkContinue, IkBreak:
       let target_label = self.arg0.int64.Label
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {target_label.int:04X}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]:<20} {target_label.int:04X}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {target_label.int:04X}"
+        result = fmt"         {($self.kind)[2..^1]:<20} {target_label.int:04X}"
     of IkJumpIfMatchSuccess:
+      let target_label = self.arg1.int64.Label
       if self.label.int > 0:
-        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
+        result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]:<20} {$self.arg0} {target_label.int:04X}"
       else:
-        result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1.int:03}"
+        result = fmt"         {($self.kind)[2..^1]:<20} {$self.arg0} {target_label.int:04X}"
     of IkVarResolveInherited, IkVarAssignInherited:
-      result = fmt"         {($self.kind)[2..^1]} {$self.arg0} {self.arg1}"
+      result = fmt"         {($self.kind)[2..^1]:<20} {$self.arg0} {self.arg1}"
     else:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]}"
