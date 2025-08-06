@@ -42,8 +42,13 @@ suite "Extension":
   let test_ns = new_namespace("test")
   VM.frame = new_frame()
   VM.frame.ns = test_ns
-  VM.frame.self = new_ref(VkNamespace).to_ref_value()
-  VM.frame.self.ref.ns = test_ns
+  # Self is no longer stored in frame - it's passed as an argument
+  # For namespace initialization, we pass it as args
+  let ns_value = new_ref(VkNamespace).to_ref_value()
+  ns_value.ref.ns = test_ns
+  let args_gene = new_gene(NIL)
+  args_gene.children.add(ns_value)
+  VM.frame.args = args_gene.to_gene_value()
   
   # Setup initial imports - handle both running from root and tests directory
   let ext_path = if fileExists("extension.dylib") or fileExists("extension.so") or fileExists("extension.dll"):

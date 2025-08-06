@@ -844,7 +844,6 @@ type
     ns*: Namespace
     scope*: Scope
     target*: Value  # target of the invocation
-    self*: Value
     args*: Value
     stack*: array[100, Value]
     current_method*: Method  # Currently executing method (for super calls)
@@ -2787,7 +2786,7 @@ proc reset_frame*(self: Frame) {.inline.} =
   self.ns = nil
   self.scope = nil
   self.target = NIL
-  self.self = NIL
+  # self field removed - self is now the first argument
   self.args = NIL
   self.current_method = nil
   self.stack_index = 0

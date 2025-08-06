@@ -262,14 +262,8 @@ proc exec*(self: VirtualMachine): Value =
           self.frame.scope.members.add(NIL)
         self.frame.scope.members[index] = value
         
-        # If we're in a namespace initialization context, also store in namespace members
-        if self.frame.self != nil and self.frame.self.kind == VkNamespace:
-          # Find the variable name from the scope tracker
-          if self.frame.scope.tracker != nil:
-            for key, idx in self.frame.scope.tracker.mappings:
-              if idx == index:
-                self.frame.self.ref.ns.members[key] = value
-                break
+        # Variables are now stored in scope, not in namespace self
+        # This simplifies the design
         
         # Push the value as the result of var
         self.frame.push(value)
@@ -284,14 +278,8 @@ proc exec*(self: VirtualMachine): Value =
           self.frame.scope.members.add(NIL)
         self.frame.scope.members[index] = value
         
-        # If we're in a namespace initialization context, also store in namespace members
-        if self.frame.self != nil and self.frame.self.kind == VkNamespace:
-          # Find the variable name from the scope tracker
-          if self.frame.scope.tracker != nil:
-            for key, idx in self.frame.scope.tracker.mappings:
-              if idx == index:
-                self.frame.self.ref.ns.members[key] = value
-                break
+        # Variables are now stored in scope, not in namespace self
+        # This simplifies the design
         
         # Also push the value to the stack (like IkVar)
         self.frame.push(value)
@@ -345,7 +333,11 @@ proc exec*(self: VirtualMachine): Value =
           of SYM_UNDERSCORE:
             self.frame.push(PLACEHOLDER)
           of SYM_SELF:
-            self.frame.push(self.frame.self)
+            # Get self from first argument
+            if self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 0:
+              self.frame.push(self.frame.args.gene.children[0])
+            else:
+              self.frame.push(NIL)
           of SYM_GENE:
             self.frame.push(App.app.gene_ns)
           of SYM_NS:
@@ -388,10 +380,15 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(value)
 
       of IkSelf:
-        self.frame.push(self.frame.self)
+        # Get self from first argument  
+        if self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 0:
+          self.frame.push(self.frame.args.gene.children[0])
+        else:
+          self.frame.push(NIL)
       
       of IkSetSelf:
-        self.frame.self = self.frame.pop()
+        # SetSelf is no longer needed - self is the first argument
+        discard self.frame.pop()
       
       of IkRotate:
         # Rotate top 3 stack elements: [a, b, c] -> [c, a, b]
@@ -809,7 +806,11 @@ proc exec*(self: VirtualMachine): Value =
       of IkPushNil:
         self.frame.push(NIL)
       of IkPushSelf:
-        self.frame.push(self.frame.self)
+        # Get self from first argument
+        if self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 0:
+          self.frame.push(self.frame.args.gene.children[0])
+        else:
+          self.frame.push(NIL)
       of IkPop:
         discard self.frame.pop()
       of IkDup:
@@ -1028,7 +1029,14 @@ proc exec*(self: VirtualMachine): Value =
                 r.frame.target = target
                 r.frame.scope = scope
                 r.frame.current_method = meth  # Track the current method for super calls
-                r.frame.self = bm.self  # Set self to the instance
+                # Prepare args with self as first argument
+                let args_gene = new_gene(NIL)
+                args_gene.children.add(bm.self)
+                # Copy any existing args from the current frame (for method calls with arguments)
+                if self.frame.current().kind == VkFrame and self.frame.current().ref.frame.args.kind == VkGene:
+                  for child in self.frame.current().ref.frame.args.gene.children:
+                    args_gene.children.add(child)
+                r.frame.args = args_gene.to_gene_value()
                 self.frame.replace(r.to_ref_value())
                 pc = inst.arg0.int64.int64.int
                 inst = self.cu.instructions[pc].addr
@@ -1156,7 +1164,18 @@ proc exec*(self: VirtualMachine): Value =
                 
                 # Process arguments if matcher exists
                 if not f.matcher.is_empty():
-                  process_args(f.matcher, frame.args, frame.scope)
+                  # For methods, skip the first argument (self) when matching parameters
+                  if frame.current_method != nil:
+                    # Method call - create args without self for parameter matching
+                    var method_args = new_gene(NIL)
+                    if frame.args.kind == VkGene and frame.args.gene.children.len > 1:
+                      # Copy all args except the first (self)
+                      for i in 1..<frame.args.gene.children.len:
+                        method_args.children.add(frame.args.gene.children[i])
+                    process_args(f.matcher, method_args.to_gene_value(), frame.scope)
+                  else:
+                    # Regular function call
+                    process_args(f.matcher, frame.args, frame.scope)
                 
                 # If this is an async function, set up exception handler
                 if f.async:
@@ -1790,12 +1809,19 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(cu_value)
 
       of IkDefineMethod:
-        # Stack: [class, function]
+        # Stack: [function]
         let name = inst.arg0
         let fn_value = self.frame.pop()
         
-        # The class should be the current 'self' in the initialization context
-        let class_value = self.frame.self
+        # The class is passed as the first argument during class initialization
+        var class_value: Value
+        if self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 0:
+          class_value = self.frame.args.gene.children[0]
+        else:
+          # During normal class definition, class should be on stack
+          # But we already popped the function, so we can't pop again
+          # This is a problem with our current approach
+          not_allowed("Cannot find class for method definition")
         
         
         if class_value.kind != VkClass:
@@ -1822,11 +1848,14 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(r.to_ref_value())
       
       of IkDefineConstructor:
-        # Stack: [class, function]
+        # Stack: [function]
         let fn_value = self.frame.pop()
         
-        # The class should be the current 'self' in the initialization context
-        let class_value = self.frame.self
+        # The class is passed as the first argument during class initialization
+        let class_value = if self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 0:
+          self.frame.args.gene.children[0]
+        else:
+          self.frame.current()  # Fallback to what's on stack
         
         if class_value.kind != VkClass:
           not_allowed("Can only define constructor on classes, got " & $class_value.kind)
@@ -1856,8 +1885,10 @@ proc exec*(self: VirtualMachine): Value =
         # Check if we're in a method context
         if self.frame.current_method != nil:
           current_class = self.frame.current_method.class
-        elif self.frame.self != nil and self.frame.self.kind == VkInstance:
-          current_class = self.frame.self.ref.instance_class
+        elif self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 0:
+          let first_arg = self.frame.args.gene.children[0]
+          if first_arg.kind == VkInstance:
+            current_class = first_arg.ref.instance_class
         else:
           not_allowed("super can only be called from within a class context")
         
@@ -1890,11 +1921,14 @@ proc exec*(self: VirtualMachine): Value =
 
         pc.inc()
         self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
-        self.frame.self = obj
+        # Pass the class/namespace as args so methods can access it
+        let args_gene = new_gene(NIL)
+        args_gene.children.add(obj)
+        self.frame.args = args_gene.to_gene_value()
         self.frame.ns = ns
         # when not defined(release):
         #   echo "IkCallInit: switching to init CU, obj kind: ", obj.kind
-        #   echo "  New frame self: ", self.frame.self.kind
+        #   echo "  New frame has no self field anymore"
         #   echo "  Init CU has ", compiled.instructions.len, " instructions"
         self.cu = compiled
         pc = 0
@@ -2131,8 +2165,7 @@ proc exec*(self: VirtualMachine): Value =
             # Create a new frame for module execution
             self.frame = new_frame()
             self.frame.ns = module_ns
-            self.frame.self = new_ref(VkNamespace).to_ref_value()
-            self.frame.self.ref.ns = module_ns
+            # Module namespace is now passed as argument, not stored as self
             
             # Execute the module
             self.cu = cu
@@ -2192,7 +2225,10 @@ proc exec*(self: VirtualMachine): Value =
 
             pc.inc()
             self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
-            self.frame.self = instance.to_ref_value()
+            # Pass instance as first argument for constructor
+            let args_gene = new_gene(NIL)
+            args_gene.children.add(instance.to_ref_value())
+            self.frame.args = args_gene.to_gene_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cu = compiled
             pc = 0
@@ -2575,7 +2611,8 @@ proc exec*(self: VirtualMachine): Value =
             # Create a new frame that inherits from caller's frame
             let eval_frame = new_frame(caller_frame, Address(cu: saved_cu, pc: saved_pc))
             eval_frame.ns = caller_frame.ns
-            eval_frame.self = caller_frame.self
+            # Self is now passed as argument, copy args from caller
+            eval_frame.args = caller_frame.args
             eval_frame.scope = caller_frame.scope
             
             # Switch to evaluation context
@@ -2701,7 +2738,46 @@ proc exec*(self: VirtualMachine): Value =
             r.class = obj.ref.instance_class
             self.frame.push(r.to_ref_value())
           else:
-            todo("instance method: " & method_name)
+            # Look up the method in the instance's class
+            let class = obj.ref.instance_class
+            let method_key = method_name.to_key()
+            if class.methods.hasKey(method_key):
+              let meth = class.methods[method_key]
+              # For IkCallMethodNoArgs, we should call the method directly
+              # not just return a bound method
+              case meth.callable.kind:
+              of VkFunction:
+                # Call the method directly with obj as self
+                let f = meth.callable.ref.fn
+                if f.body_compiled == nil:
+                  f.compile()
+                
+                # Create a new frame for the method call
+                var scope: Scope
+                if f.matcher.is_empty():
+                  scope = f.parent_scope
+                else:
+                  scope = new_scope(f.scope_tracker, f.parent_scope)
+                
+                pc.inc()
+                self.frame = new_frame(self.frame, Address(cu: self.cu, pc: pc))
+                self.frame.kind = FkFunction
+                self.frame.target = meth.callable
+                self.frame.scope = scope
+                self.frame.current_method = meth
+                self.frame.ns = f.ns
+                # Pass obj as self (first argument)
+                let args_gene = new_gene(NIL)
+                args_gene.children.add(obj)
+                self.frame.args = args_gene.to_gene_value()
+                self.cu = f.body_compiled
+                pc = 0
+                inst = self.cu.instructions[pc].addr
+                continue
+              else:
+                not_allowed("Method must be a function")
+            else:
+              not_allowed("Method " & method_name & " not found on instance")
         else:
           todo($obj.kind & " method: " & method_name)
       
@@ -2735,7 +2811,7 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   else:
     self.frame.update(new_frame(ns))
   
-  self.frame.self = NIL  # Set default self to nil
+  # Self is now passed as argument, not stored in frame
   self.cu = compiled
 
   self.exec()

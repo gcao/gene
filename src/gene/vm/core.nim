@@ -72,7 +72,12 @@ proc class_ctor(self: VirtualMachine, args: Value): Value =
   fn.ns = self.frame.ns
   let r = new_ref(VkFunction)
   r.fn = fn
-  self.frame.self.ref.class.constructor = r.to_ref_value()
+  # Get class from first argument (bound method self)
+  let x = args.gene.type.ref.bound_method.self
+  if x.kind == VkClass:
+    x.ref.class.constructor = r.to_ref_value()
+  else:
+    not_allowed("Constructor can only be defined on classes")
 
 proc class_fn(self: VirtualMachine, args: Value): Value =
   let x = args.gene.type.ref.bound_method.self
@@ -170,14 +175,13 @@ proc vm_with(self: VirtualMachine, args: Value): Value =
     not_allowed("$with expects at least 2 arguments")
   
   let original_value = args.gene.children[0]
-  let old_self = self.frame.self
-  self.frame.self = original_value
+  # Self is now managed through arguments, not frame field
+  # The compiler should handle passing the value as the first argument
   
   # Execute the body (all arguments after the first)
   for i in 1..<args.gene.children.len:
     discard # Body execution would happen during compilation/evaluation
   
-  self.frame.self = old_self
   return original_value
 
 proc vm_tap(self: VirtualMachine, args: Value): Value =
@@ -186,7 +190,6 @@ proc vm_tap(self: VirtualMachine, args: Value): Value =
     not_allowed("$tap expects at least 2 arguments")
   
   let original_value = args.gene.children[0]
-  let old_self = self.frame.self
   
   # If second argument is a symbol, bind it to the value
   var binding_name: string = ""
@@ -194,14 +197,14 @@ proc vm_tap(self: VirtualMachine, args: Value): Value =
   if args.gene.children.len > 2 and args.gene.children[1].kind == VkSymbol:
     binding_name = args.gene.children[1].str
     body_start_index = 2
-  else:
-    self.frame.self = original_value
+  
+  # Self is now managed through arguments
+  # The compiler should handle passing the value as the first argument
   
   # Execute the body
   for i in body_start_index..<args.gene.children.len:
     discard # Body execution would happen during compilation/evaluation
   
-  self.frame.self = old_self
   return original_value
 
 proc vm_eval(self: VirtualMachine, args: Value): Value {.gcsafe.} =

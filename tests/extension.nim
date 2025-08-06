@@ -30,9 +30,12 @@ proc get_i*(vm: VirtualMachine, args: Value): Value {.gcsafe.} =
   0.to_value()
 
 proc get_i_method*(vm: VirtualMachine, args: Value): Value {.gcsafe.} =
-  if vm.frame.self.kind == VkCustom:
-    let ext = cast[Extension](vm.frame.self.ref.custom_data)
-    return ext.i.to_value()
+  # Self is now the first argument in args
+  if args.kind == VkGene and args.gene.children.len > 0:
+    let self = args.gene.children[0]
+    if self.kind == VkCustom:
+      let ext = cast[Extension](self.ref.custom_data)
+      return ext.i.to_value()
   0.to_value()
 
 {.push dynlib exportc.}
