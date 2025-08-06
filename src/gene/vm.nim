@@ -348,36 +348,19 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(r.to_ref_value())
           else:
             let name = cast[Key](inst.arg0)
-            when not defined(release):
-              if self.trace:
-                echo "  ResolveSymbol: looking for key ", name.int
-                try:
-                  echo "  Symbol name: ", get_symbol(name.int)
-                except:
-                  echo "  Invalid symbol key: ", name.int
             var value = self.frame.ns[name]
             if value == NIL:
               # Try global namespace
               value = App.app.global_ns.ref.ns[name]
-              when not defined(release):
-                if self.trace and value != NIL:
-                  echo "  Found in global namespace: ", value.kind
               if value == NIL:
                 # Try gene namespace
                 value = App.app.gene_ns.ref.ns[name]
-                when not defined(release):
-                  if self.trace and value != NIL:
-                    echo "  Found in gene namespace: ", value.kind
                 if value == NIL:
                   let symbol_name = try:
                     get_symbol(name.int)
                   except:
                     "<invalid key: " & $name.int & ">"
                   not_allowed("Unknown symbol: " & symbol_name)
-            else:
-              when not defined(release):
-                if self.trace:
-                  echo "  Found in current namespace: ", value.kind
             self.frame.push(value)
 
       of IkSelf:
@@ -724,9 +707,6 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         var value: Value
         self.frame.pop2(value)
-        when not defined(release):
-          if self.trace:
-            echo fmt"IkJumpIfFalse: value={value}, to_bool={value.to_bool()}, jumping={not value.to_bool()}"
         if not value.to_bool():
           pc = inst.arg0.int64.int
           inst = self.cu.instructions[pc].addr
