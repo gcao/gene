@@ -633,9 +633,11 @@ type
     IkAdd
     IkAddValue    # args: literal value
     IkVarAddValue # variable + literal value
+    IkIncVar      # Increment variable by 1
     IkSub
     IkSubValue
     IkVarSubValue # variable - literal value
+    IkDecVar      # Decrement variable by 1
     IkNeg          # Unary negation
     IkMul
     IkVarMulValue # variable * literal value
@@ -2882,6 +2884,7 @@ proc `$`*(self: Instruction): string =
     of IkPushValue,
       IkVar, IkVarResolve, IkVarAssign,
       IkAddValue, IkVarAddValue, IkVarSubValue, IkVarMulValue, IkVarDivValue,
+      IkIncVar, IkDecVar,
       IkLtValue, IkVarLtValue,
       IkMapSetProp, IkMapSetPropValue,
       IkArrayAddChildValue,

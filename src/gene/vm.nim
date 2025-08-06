@@ -1288,7 +1288,7 @@ proc exec*(self: VirtualMachine): Value =
           of VkInt:
             case second.kind:
               of VkInt:
-                self.frame.push(add_int_fast(first.int64, second.int64))
+                self.frame.push(first.int64 + second.int64)
               of VkFloat:
                 self.frame.push(add_mixed(first.int64, second.float))
               else:
@@ -1454,6 +1454,18 @@ proc exec*(self: VirtualMachine): Value =
             todo("Unsupported variable operand for VarAddValue: " & $var_value)
         {.pop.}
 
+      of IkIncVar:
+        {.push checks: off}
+        # Increment variable directly without stack operations
+        let index = inst.arg0.int64.int
+        let current = self.frame.scope.members[index]
+        if current.kind == VkInt:
+          self.frame.scope.members[index] = (current.int64 + 1).to_value()
+          self.frame.push(self.frame.scope.members[index])
+        else:
+          todo("IkIncVar only supports integers")
+        {.pop.}
+
       of IkVarSubValue:
         {.push checks: off}
         # Get variable value based on parent index (stored in arg1)
@@ -1490,6 +1502,18 @@ proc exec*(self: VirtualMachine): Value =
                 todo("Unsupported literal operand for VarSubValue: " & $literal_value)
           else:
             todo("Unsupported variable operand for VarSubValue: " & $var_value)
+        {.pop.}
+
+      of IkDecVar:
+        {.push checks: off}
+        # Decrement variable directly without stack operations
+        let index = inst.arg0.int64.int
+        let current = self.frame.scope.members[index]
+        if current.kind == VkInt:
+          self.frame.scope.members[index] = (current.int64 - 1).to_value()
+          self.frame.push(self.frame.scope.members[index])
+        else:
+          todo("IkDecVar only supports integers")
         {.pop.}
 
       of IkVarMulValue:

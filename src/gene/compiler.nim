@@ -307,6 +307,31 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
         else:
           not_allowed("Unsupported compound assignment operator: " & operator)
     else:
+      # Regular assignment - check for increment/decrement pattern
+      let rhs = gene.children[1]
+      let key = `type`.str.to_key()
+      let found = self.scope_tracker.locate(key)
+      
+      # Check for (x = (x + 1)) or (x = (x - 1)) pattern
+      # In infix notation: (x + 1) has type=x and children=[+, 1]
+      if found.local_index >= 0 and found.parent_index == 0 and
+         rhs.kind == VkGene and rhs.gene.children.len == 2:
+        let rhs_gene = rhs.gene
+        let op = rhs_gene.children[0]
+        let rhs_operand = rhs_gene.children[1]
+        
+        # Check if it's (x + 1) or (x - 1) where x is the gene type
+        if rhs_gene.type.kind == VkSymbol and rhs_gene.type.str == `type`.str and
+           op.kind == VkSymbol and rhs_operand.kind == VkInt:
+          if op.str == "+" and rhs_operand.int64 == 1:
+            # Generate IkIncVar instead
+            self.output.instructions.add(Instruction(kind: IkIncVar, arg0: found.local_index.to_value()))
+            return
+          elif op.str == "-" and rhs_operand.int64 == 1:
+            # Generate IkDecVar instead
+            self.output.instructions.add(Instruction(kind: IkDecVar, arg0: found.local_index.to_value()))
+            return
+      
       # Regular assignment - compile the value
       self.compile(gene.children[1])
     
