@@ -817,6 +817,12 @@ type
     self_time*: float64   # Time excluding sub-calls
     min_time*: float64
     max_time*: float64
+  
+  InstructionProfile* = object
+    count*: int64
+    total_time*: float64  # Total time in seconds
+    min_time*: float64
+    max_time*: float64
     
   VirtualMachine* = ref object
     cu*: CompilationUnit
@@ -830,6 +836,9 @@ type
     profiling*: bool
     profile_data*: Table[string, FunctionProfile]
     profile_stack*: seq[tuple[name: string, start_time: float64]]
+    # Instruction profiling
+    instruction_profiling*: bool
+    instruction_profile*: array[InstructionKind, InstructionProfile]
 
   VmCallback* = proc() {.gcsafe.}
 

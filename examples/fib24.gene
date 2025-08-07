@@ -7,6 +7,6 @@
   )
 )
 
-(var start (gene/now))
+# (var start (gene/now))
 (println (fib 24))
-(println "Execution time: " start/.elapsed " seconds.")
+# (println "Execution time: " start/.elapsed " seconds.")
