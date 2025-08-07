@@ -810,6 +810,14 @@ type
     has_saved_value*: bool
     in_finally*: bool
 
+  FunctionProfile* = object
+    name*: string
+    call_count*: int64
+    total_time*: float64  # Total time in seconds
+    self_time*: float64   # Time excluding sub-calls
+    min_time*: float64
+    max_time*: float64
+    
   VirtualMachine* = ref object
     cu*: CompilationUnit
     pc*: int
@@ -818,6 +826,10 @@ type
     exception_handlers*: seq[ExceptionHandler]
     current_exception*: Value
     symbols*: ptr ManagedSymbols  # Pointer to global symbol table
+    # Profiling
+    profiling*: bool
+    profile_data*: Table[string, FunctionProfile]
+    profile_stack*: seq[tuple[name: string, start_time: float64]]
 
   VmCallback* = proc() {.gcsafe.}
 

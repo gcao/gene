@@ -1832,7 +1832,7 @@ proc optimize_noops(self: CompilationUnit) =
   self.instructions = new_instructions
 
 proc compile*(input: seq[Value]): CompilationUnit =
-  let self = Compiler(output: new_compilation_unit())
+  let self = Compiler(output: new_compilation_unit(), tail_position: false)
   self.output.instructions.add(Instruction(kind: IkStart))
   self.start_scope()
 
@@ -1851,7 +1851,7 @@ proc compile*(f: Function) =
   if f.body_compiled != nil:
     return
 
-  var self = Compiler(output: new_compilation_unit())
+  var self = Compiler(output: new_compilation_unit(), tail_position: false)
   self.output.instructions.add(Instruction(kind: IkStart))
   self.scope_trackers.add(f.scope_tracker)
 
@@ -1889,7 +1889,7 @@ proc compile*(m: Macro) =
   if m.body_compiled != nil:
     return
 
-  var self = Compiler(output: new_compilation_unit())
+  var self = Compiler(output: new_compilation_unit(), tail_position: false)
   self.output.instructions.add(Instruction(kind: IkStart))
   self.scope_trackers.add(m.scope_tracker)
 
@@ -1925,7 +1925,7 @@ proc compile*(b: Block) =
   if b.body_compiled != nil:
     return
 
-  var self = Compiler(output: new_compilation_unit())
+  var self = Compiler(output: new_compilation_unit(), tail_position: false)
   self.output.instructions.add(Instruction(kind: IkStart))
   self.scope_trackers.add(b.scope_tracker)
 
@@ -1960,7 +1960,7 @@ proc compile*(f: CompileFn) =
   if f.body_compiled != nil:
     return
 
-  let self = Compiler(output: new_compilation_unit())
+  let self = Compiler(output: new_compilation_unit(), tail_position: false)
   self.output.instructions.add(Instruction(kind: IkStart))
   self.scope_trackers.add(f.scope_tracker)
 
@@ -2310,7 +2310,7 @@ proc compile_import(self: Compiler, gene: ptr Gene) =
   self.output.instructions.add(Instruction(kind: IkImport))
 
 proc compile_init*(input: Value): CompilationUnit =
-  let self = Compiler(output: new_compilation_unit())
+  let self = Compiler(output: new_compilation_unit(), tail_position: false)
   self.output.skip_return = true
   self.output.instructions.add(Instruction(kind: IkStart))
   self.start_scope()

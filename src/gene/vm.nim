@@ -1,4 +1,5 @@
-import tables, strutils, strformat
+import tables, strutils, strformat, algorithm
+import times
 
 import ./types
 import ./parser
@@ -11,6 +12,86 @@ when not defined(noExtensions):
   import ./vm/extension
 
 const DEBUG_VM = false
+
+proc enter_function(self: VirtualMachine, name: string) {.inline.} =
+  if self.profiling:
+    let start_time = cpuTime()
+    self.profile_stack.add((name, start_time))
+    
+proc exit_function(self: VirtualMachine) {.inline.} =
+  if self.profiling and self.profile_stack.len > 0:
+    let (name, start_time) = self.profile_stack[^1]
+    self.profile_stack.del(self.profile_stack.len - 1)
+    
+    let end_time = cpuTime()
+    let elapsed = end_time - start_time
+    
+    # Update or create profile entry
+    if name notin self.profile_data:
+      self.profile_data[name] = FunctionProfile(
+        name: name,
+        call_count: 0,
+        total_time: 0.0,
+        self_time: 0.0,
+        min_time: elapsed,
+        max_time: elapsed
+      )
+    
+    var profile = self.profile_data[name]
+    profile.call_count.inc()
+    profile.total_time += elapsed
+    
+    # Update min/max
+    if elapsed < profile.min_time:
+      profile.min_time = elapsed
+    if elapsed > profile.max_time:
+      profile.max_time = elapsed
+    
+    # Calculate self time (subtract child call times)
+    var child_time = 0.0
+    for i in countdown(self.profile_stack.len - 1, 0):
+      if self.profile_stack[i].name == name:
+        break
+      # This is a simplification - proper self time calculation is more complex
+    profile.self_time = profile.total_time  # For now, just use total
+    
+    self.profile_data[name] = profile
+
+proc print_profile*(self: VirtualMachine) =
+  if not self.profiling or self.profile_data.len == 0:
+    echo "No profiling data available"
+    return
+  
+  echo "\n=== Function Profile Report ==="
+  echo "Function                       Calls      Total(ms)       Avg(μs)     Min(μs)     Max(μs)"
+  echo repeat('-', 94)
+  
+  # Sort by total time descending
+  var profiles: seq[FunctionProfile] = @[]
+  for name, profile in self.profile_data:
+    profiles.add(profile)
+  
+  profiles.sort do (a, b: FunctionProfile) -> int:
+    if a.total_time > b.total_time: -1
+    elif a.total_time < b.total_time: 1
+    else: 0
+  
+  for profile in profiles:
+    let total_ms = profile.total_time * 1000.0
+    let avg_us = if profile.call_count > 0: (profile.total_time * 1_000_000.0) / profile.call_count.float else: 0.0
+    let min_us = profile.min_time * 1_000_000.0
+    let max_us = profile.max_time * 1_000_000.0
+    
+    # Use manual formatting for now
+    var name_str = profile.name
+    if name_str.len > 30:
+      name_str = name_str[0..26] & "..."
+    while name_str.len < 30:
+      name_str = name_str & " "
+    
+    echo fmt"{name_str} {profile.call_count:10} {total_ms:12.3f} {avg_us:12.3f} {min_us:10.3f} {max_us:10.3f}"
+  
+  echo "\nTotal functions profiled: ", self.profile_data.len
 
 # Forward declaration
 proc exec*(self: VirtualMachine): Value
@@ -232,6 +313,9 @@ proc exec*(self: VirtualMachine): Value =
               future_obj.complete(result_val)
               result_val = future_val
           
+          # Profile function exit
+          self.exit_function()
+          
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
@@ -365,6 +449,10 @@ proc exec*(self: VirtualMachine): Value =
         # Process arguments if needed
         if not f.matcher.is_empty():
           process_args(f.matcher, new_frame.args, new_frame.scope)
+        
+        # Profile function entry
+        let func_name = if f.name != "": f.name else: "<anonymous>"
+        self.enter_function(func_name)
         
         # Switch to new frame and CU
         self.frame = new_frame
@@ -1266,6 +1354,11 @@ proc exec*(self: VirtualMachine): Value =
                 self.frame.ref_count.inc()  # Increment ref count since we're storing a reference
                 frame.caller_address = Address(cu: self.cu, pc: pc)
                 frame.ns = f.ns
+                
+                # Profile function entry
+                let func_name = if f.name != "": f.name else: "<anonymous>"
+                self.enter_function(func_name)
+                
                 self.frame = frame
                 self.cu = f.body_compiled
                 
@@ -2240,6 +2333,9 @@ proc exec*(self: VirtualMachine): Value =
               let future_obj = future_val.ref.future
               future_obj.complete(v)
               v = future_val
+          
+          # Profile function exit
+          self.exit_function()
           
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc

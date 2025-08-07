@@ -18,6 +18,7 @@ type
     trace: bool
     trace_instruction: bool
     compile: bool
+    profile: bool
     file: string
     args: seq[string]
 
@@ -33,6 +34,7 @@ let long_no_val = @[
   "trace",
   "trace-instruction",
   "compile",
+  "profile",
 ]
 proc parse_options(args: seq[string]): Options =
   result = Options()
@@ -66,6 +68,8 @@ proc parse_options(args: seq[string]): Options =
           result.trace_instruction = true
         of "compile":
           result.compile = true
+        of "profile":
+          result.profile = true
         else:
           echo "Unknown option: ", key
           discard
@@ -117,6 +121,10 @@ proc handle*(cmd: string, args: seq[string]): string =
   if options.trace:
     VM.trace = true
   
+  # Enable profiling if requested
+  if options.profile:
+    VM.profiling = true
+  
   if options.trace_instruction:
     # Show both compilation and execution with trace
     echo "=== Compilation Output ==="
@@ -154,6 +162,8 @@ proc handle*(cmd: string, args: seq[string]): string =
     echo value
   if options.benchmark:
     echo "Time: " & $(cpu_time() - start)
+  if options.profile:
+    VM.print_profile()
 
 when isMainModule:
   let cmd = DEFAULT_COMMAND
