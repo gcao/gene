@@ -15,7 +15,20 @@ proc compile_emit(self: Compiler, gene: ptr Gene)
 
 proc compile(self: Compiler, input: seq[Value]) =
   for i, v in input:
+    # Set tail position for the last expression
+    let old_tail = self.tail_position
+    if i == input.len - 1:
+      # Last expression inherits current tail position
+      discard
+    else:
+      # Non-last expressions are never in tail position
+      self.tail_position = false
+    
     self.compile(v)
+    
+    # Restore tail position
+    self.tail_position = old_tail
+    
     if i < input.len - 1:
       self.output.instructions.add(Instruction(kind: IkPop))
 
@@ -195,9 +208,11 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
   let end_label = new_label()
   self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.to_value()))
 
-  # Compile then branch
+  # Compile then branch (preserves tail position)
   self.start_scope()
+  let old_tail = self.tail_position
   self.compile(gene.props[THEN_KEY.to_key()])
+  self.tail_position = old_tail
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
 
@@ -216,18 +231,22 @@ proc compile_if(self: Compiler, gene: ptr Gene) =
             next_label = new_label()
             self.output.instructions.add(Instruction(kind: IkJumpIfFalse, arg0: next_label.to_value()))
             
-            # Compile elif body
+            # Compile elif body (preserves tail position)
             self.start_scope()
+            let old_tail_elif = self.tail_position
             self.compile(elifs.ref.arr[i + 1])
+            self.tail_position = old_tail_elif
             self.end_scope()
             self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
       else:
         discard
 
-  # Compile else branch
+  # Compile else branch (preserves tail position)
   self.output.instructions.add(Instruction(kind: IkNoop, label: next_label))
   self.start_scope()
+  let old_tail_else = self.tail_position
   self.compile(gene.props[ELSE_KEY.to_key()])
+  self.tail_position = old_tail_else
   self.end_scope()
 
   self.output.instructions.add(Instruction(kind: IkNoop, label: end_label))
@@ -1084,7 +1103,13 @@ proc compile_gene_default(self: Compiler, gene: ptr Gene) {.inline.} =
   for child in gene.children:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  # Use IkTailCall when in tail position
+  if self.tail_position:
+    when DEBUG:
+      echo "DEBUG: Generating IkTailCall in compile_gene_default"
+    self.output.instructions.add(Instruction(kind: IkTailCall))
+  else:
+    self.output.instructions.add(Instruction(kind: IkGeneEnd))
 
 # For a call that is unsure whether it is a function call or a macro call,
 # we need to handle both cases and decide at runtime:
@@ -1246,7 +1271,15 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
 
-  self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
+  # Use IkTailCall when in tail position
+  if self.tail_position:
+    when DEBUG:
+      echo "DEBUG: Generating IkTailCall in compile_gene_unknown"
+    # For now, we can't determine if it's the same function at compile time
+    # So we'll let the VM decide
+    self.output.instructions.add(Instruction(kind: IkTailCall, label: end_label))
+  else:
+    self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
 
 proc compile_gene(self: Compiler, input: Value) =
   let gene = input.gene
@@ -1840,7 +1873,10 @@ proc compile*(f: Function) =
       self.output.instructions.add(Instruction(kind: IkThrow))
     self.output.instructions.add(Instruction(kind: IkNoop, label: label))
 
+  # Mark that we're in tail position for the function body
+  self.tail_position = true
   self.compile(f.body)
+  self.tail_position = false
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
@@ -1946,7 +1982,10 @@ proc compile*(f: CompileFn) =
       self.output.instructions.add(Instruction(kind: IkThrow))
     self.output.instructions.add(Instruction(kind: IkNoop, label: label))
 
+  # Mark that we're in tail position for the function body
+  self.tail_position = true
   self.compile(f.body)
+  self.tail_position = false
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))

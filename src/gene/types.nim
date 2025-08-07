@@ -590,6 +590,7 @@ type
     quote_level*: int
     scope_trackers*: seq[ScopeTracker]
     loop_stack*: seq[LoopInfo]
+    tail_position*: bool  # Track if we're in tail position for tail call optimization
 
   InstructionKind* {.size: sizeof(int16).} = enum
     IkNoop
@@ -722,6 +723,10 @@ type
     IkGeneAddChild
     IkGeneAddChildValue       # args: literal value
     IkGeneEnd
+    
+    # Fast function call instructions
+    IkCallDirect      # Direct function call with known target
+    IkTailCall        # Tail call optimization
 
     IkResolveSymbol
     IkSetMember
@@ -2890,7 +2895,8 @@ proc `$`*(self: Instruction): string =
       IkArrayAddChildValue,
       IkResolveSymbol, IkResolveMethod,
       IkSetMember, IkGetMember, IkGetMemberOrNil, IkGetMemberDefault,
-      IkSetChild, IkGetChild:
+      IkSetChild, IkGetChild,
+      IkCallDirect, IkTailCall:
       if self.label.int > 0:
         result = fmt"{self.label.int32.to_hex()} {($self.kind)[2..^1]:<20} {$self.arg0}"
       else:

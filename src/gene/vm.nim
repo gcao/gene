@@ -328,6 +328,132 @@ proc exec*(self: VirtualMachine): Value =
         # let value = self.frame.current()
         # Find the namespace where the member is defined and assign it there
 
+      of IkCallDirect:
+        {.push checks: off}
+        # Fast direct function call - function is in arg0, args already on stack
+        let target = inst.arg0
+        if target.kind != VkFunction:
+          not_allowed("IkCallDirect requires a function, got " & $target.kind)
+        
+        let f = target.ref.fn
+        if f.body_compiled == nil:
+          f.compile()
+        
+        # Collect arguments from stack (they were pushed in reverse order)
+        let arg_count = inst.arg1.int64.int
+        var args_gene = new_gene(NIL)
+        for i in 0..<arg_count:
+          args_gene.children.insert(self.frame.pop(), 0)
+        
+        # Create new frame
+        var scope: Scope
+        if f.matcher.is_empty():
+          scope = f.parent_scope
+        else:
+          scope = new_scope(f.scope_tracker, f.parent_scope)
+        
+        var new_frame = new_frame()
+        new_frame.kind = FkFunction
+        new_frame.target = target
+        new_frame.scope = scope
+        new_frame.args = args_gene.to_gene_value()
+        new_frame.caller_frame = self.frame
+        self.frame.ref_count.inc()
+        new_frame.caller_address = Address(cu: self.cu, pc: pc + 1)
+        new_frame.ns = f.ns
+        
+        # Process arguments if needed
+        if not f.matcher.is_empty():
+          process_args(f.matcher, new_frame.args, new_frame.scope)
+        
+        # Switch to new frame and CU
+        self.frame = new_frame
+        self.cu = f.body_compiled
+        pc = 0
+        inst = self.cu.instructions[pc].addr
+        continue
+        {.pop}
+
+      of IkTailCall:
+        {.push checks: off}
+        # IkTailCall works like IkGeneEnd but optimizes tail calls to the same function
+        let value = self.frame.current()
+        case value.kind:
+          of VkFrame:
+            let new_frame = value.ref.frame
+            case new_frame.kind:
+              of FkFunction:
+                let f = new_frame.target.ref.fn
+                if f.body_compiled == nil:
+                  f.compile()
+                
+                # Check if this is a tail call to the same function
+                if self.frame.kind == FkFunction and 
+                   self.frame.target.kind == VkFunction and
+                   self.frame.target.ref.fn == f:
+                  # Tail call optimization - reuse current frame
+                  # Pop the VkFrame value from the stack
+                  discard self.frame.pop()
+                  
+                  # Update arguments and scope in place
+                  self.frame.args = new_frame.args
+                  
+                  # Reset scope
+                  if f.matcher.is_empty():
+                    self.frame.scope = f.parent_scope
+                  else:
+                    self.frame.scope = new_scope(f.scope_tracker, f.parent_scope)
+                    # Process arguments
+                    if self.frame.current_method != nil:
+                      # Method call - create args without self
+                      var method_args = new_gene(NIL)
+                      if self.frame.args.kind == VkGene and self.frame.args.gene.children.len > 1:
+                        for i in 1..<self.frame.args.gene.children.len:
+                          method_args.children.add(self.frame.args.gene.children[i])
+                      process_args(f.matcher, method_args.to_gene_value(), self.frame.scope)
+                    else:
+                      process_args(f.matcher, self.frame.args, self.frame.scope)
+                  
+                  # Reset stack
+                  self.frame.stack_index = 0
+                  
+                  # Jump to start of function body
+                  pc = 0
+                  inst = self.cu.instructions[pc].addr
+                  continue
+                else:
+                  # Not a tail call - fall back to regular call like IkGeneEnd
+                  pc.inc()
+                  discard self.frame.pop()
+                  new_frame.caller_frame = self.frame
+                  self.frame.ref_count.inc()
+                  new_frame.caller_address = Address(cu: self.cu, pc: pc)
+                  new_frame.ns = f.ns
+                  self.frame = new_frame
+                  self.cu = f.body_compiled
+                  
+                  # Process arguments
+                  if not f.matcher.is_empty():
+                    if new_frame.current_method != nil:
+                      var method_args = new_gene(NIL)
+                      if new_frame.args.kind == VkGene and new_frame.args.gene.children.len > 1:
+                        for i in 1..<new_frame.args.gene.children.len:
+                          method_args.children.add(new_frame.args.gene.children[i])
+                      process_args(f.matcher, method_args.to_gene_value(), new_frame.scope)
+                    else:
+                      process_args(f.matcher, new_frame.args, new_frame.scope)
+                  
+                  pc = 0
+                  inst = self.cu.instructions[pc].addr
+                  continue
+              else:
+                # For other frame kinds, just do regular call
+                todo("IkTailCall for " & $new_frame.kind)
+          else:
+            # For non-frames, fall back to IkGeneEnd behavior
+            todo("IkTailCall for " & $value.kind)
+        {.pop}
+
       of IkResolveSymbol:
         let symbol_key = cast[uint64](inst.arg0)
         case symbol_key:
