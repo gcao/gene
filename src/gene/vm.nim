@@ -141,7 +141,7 @@ proc print_instruction_profile*(self: VirtualMachine) =
     
     echo fmt"{name_str} {profile.count:12} {total_ms:12.3f} {avg_ns:10.1f} {min_ns:9.1f} {max_ns:9.1f} {percent:8.2f}%"
   
-  echo fmt"\nTotal time: {total_time * 1000.0:.3f} ms"
+  echo fmt"Total time: {total_time * 1000.0:.3f} ms"
   echo "Instructions profiled: ", stats.len
 
 # Forward declaration

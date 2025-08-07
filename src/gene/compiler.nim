@@ -1811,23 +1811,52 @@ proc update_jumps(self: CompilationUnit) =
       else:
         discard
 
-# Remove IkNoop instructions that don't serve as jump targets
+# Merge IkNoop instructions with following instructions before jump resolution
 proc optimize_noops(self: CompilationUnit) =
-  # After jumps are resolved, we can remove IkNoop instructions that don't have labels
-  # BUT we must keep IkNoop instructions that store data (like scope trackers)
+  # Move labels from Noop instructions to the next real instruction
+  # This must be done BEFORE jump resolution
   var new_instructions: seq[Instruction] = @[]
+  var pending_labels: seq[Label] = @[]  # Accumulate labels to transfer
+  var removed_count = 0
   
   for i, inst in self.instructions:
-    if inst.kind != IkNoop:
-      # Keep all non-Noop instructions
-      new_instructions.add(inst)
-    elif inst.label != 0:
-      # Keep IkNoop if it has a label (used as jump target)
-      new_instructions.add(inst)
-    elif inst.arg0.kind != VkNil:
-      # Keep IkNoop if it has data in arg0 (e.g., scope tracker)
-      new_instructions.add(inst)
-    # Skip IkNoop without labels or data
+    if inst.kind == IkNoop:
+      if inst.label != 0:
+        # Accumulate this label to transfer to next real instruction
+        pending_labels.add(inst.label)
+        removed_count.inc()  # We're removing this Noop
+      elif inst.arg0.kind != VkNil:
+        # This Noop has data (e.g., scope tracker) - must keep it
+        var modified_inst = inst
+        # But we can still give it any accumulated labels
+        if pending_labels.len > 0 and inst.label == 0:
+          modified_inst.label = pending_labels[0]
+          pending_labels.delete(0)
+        new_instructions.add(modified_inst)
+        # Transfer any remaining labels to subsequent instructions
+      else:
+        # Empty Noop without label or data - remove it
+        removed_count.inc()
+    else:
+      # Non-Noop instruction - give it the first pending label if it doesn't have one
+      var modified_inst = inst
+      if pending_labels.len > 0 and inst.label == 0:
+        modified_inst.label = pending_labels[0]
+        pending_labels.delete(0)
+      new_instructions.add(modified_inst)
+      
+      # If there are more pending labels, we need to keep Noops for them
+      for label in pending_labels:
+        new_instructions.add(Instruction(kind: IkNoop, label: label))
+      pending_labels = @[]
+  
+  # If there are still pending labels at the end, keep Noops for them
+  for label in pending_labels:
+    new_instructions.add(Instruction(kind: IkNoop, label: label))
+  
+  when not defined(release):
+    if removed_count > 0:
+      echo "optimize_noops: Removed ", removed_count, " Noop instructions"
   
   self.instructions = new_instructions
 
@@ -1843,8 +1872,8 @@ proc compile*(input: seq[Value]): CompilationUnit =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()  # Optimize BEFORE resolving jumps
   self.output.update_jumps()
-  self.output.optimize_noops()
   result = self.output
 
 proc compile*(f: Function) =
@@ -1880,8 +1909,8 @@ proc compile*(f: Function) =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()  # Optimize BEFORE resolving jumps
   self.output.update_jumps()
-  self.output.optimize_noops()
   f.body_compiled = self.output
   f.body_compiled.matcher = f.matcher
 
@@ -1915,8 +1944,8 @@ proc compile*(m: Macro) =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()  # Optimize BEFORE resolving jumps
   self.output.update_jumps()
-  self.output.optimize_noops()
   m.body_compiled = self.output
   m.body_compiled.kind = CkMacro
   m.body_compiled.matcher = m.matcher
@@ -1951,8 +1980,8 @@ proc compile*(b: Block) =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()  # Optimize BEFORE resolving jumps
   self.output.update_jumps()
-  self.output.optimize_noops()
   b.body_compiled = self.output
   b.body_compiled.matcher = b.matcher
 
@@ -1989,8 +2018,8 @@ proc compile*(f: CompileFn) =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()  # Optimize BEFORE resolving jumps
   self.output.update_jumps()
-  self.output.optimize_noops()
   f.body_compiled = self.output
   f.body_compiled.kind = CkCompileFn
   f.body_compiled.matcher = f.matcher
@@ -2319,8 +2348,8 @@ proc compile_init*(input: Value): CompilationUnit =
 
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()  # Optimize BEFORE resolving jumps
   self.output.update_jumps()
-  self.output.optimize_noops()
   result = self.output
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
