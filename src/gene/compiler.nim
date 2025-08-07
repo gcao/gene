@@ -1815,6 +1815,19 @@ proc update_jumps(self: CompilationUnit) =
 proc optimize_noops(self: CompilationUnit) =
   # Move labels from Noop instructions to the next real instruction
   # This must be done BEFORE jump resolution
+  
+  # when not defined(release):
+  #   # Debug: show all Noops before optimization
+  #   var noop_info: seq[string] = @[]
+  #   for idx, inst in self.instructions:
+  #     if inst.kind == IkNoop:
+  #       let info = $idx & ": label=" & $inst.label & ", has_data=" & $(inst.arg0.kind != VkNil)
+  #       noop_info.add(info)
+  #   if noop_info.len > 0:
+  #     echo "[NOOPS BEFORE] Found " & $noop_info.len & " Noops:"
+  #     for info in noop_info:
+  #       echo "  " & info
+  
   var new_instructions: seq[Instruction] = @[]
   var pending_labels: seq[Label] = @[]  # Accumulate labels to transfer
   var removed_count = 0
@@ -1857,6 +1870,17 @@ proc optimize_noops(self: CompilationUnit) =
   when not defined(release):
     if removed_count > 0:
       echo "optimize_noops: Removed ", removed_count, " Noop instructions"
+    
+    # # Debug: show remaining Noops after optimization
+    # var remaining_noops: seq[string] = @[]
+    # for idx, inst in new_instructions:
+    #   if inst.kind == IkNoop:
+    #     let info = $idx & ": label=" & $inst.label & ", has_data=" & $(inst.arg0.kind != VkNil)
+    #     remaining_noops.add(info)
+    # if remaining_noops.len > 0:
+    #   echo "[NOOPS AFTER] " & $remaining_noops.len & " Noops remain:"
+    #   for info in remaining_noops:
+    #     echo "  " & info
   
   self.instructions = new_instructions
 

@@ -295,12 +295,20 @@ proc exec*(self: VirtualMachine): Value =
     
     # Instruction profiling
     var inst_start_time: float64
+    var inst_kind_for_profiling = IkNoop  # Default value, will be overwritten
     if self.instruction_profiling:
       inst_start_time = cpuTime()
+      inst_kind_for_profiling = inst.kind  # Save it now, before execution changes anything
+      # when not defined(release):
+      #   if inst.kind == IkNoop:
+      #     echo fmt"[PROFILER] About to execute Noop at PC {pc:04X}, inst ptr = {cast[int64](inst):X}, first inst ptr = {cast[int64](self.cu.instructions[0].addr):X}"
 
     {.computedGoto.}
     case inst.kind:
       of IkNoop:
+        when not defined(release):
+          if self.trace:
+            echo fmt"{indent}     [Noop at PC {pc:04X}, label: {inst.label.int:04X}]"
         discard
 
       of IkStart:
@@ -3082,7 +3090,11 @@ proc exec*(self: VirtualMachine): Value =
     # Record instruction timing
     if self.instruction_profiling:
       let elapsed = cpuTime() - inst_start_time
-      let kind = inst.kind
+      let kind = inst_kind_for_profiling  # Use the saved kind, not current inst.kind
+      
+      # when not defined(release):
+      #   if kind == IkNoop:
+      #     echo fmt"[PROFILER] Recording {kind} execution at PC {pc:04X}, saved kind = {kind}, current inst.kind = {inst.kind}, elapsed = {elapsed}"
       
       # Update or initialize profile for this instruction
       if self.instruction_profile[kind].count == 0:
