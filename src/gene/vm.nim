@@ -376,7 +376,8 @@ proc exec*(self: VirtualMachine): Value =
               result_val = future_val
           
           # Profile function exit
-          self.exit_function()
+          if self.profiling:
+            self.exit_function()
           
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
@@ -513,8 +514,9 @@ proc exec*(self: VirtualMachine): Value =
           process_args(f.matcher, new_frame.args, new_frame.scope)
         
         # Profile function entry
-        let func_name = if f.name != "": f.name else: "<anonymous>"
-        self.enter_function(func_name)
+        if self.profiling:
+          let func_name = if f.name != "": f.name else: "<anonymous>"
+          self.enter_function(func_name)
         
         # Switch to new frame and CU
         self.frame = new_frame
@@ -1418,8 +1420,9 @@ proc exec*(self: VirtualMachine): Value =
                 frame.ns = f.ns
                 
                 # Profile function entry
-                let func_name = if f.name != "": f.name else: "<anonymous>"
-                self.enter_function(func_name)
+                if self.profiling:
+                  let func_name = if f.name != "": f.name else: "<anonymous>"
+                  self.enter_function(func_name)
                 
                 self.frame = frame
                 self.cu = f.body_compiled
@@ -2397,7 +2400,8 @@ proc exec*(self: VirtualMachine): Value =
               v = future_val
           
           # Profile function exit
-          self.exit_function()
+          if self.profiling:
+            self.exit_function()
           
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
