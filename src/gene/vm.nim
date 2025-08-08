@@ -293,15 +293,13 @@ proc exec*(self: VirtualMachine): Value =
         # self.print_stack()
         echo fmt"{indent}{pc:04X} {inst[]}"
     
-    # Instruction profiling
-    var inst_start_time: float64
-    var inst_kind_for_profiling = IkNoop  # Default value, will be overwritten
-    if self.instruction_profiling:
-      inst_start_time = cpuTime()
-      inst_kind_for_profiling = inst.kind  # Save it now, before execution changes anything
-      # when not defined(release):
-      #   if inst.kind == IkNoop:
-      #     echo fmt"[PROFILER] About to execute Noop at PC {pc:04X}, inst ptr = {cast[int64](inst):X}, first inst ptr = {cast[int64](self.cu.instructions[0].addr):X}"
+    # Instruction profiling - only declare variables when needed
+    when not defined(release):
+      var inst_start_time: float64
+      var inst_kind_for_profiling: InstructionKind
+      if self.instruction_profiling:
+        inst_start_time = cpuTime()
+        inst_kind_for_profiling = inst.kind  # Save it now, before execution changes anything
 
     {.computedGoto.}
     case inst.kind:
@@ -3088,29 +3086,26 @@ proc exec*(self: VirtualMachine): Value =
         todo($inst.kind)
 
     # Record instruction timing
-    if self.instruction_profiling:
-      let elapsed = cpuTime() - inst_start_time
-      let kind = inst_kind_for_profiling  # Use the saved kind, not current inst.kind
-      
-      # when not defined(release):
-      #   if kind == IkNoop:
-      #     echo fmt"[PROFILER] Recording {kind} execution at PC {pc:04X}, saved kind = {kind}, current inst.kind = {inst.kind}, elapsed = {elapsed}"
-      
-      # Update or initialize profile for this instruction
-      if self.instruction_profile[kind].count == 0:
-        self.instruction_profile[kind] = InstructionProfile(
-          count: 1,
-          total_time: elapsed,
-          min_time: elapsed,
-          max_time: elapsed
-        )
-      else:
-        self.instruction_profile[kind].count.inc()
-        self.instruction_profile[kind].total_time += elapsed
-        if elapsed < self.instruction_profile[kind].min_time:
-          self.instruction_profile[kind].min_time = elapsed
-        if elapsed > self.instruction_profile[kind].max_time:
-          self.instruction_profile[kind].max_time = elapsed
+    when not defined(release):
+      if self.instruction_profiling:
+        let elapsed = cpuTime() - inst_start_time
+        let kind = inst_kind_for_profiling  # Use the saved kind, not current inst.kind
+        
+        # Update or initialize profile for this instruction
+        if self.instruction_profile[kind].count == 0:
+          self.instruction_profile[kind] = InstructionProfile(
+            count: 1,
+            total_time: elapsed,
+            min_time: elapsed,
+            max_time: elapsed
+          )
+        else:
+          self.instruction_profile[kind].count.inc()
+          self.instruction_profile[kind].total_time += elapsed
+          if elapsed < self.instruction_profile[kind].min_time:
+            self.instruction_profile[kind].min_time = elapsed
+          if elapsed > self.instruction_profile[kind].max_time:
+            self.instruction_profile[kind].max_time = elapsed
     
     {.push checks: off}
     pc.inc()
