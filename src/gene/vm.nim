@@ -322,7 +322,7 @@ proc exec*(self: VirtualMachine): Value =
           if indent.len >= 2:
             indent.delete(indent.len-2..indent.len-1)
         # TODO: validate that there is only one value on the stack
-        let v = move(self.frame.current)
+        let v = self.frame.current()
         if self.frame.caller_frame == nil:
           return v
         else:
@@ -347,18 +347,16 @@ proc exec*(self: VirtualMachine): Value =
             self.cu = self.frame.caller_address.cu
             pc = start_pos
             inst = self.cu.instructions[pc].addr
-            var old_frame = self.frame
-            self.frame = self.frame.caller_frame
-            old_frame.free()
+            self.frame.update(self.frame.caller_frame)
+            self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
             continue
           elif self.cu.kind == CkMacro:
             # Return to caller who will handle macro expansion
             self.cu = self.frame.caller_address.cu
             pc = self.frame.caller_address.pc
             inst = self.cu.instructions[pc].addr
-            var old_frame = self.frame
-            self.frame = self.frame.caller_frame
-            old_frame.free()
+            self.frame.update(self.frame.caller_frame)
+            self.frame.ref_count.dec()
             # Push the macro result for the caller to process
             self.frame.push(v)
             continue
@@ -382,9 +380,8 @@ proc exec*(self: VirtualMachine): Value =
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
-          var old_frame = self.frame
-          self.frame = self.frame.caller_frame
-          old_frame.free()
+          self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           if not skip_return:
             self.frame.push(result_val)
           continue
@@ -435,9 +432,9 @@ proc exec*(self: VirtualMachine): Value =
 
       of IkVarResolve:
         {.push checks: off}
-        when not defined(release):
-          if self.trace:
-            echo fmt"IkVarResolve: arg0={inst.arg0}, arg0.int64.int={inst.arg0.int64.int}, scope.members.len={self.frame.scope.members.len}"
+        # when not defined(release):
+        #   if self.trace:
+        #     echo fmt"IkVarResolve: arg0={inst.arg0}, arg0.int64.int={inst.arg0.int64.int}, scope.members.len={self.frame.scope.members.len}"
         self.frame.push(self.frame.scope.members[inst.arg0.int64.int])
         {.pop.}
 
@@ -1179,7 +1176,7 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int64.int64.int
+            pc = inst.arg0.int64.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -1228,7 +1225,7 @@ proc exec*(self: VirtualMachine): Value =
             r.frame.target = gene_type
             r.frame.scope = scope
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int64.int64.int
+            pc = inst.arg0.int64.int
             inst = self.cu.instructions[pc].addr
             continue
 
@@ -1262,7 +1259,7 @@ proc exec*(self: VirtualMachine): Value =
               args: new_gene_value(),
             )
             self.frame.replace(r.to_ref_value())
-            pc = inst.arg0.int64.int64.int
+            pc = inst.arg0.int64.int
             inst = self.cu.instructions[pc].addr
             continue
             
@@ -1297,7 +1294,7 @@ proc exec*(self: VirtualMachine): Value =
                     args_gene.children.add(child)
                 r.frame.args = args_gene.to_gene_value()
                 self.frame.replace(r.to_ref_value())
-                pc = inst.arg0.int64.int64.int
+                pc = inst.arg0.int64.int
                 inst = self.cu.instructions[pc].addr
                 continue
               else:
@@ -1404,9 +1401,13 @@ proc exec*(self: VirtualMachine): Value =
         case kind:
           of VkFrame:
             let frame = self.frame.current().ref.frame
+            when DEBUG_VM:
+              echo fmt"  Frame kind = {frame.kind}"
             case frame.kind:
               of FkFunction:
                 let f = frame.target.ref.fn
+                when DEBUG_VM:
+                  echo fmt"  Function name = {f.name}, has compiled body = {f.body_compiled != nil}"
                 if f.body_compiled == nil:
                   f.compile()
 
@@ -1545,9 +1546,9 @@ proc exec*(self: VirtualMachine): Value =
         {.push checks: off}
         let second = self.frame.pop()
         let first = self.frame.pop()
-        when not defined(release):
-          if self.trace:
-            echo fmt"IkAdd: first={first} ({first.kind}), second={second} ({second.kind})"
+        # when not defined(release):
+        #   if self.trace:
+        #     echo fmt"IkAdd: first={first} ({first.kind}), second={second} ({second.kind})"
         case first.kind:
           of VkInt:
             case second.kind:
@@ -2406,9 +2407,8 @@ proc exec*(self: VirtualMachine): Value =
           self.cu = self.frame.caller_address.cu
           pc = self.frame.caller_address.pc
           inst = self.cu.instructions[pc].addr
-          var old_frame = self.frame
-          self.frame = self.frame.caller_frame
-          old_frame.free()  # Properly release the frame
+          self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()  # The frame's ref_count was incremented unnecessarily.
           self.frame.push(v)
           continue
         {.pop.}
@@ -2614,9 +2614,8 @@ proc exec*(self: VirtualMachine): Value =
               self.cu = self.frame.caller_address.cu
               pc = self.frame.caller_address.pc
               inst = self.cu.instructions[pc].addr
-              var old_frame = self.frame
-              self.frame = self.frame.caller_frame
-              old_frame.free()
+              self.frame.update(self.frame.caller_frame)
+              self.frame.ref_count.dec()
               self.frame.push(future_val)
             continue
           else:

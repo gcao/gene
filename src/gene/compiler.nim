@@ -1208,7 +1208,9 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
   #   return
 
   let fn_label = new_label()
-  let end_label = new_label()
+  # When there are no children and props, use the same label for both fn and end
+  let end_label = if gene.children.len == 0 and gene.props.len == 0: fn_label else: new_label()
+  # echo fmt"compile_gene_unknown: fn_label={fn_label}, end_label={end_label}"
   self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.to_value()))
 
   # self.output.instructions.add(Instruction(kind: IkGeneStartMacro))
@@ -1223,14 +1225,19 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
   self.quote_level.dec()
 
   # self.output.instructions.add(Instruction(kind: IkGeneStartFn, label: fn_label))
-  self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
+  # Only add the Noop if fn_label is different from end_label
+  if fn_label != end_label:
+    self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
   for k, v in gene.props:
     self.compile(v)
     self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
   for child in gene.children:
     self.compile(child)
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
-  self.output.instructions.add(Instruction(kind: IkGeneEnd, arg0: start_pos, label: end_label))
+  # Use fn_label if they're the same, otherwise use end_label
+  let gene_end_label = if fn_label == end_label: fn_label else: end_label
+  self.output.instructions.add(Instruction(kind: IkGeneEnd, arg0: start_pos, label: gene_end_label))
+  # echo fmt"Added GeneEnd with label {end_label} at position {self.output.instructions.len - 1}"
 
 # TODO: handle special cases:
 # 1. No arguments
@@ -1250,7 +1257,8 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
     self.output.instructions.add(Instruction(kind: IkResolveMethod, arg0: first.str[1..^1]))
 
   let fn_label = new_label()
-  let end_label = new_label()
+  # When there are no children and props, use the same label for both fn and end
+  let end_label = if gene.children.len == 0 and gene.props.len == 0: fn_label else: new_label()
   self.output.instructions.add(Instruction(kind: IkGeneStartDefault, arg0: fn_label.to_value()))
 
   self.quote_level.inc()
@@ -1263,7 +1271,9 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
   self.output.instructions.add(Instruction(kind: IkJump, arg0: end_label.to_value()))
   self.quote_level.dec()
 
-  self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
+  # Only add the Noop if fn_label is different from end_label
+  if fn_label != end_label:
+    self.output.instructions.add(Instruction(kind: IkNoop, label: fn_label))
   for k, v in gene.props:
     self.compile(v)
     self.output.instructions.add(Instruction(kind: IkGeneSetProp, arg0: k))
@@ -1272,14 +1282,16 @@ proc compile_method_call(self: Compiler, gene: ptr Gene) {.inline.} =
     self.output.instructions.add(Instruction(kind: IkGeneAddChild))
 
   # Use IkTailCall when in tail position
+  # Use fn_label if they're the same, otherwise use end_label
+  let gene_end_label = if fn_label == end_label: fn_label else: end_label
   if self.tail_position:
     when DEBUG:
       echo "DEBUG: Generating IkTailCall in compile_gene_unknown"
     # For now, we can't determine if it's the same function at compile time
     # So we'll let the VM decide
-    self.output.instructions.add(Instruction(kind: IkTailCall, label: end_label))
+    self.output.instructions.add(Instruction(kind: IkTailCall, label: gene_end_label))
   else:
-    self.output.instructions.add(Instruction(kind: IkGeneEnd, label: end_label))
+    self.output.instructions.add(Instruction(kind: IkGeneEnd, label: gene_end_label))
 
 proc compile_gene(self: Compiler, input: Value) =
   let gene = input.gene
@@ -1774,6 +1786,7 @@ proc compile*(self: Compiler, input: Value) =
       todo($input.kind)
 
 proc update_jumps(self: CompilationUnit) =
+  # echo "update_jumps called, instruction count: ", self.instructions.len
   for i in 0..<self.instructions.len:
     let inst = self.instructions[i]
     case inst.kind
@@ -1792,6 +1805,8 @@ proc update_jumps(self: CompilationUnit) =
               echo "ERROR: inst ", i, " (", inst.kind, ") arg0 is not an int: ", inst.arg0, " kind: ", inst.arg0.kind
           let label = (inst.arg0.int64.int and 0xFFFF).int16.Label
           let new_pc = self.find_label(label)
+          # if inst.kind == IkGeneStartDefault:
+          #   echo "  GeneStartDefault at ", i, ": label ", label, " -> PC ", new_pc
           self.instructions[i].arg0 = new_pc.to_value()
       of IkTryStart:
         # IkTryStart has arg0 for catch PC and optional arg1 for finally PC
@@ -1867,9 +1882,9 @@ proc optimize_noops(self: CompilationUnit) =
   for label in pending_labels:
     new_instructions.add(Instruction(kind: IkNoop, label: label))
   
-  when not defined(release):
-    if removed_count > 0:
-      echo "optimize_noops: Removed ", removed_count, " Noop instructions"
+  # when not defined(release):
+  #   if removed_count > 0:
+  # echo "optimize_noops: Removed ", removed_count, " Noop instructions (", self.instructions.len, " total)"
     
     # # Debug: show remaining Noops after optimization
     # var remaining_noops: seq[string] = @[]
