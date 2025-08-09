@@ -17,29 +17,36 @@ proc main() =
   
   if args.len == 0:
     # No arguments, show help
-    discard CommandMgr["help"]("help", @[])
+    let result = CommandMgr.lookup("help")
+    if result != nil:
+      let helpResult = result("help", @[])
+      if helpResult.output.len > 0:
+        echo helpResult.output
     return
   
   var cmd = args[0]
   var cmd_args = args[1 .. ^1]
   
-  # Check if it's a known command
-  if not CommandMgr.data.hasKey(cmd):
+  # Use safe lookup
+  let handler = CommandMgr.lookup(cmd)
+  if handler.isNil:
     echo "Error: Unknown command: ", cmd
     echo ""
-    discard CommandMgr["help"]("help", @[])
+    let helpHandler = CommandMgr.lookup("help")
+    if helpHandler != nil:
+      let helpResult = helpHandler("help", @[])
+      if helpResult.output.len > 0:
+        echo helpResult.output
     quit(1)
   
   # Execute the command
-  let handler = CommandMgr[cmd]
-  if handler.is_nil():
-    echo "Error: Unknown command: ", cmd
+  let result = handler(cmd, cmd_args)
+  if not result.success:
+    if result.error.len > 0:
+      echo "Error: ", result.error
     quit(1)
-  
-  let status = handler(cmd, cmd_args)
-  if status.len > 0:
-    echo status
-    quit(1)
+  elif result.output.len > 0:
+    echo result.output
 
 when isMainModule:
   main()
