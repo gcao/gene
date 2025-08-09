@@ -1093,53 +1093,9 @@ proc new_id*(): Id =
 var REF_POOL {.threadvar.}: seq[ptr Reference]
 const INITIAL_REF_POOL_SIZE = 2048
 
-# DEPRECATED: This destroy template is no longer needed
-# Reference counting is now handled by proper =destroy hooks on ptr types
-# template destroy(self: Value) =
-#   {.push checks: off, optimization: speed.}
-#   let u = cast[uint64](self)
-#   
-#   # Only need to destroy heap-allocated values
-#   if (u and NAN_MASK) == NAN_MASK:  # In NaN space
-#     case u and 0xFFFF_0000_0000_0000u64:
-#       of REF_TAG:
-#         let x = cast[ptr Reference](u and PAYLOAD_MASK)
-#         if x.ref_count == 1:
-#           # echo "destroy " & $x.kind
-#           # Return to pool instead of deallocating
-#           if REF_POOL.len < INITIAL_REF_POOL_SIZE * 2:
-#             REF_POOL.add(x)
-#           else:
-#             dealloc(x)
-#         else:
-#           x.ref_count.dec()
-#         {.linearScanEnd.}
-#       of GENE_TAG:
-#         let x = cast[ptr Gene](u and PAYLOAD_MASK)
-#         if x.ref_count == 1:
-#           # echo "destroy gene"
-#           dealloc(x)
-#         else:
-#           x.ref_count.dec()
-#       of LONG_STR_TAG:
-#         let x = cast[ptr String](u and PAYLOAD_MASK)
-#         if x.ref_count == 1:
-#           # echo "destroy long string"
-#           dealloc(x)
-#         else:
-#           x.ref_count.dec()
-#       else:
-#         # Small ints, symbols, short strings, special values - no deallocation needed
-#         discard
-#   # else: regular float - no deallocation needed
-#   {.pop.}
+# Reference counting is handled by Nim's memory management for ref types
 
-# Removed =destroy for Value - not needed for inlined values
-# Reference counting is handled at the Reference/Gene level
-
-# Removed =copy for Value - not needed since Value is a POD type
-# For inlined values (ints, floats, etc), simple bit copy is sufficient
-# Reference counting should be handled at the Reference/Gene/String level
+# Value is a POD type - simple bit copy is sufficient
 
 # Manual reference counting for Values
 proc retain*(v: Value) {.inline.} =
@@ -2816,14 +2772,7 @@ converter to_value*(f: NativeFn): Value {.inline.} =
   r.native_fn = f
   result = r.to_ref_value()
 
-# converter to_value*(f: NativeFn2): Value {.inline.} =
-#   let r = new_ref(VkNativeFn2)
-#   r.native_fn2 = f
-#   result = r.to_ref_value()
-
 #################### Frame #######################
-
-# const REG_DEFAULT = 6
 const INITIAL_FRAME_POOL_SIZE = 1024
 
 var FRAMES {.threadvar.}: seq[Frame]
@@ -2922,9 +2871,6 @@ template pop2*(self: var Frame, to: var Value) =
   copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
   self.stack[self.stack_index] = NIL
   {.pop.}
-
-# template default*(self: Frame): Value =
-#   self.stack[REG_DEFAULT]
 
 #################### COMPILER ####################
 
@@ -3087,20 +3033,6 @@ proc init_app_and_vm*() =
 
   for callback in VmCreatedCallbacks:
     callback()
-
-# proc handle_args*(self: VirtualMachine, matcher: RootMatcher, args: Value) =
-#   case matcher.hint_mode:
-#     of MhNone:
-#       discard
-#     of MhSimpleData:
-#       for i, value in args.gene.children:
-#         self.frame.match_result.fields.add(MfSuccess)
-#         self.frame.scope.members.add(value)
-#       if args.gene.children.len < matcher.children.len:
-#         for i in args.gene.children.len..matcher.children.len-1:
-#           self.frame.match_result.fields.add(MfMissing)
-#     else:
-#       todo($matcher.hint_mode)
 
 #################### Helpers #####################
 

@@ -12,5 +12,3 @@ proc to_int*(x: string): (bool, int) =
   except ValueError:
     result = (false, 0)
 
-# template dbg*(args: untyped) =
-#   echo instantiation_info() & $args

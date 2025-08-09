@@ -177,13 +177,6 @@ proc start_scope(self: Compiler) =
   let scope_tracker = new_scope_tracker(self.scope_tracker)
   self.scope_trackers.add(scope_tracker)
   # ScopeStart is added when the first variable is declared
-  # self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: st.to_value()))
-
-# proc start_scope(self: Compiler, parent: ScopeTracker, parent_index_max: int) =
-#   var scope_tracker = new_scope_tracker(parent)
-#   scope_tracker.parent_index_max = parent_index_max.int16
-#   self.scope_trackers.add(scope_tracker)
-
 proc add_scope_start(self: Compiler) =
   if self.scope_tracker.next_index == 0:
     self.output.instructions.add(Instruction(kind: IkScopeStart, arg0: self.scope_tracker.to_value()))

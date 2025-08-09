@@ -883,21 +883,10 @@ proc read_regex(self: var Parser): Value =
 proc read_unmatched_delimiter(self: var Parser): Value =
   raise new_exception(ParseError, "Unmatched delimiter: " & self.buf[self.bufpos])
 
-# proc read_discard(self: var Parser): Value =
-#   discard self.read()
-#   result = nil
-
 proc read_decorator(self: var Parser): Value =
   let gene = new_gene(self.read())
   gene.children.add(self.read())
   result = gene.to_gene_value()
-
-# proc read_star(self: var Parser): Value =
-#   return new_gene_gene(self.read())
-
-# proc read_reference(self: var Parser): Value =
-#   var name  = self.read_token(false)
-#   result = new_gene_reference(name, self.references)
 
 proc read_dispatch(self: var Parser): Value =
   let ch = self.buf[self.bufpos]
@@ -915,7 +904,6 @@ proc init_macro_array() =
   macros['"'] = read_string2
   macros[':'] = read_quoted
   macros['\\'] = read_character
-  # macros['`'] = read_quasi_quoted
   macros['%'] = read_unquoted
   macros['#'] = read_dispatch
   macros['('] = read_gene
@@ -927,86 +915,12 @@ proc init_macro_array() =
 
 proc init_dispatch_macro_array() =
   dispatch_macros['['] = read_set
-  # dispatch_macros['_'] = read_discard
   dispatch_macros['/'] = read_regex
   dispatch_macros['@'] = read_decorator
-  # dispatch_macros['*'] = read_star
-  # dispatch_macros['&'] = read_reference
   dispatch_macros['"'] = read_string_interpolation
-
-# proc handle_file(self: var Parser, value: Value): Value =
-#     result = Value(kind: VkFile)
-#     result.file_name = value.gene_children[0].str
-#     result.file_content = value.gene_children[1]
-
-# proc handle_dir(self: var Parser, value: Value): Value =
-#   result = Value(kind: VkDirectory)
-#   result.dir_name = value.gene_children[0].str
-#   for child in value.gene_children[1..^1]:
-#     var child_name: string
-#     case child.kind:
-#     of VkFile:
-#       child_name = child.file_name
-#       child.file_parent = result
-#     of VkDirectory:
-#       child_name = child.dir_name
-#       child.dir_parent = result
-#     of VkArchiveFile:
-#       child_name = child.arc_file_name
-#       child.arc_file_parent = result
-#     else:
-#       not_allowed("unknown child " & $child)
-#     result.dir_members[child_name] = child
-
-# proc handle_arc(self: var Parser, value: Value): Value =
-#   result = Value(kind: VkArchiveFile)
-#   result.arc_file_name = value.gene_children[0].str
-#   for child in value.gene_children[1..^1]:
-#     var child_name: string
-#     case child.kind:
-#     of VkFile:
-#       child_name = child.file_name
-#       child.file_parent = result
-#     of VkDirectory:
-#       child_name = child.dir_name
-#       child.dir_parent = result
-#     of VkArchiveFile:
-#       child_name = child.arc_file_name
-#       child.arc_file_parent = result
-#     else:
-#       not_allowed("unknown child " & $child)
-#     result.arc_file_members[child_name] = child
-
-# proc handle_set(self: var Parser, value: Value): Value =
-#   if value.gene_children[0].is_symbol("debug"):
-#     self.options["debug"] = value.gene_children[1].bool
-#   else:
-#     todo("#Set " & $value.gene_children[0])
-
-# proc handle_ignore(self: var Parser, value: Value): Value =
-#   PARSER_IGNORE
-
-# proc handle_reference(self: var Parser, value: Value): Value =
-#   let name = value.gene_children[0].str
-#   if self.references.has_key(name):
-#     raise new_exception(ParseError, "Duplicate reference: " & name)
-#   else:
-#     let target = RefTarget(
-#       name: name,
-#       value: value.gene_children[1],
-#       registry: self.references,
-#     )
-#     result = Value(kind: VkRefTarget, ref_target: target)
-#     self.references[name] = result
 
 proc init_handlers() =
   discard
-  # handlers["#Ref"] = handle_reference
-  # handlers["#File"] = handle_file
-  # handlers["#Dir"] = handle_dir
-  # handlers["#Gar"] = handle_arc
-  # handlers["#Set"] = handle_set
-  # handlers["#Ignore"] = handle_ignore
 
 proc init*() =
   if INITIALIZED:
@@ -1050,15 +964,6 @@ proc open*(self: var Parser, code: string) =
 
 proc close*(self: var Parser) {.inline.} =
   lexbase.close(self)
-
-# proc get_line(self: Parser): int {.inline.} =
-#   result = self.line_number
-
-# proc get_column(self: Parser): int {.inline.} =
-#   result = self.get_col_number(self.bufpos)
-
-# proc get_filename(self: Parser): string =
-#   result = self.filename
 
 proc parse_bin(self: var Parser): Value =
   var bytes: seq[uint8] = @[]
@@ -1346,13 +1251,6 @@ proc read*(self: var Parser): Value =
 # proc read_document_properties(self: var Parser) =
 #   if self.document_props_done:
 #     return
-#   else:
-#     self.document_props_done = true
-#   self.skip_ws()
-#   var ch = self.buf[self.bufpos]
-#   if ch == '^':
-#     self.document.props = self.read_map(MkDocument)
-
 proc read*(self: var Parser, s: Stream, filename: string): Value =
   self.open(s, filename)
   defer: self.close()
@@ -1368,7 +1266,6 @@ proc read_all*(self: var Parser, buffer: string): seq[Value] =
   var s = new_string_stream(buffer)
   self.open(s, "<input>")
   defer: self.close()
-  # self.read_document_properties()
   var node = self.read()
   while true:
     if node != PARSER_IGNORE:
@@ -1392,36 +1289,6 @@ proc read_stream*(self: var Parser, buffer: string, stream_handler: StreamHandle
     except ParseEofError:
       break
 
-# proc read_document*(self: var Parser, buffer: string): Document =
-#   try:
-#     self.document.children = self.read_all(buffer)
-#   except ParseEofError:
-#     discard
-#   return self.document
-
-# proc read_archive*(self: var Parser, buffer: string): Value =
-#   result = Value(kind: VkArchiveFile)
-#   var children = self.read_all(buffer)
-#   for child in children:
-#     var child_name: string
-#     case child.kind:
-#     of VkFile:
-#       child_name = child.file_name
-#       child.file_parent = result
-#     of VkDirectory:
-#       child_name = child.dir_name
-#       child.dir_parent = result
-#     of VkArchiveFile:
-#       child_name = child.arc_file_name
-#       child.arc_file_parent = result
-#     else:
-#       not_allowed("unknown child " & $child)
-#     result.arc_file_members[child_name] = child
-
-# proc read_archive_file*(self: var Parser, filename: string): Value =
-#   result = self.read_archive(read_file(filename))
-#   result.arc_file_name = extract_filename(filename)
-
 proc read*(s: Stream, filename: string): Value =
   var parser = new_parser()
   return parser.read(s, filename)
@@ -1434,6 +1301,3 @@ proc read_all*(buffer: string): seq[Value] =
   var parser = new_parser()
   return parser.read_all(buffer)
 
-# proc read_document*(buffer: string): Document =
-#   var parser = new_parser()
-#   return parser.read_document(buffer)
