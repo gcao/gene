@@ -2,6 +2,7 @@ import parseopt, strutils, os, terminal
 import ../types
 import ../parser
 import ../compiler
+import ../gir
 import ./base
 
 const DEFAULT_COMMAND = "compile"
@@ -11,8 +12,11 @@ type
     help: bool
     files: seq[string]
     code: string
-    format: string  # "pretty" (default), "compact", "bytecode"
+    format: string  # "pretty" (default), "compact", "bytecode", "gir"
     show_addresses: bool
+    out_dir: string  # Output directory for GIR files
+    force: bool      # Force rebuild even if cache is up-to-date
+    emit_debug: bool # Include debug info in GIR
 
 proc handle*(cmd: string, args: seq[string]): string
 
@@ -20,28 +24,35 @@ let short_no_val = {'h', 'a'}
 let long_no_val = @[
   "help",
   "addresses",
+  "force",
+  "emit-debug",
 ]
 
 let help_text = """
 Usage: gene compile [options] [<file>...]
 
-Compile Gene code and output the bytecode instructions.
+Compile Gene code to bytecode or Gene IR (.gir) format.
 
 Options:
   -h, --help              Show this help message
   -e, --eval <code>       Compile the given code string
-  -f, --format <format>   Output format: pretty (default), compact, bytecode
+  -f, --format <format>   Output format: pretty (default), compact, bytecode, gir
+  -o, --out-dir <dir>     Output directory for GIR files (default: build/)
   -a, --addresses         Show instruction addresses
+  --force                 Rebuild even if cache is up-to-date
+  --emit-debug            Include debug info in GIR files
 
 Examples:
-  gene compile file.gene                  # Compile and display instructions
+  gene compile file.gene                  # Compile to build/file.gir
+  gene compile -f pretty file.gene        # Display instructions
   gene compile -e "(+ 1 2)"               # Compile a code string
-  gene compile --format bytecode file.gene # Output raw bytecode format
-  gene compile -a file.gene               # Show with addresses
+  gene compile -o out src/app.gene        # Output to out/src/app.gir
+  gene compile --force file.gene          # Force recompilation
 """
 
 proc parseArgs(args: seq[string]): CompileOptions =
-  result.format = "pretty"
+  result.format = ""  # Will be set based on context
+  result.out_dir = "build"
   
   # Workaround: get_opt reads from command line when given empty args
   if args.len == 0:
@@ -60,16 +71,28 @@ proc parseArgs(args: seq[string]): CompileOptions =
       of "e", "eval":
         result.code = value
       of "f", "format":
-        if value in ["pretty", "compact", "bytecode"]:
+        if value == "":
+          stderr.writeLine("Error: Format option requires a value")
+          quit(1)
+        elif value in ["pretty", "compact", "bytecode", "gir"]:
           result.format = value
         else:
-          stderr.writeLine("Error: Invalid format '" & value & "'. Must be: pretty, compact, or bytecode")
+          stderr.writeLine("Error: Invalid format '" & value & "'. Must be: pretty, compact, bytecode, or gir")
           quit(1)
+      of "o", "out-dir":
+        result.out_dir = value
+      of "force":
+        result.force = true
+      of "emit-debug":
+        result.emit_debug = true
       else:
         stderr.writeLine("Error: Unknown option: " & key)
         quit(1)
     of cmdEnd:
       discard
+  
+  # Default format based on context - moved after processing all arguments
+  discard
 
 proc formatValue(value: Value): string =
   case value.kind
@@ -286,7 +309,14 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
         result &= formatValue(inst.arg1)
 
 proc handle*(cmd: string, args: seq[string]): string =
-  let options = parseArgs(args)
+  var options = parseArgs(args)
+  
+  # Set default format if not specified
+  if options.format == "":
+    if options.files.len > 0:
+      options.format = "gir"  # Default to GIR for files
+    else:
+      options.format = "pretty"  # Default to pretty for eval/stdin
   
   if options.help:
     echo help_text
@@ -308,25 +338,55 @@ proc handle*(cmd: string, args: seq[string]): string =
       code = readFile(file)
       source_name = file
       
-      echo "=== Compiling: " & source_name & " ==="
-      
-      try:
-        let parsed = read_all(code)
-        let compiled = compile(parsed)
+      # Check if GIR output is requested
+      if options.format == "gir":
+        let gir_path = getGirPath(file, options.out_dir)
         
-        echo "Instructions (" & $compiled.instructions.len & "):"
-        for i, inst in compiled.instructions:
-          echo formatInstruction(inst, i, options.format, options.show_addresses)
+        # Check if recompilation is needed
+        if not options.force and isGirUpToDate(gir_path, file):
+          echo "Up-to-date: " & gir_path
+          continue
         
-        # TODO: Add matcher display when $ operator is available
+        echo "Compiling: " & source_name & " -> " & gir_path
         
-        echo ""
-      except ParseError as e:
-        stderr.writeLine("Parse error in " & source_name & ": " & e.msg)
-        quit(1)
-      except CatchableError as e:
-        stderr.writeLine("Compilation error in " & source_name & ": " & e.msg)
-        quit(1)
+        try:
+          let parsed = read_all(code)
+          let compiled = compile(parsed)
+          
+          # Save to GIR file
+          saveGir(compiled, gir_path, file, options.emit_debug)
+          echo "Written: " & gir_path
+        except ParseError as e:
+          stderr.writeLine("Parse error in " & source_name & ": " & e.msg)
+          quit(1)
+        except ValueError as e:
+          stderr.writeLine("Value error in " & source_name & ": " & e.msg)
+          stderr.writeLine("Stack trace: " & e.getStackTrace())
+          quit(1)
+        except CatchableError as e:
+          stderr.writeLine("Compilation error in " & source_name & ": " & e.msg)
+          quit(1)
+      else:
+        # Display instructions
+        echo "=== Compiling: " & source_name & " ==="
+        
+        try:
+          let parsed = read_all(code)
+          let compiled = compile(parsed)
+          
+          echo "Instructions (" & $compiled.instructions.len & "):"
+          for i, inst in compiled.instructions:
+            echo formatInstruction(inst, i, options.format, options.show_addresses)
+          
+          # TODO: Add matcher display when $ operator is available
+          
+          echo ""
+        except ParseError as e:
+          stderr.writeLine("Parse error in " & source_name & ": " & e.msg)
+          quit(1)
+        except CatchableError as e:
+          stderr.writeLine("Compilation error in " & source_name & ": " & e.msg)
+          quit(1)
     
     return ""
   else:

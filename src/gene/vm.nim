@@ -390,9 +390,14 @@ proc exec*(self: VirtualMachine): Value =
         {.pop.}
 
       of IkScopeStart:
-        if inst.arg0.kind != VkScopeTracker:
-          not_allowed("IkScopeStart: expected ScopeTracker, got " & $inst.arg0.kind)
-        self.frame.scope = new_scope(inst.arg0.ref.scope_tracker, self.frame.scope)
+        if inst.arg0.kind == VkNil:
+          # For GIR files, create a new scope with empty tracker
+          let tracker = new_scope_tracker()
+          self.frame.scope = new_scope(tracker, self.frame.scope)
+        elif inst.arg0.kind == VkScopeTracker:
+          self.frame.scope = new_scope(inst.arg0.ref.scope_tracker, self.frame.scope)
+        else:
+          not_allowed("IkScopeStart: expected ScopeTracker or Nil, got " & $inst.arg0.kind)
       of IkScopeEnd:
         var old_scope = self.frame.scope
         self.frame.scope = self.frame.scope.parent

@@ -4,6 +4,7 @@ import ../types
 import ../vm
 import ../parser
 import ../compiler
+import ../gir
 import ./base
 
 const DEFAULT_COMMAND = "run"
@@ -20,6 +21,7 @@ type
     compile: bool
     profile: bool
     profile_instructions: bool
+    no_gir_cache: bool  # Ignore GIR cache
     file: string
     args: seq[string]
 
@@ -37,6 +39,7 @@ let long_no_val = @[
   "compile",
   "profile",
   "profile-instructions",
+  "no-gir-cache",
 ]
 proc parse_options(args: seq[string]): Options =
   result = Options()
@@ -74,6 +77,8 @@ proc parse_options(args: seq[string]): Options =
           result.profile = true
         of "profile-instructions":
           result.profile_instructions = true
+        of "no-gir-cache":
+          result.no_gir_cache = true
         else:
           echo "Unknown option: ", key
           discard
@@ -110,9 +115,97 @@ proc handle*(cmd: string, args: seq[string]): string =
     else:
       return "Error: No file provided to run."
   else:
-    # Read the file and execute it
+    # Check if file exists
     if not fileExists(file):
       return "Error: File not found: " & file
+    
+    # Check if it's a .gir file
+    if file.endsWith(".gir"):
+      # Load and run precompiled GIR directly
+      let start = cpu_time()
+      
+      # Initialize the VM if not already initialized
+      init_app_and_vm()
+      
+      # Enable tracing/profiling if requested
+      if options.trace:
+        VM.trace = true
+      if options.profile:
+        VM.profiling = true
+      if options.profile_instructions:
+        VM.instruction_profiling = true
+      
+      try:
+        # Load the GIR file
+        let compiled = loadGir(file)
+        
+        if options.compile or options.debugging:
+          echo "=== Loaded GIR: " & file & " ==="
+          echo "Instructions: " & $compiled.instructions.len
+        
+        # Execute the loaded compilation unit
+        if VM.frame == nil:
+          VM.frame = new_frame(new_namespace(file))
+        VM.cu = compiled
+        let value = VM.exec()
+        
+        let elapsed = cpu_time() - start
+        
+        # Print profiling results if requested
+        if options.profile:
+          VM.print_profile()
+        if options.profile_instructions:
+          VM.print_instruction_profile()
+        
+        if options.benchmark:
+          echo fmt"Execution time: {elapsed * 1000:.3f} ms"
+        
+        return ""
+      except CatchableError as e:
+        return "Error loading GIR file: " & e.msg
+    
+    # Regular .gene file - check for cached GIR
+    if not options.no_gir_cache:
+      let gir_path = getGirPath(file, "build")
+      if fileExists(gir_path) and isGirUpToDate(gir_path, file):
+        # Use cached GIR
+        if options.debugging:
+          echo "Using cached GIR: " & gir_path
+        
+        let start = cpu_time()
+        init_app_and_vm()
+        
+        if options.trace:
+          VM.trace = true
+        if options.profile:
+          VM.profiling = true
+        if options.profile_instructions:
+          VM.instruction_profiling = true
+        
+        try:
+          let compiled = loadGir(gir_path)
+          
+          if VM.frame == nil:
+            VM.frame = new_frame(new_namespace(file))
+          VM.cu = compiled
+          let value = VM.exec()
+          
+          let elapsed = cpu_time() - start
+          
+          if options.profile:
+            VM.print_profile()
+          if options.profile_instructions:
+            VM.print_instruction_profile()
+          
+          if options.benchmark:
+            echo fmt"Execution time: {elapsed * 1000:.3f} ms (from cache)"
+          
+          return ""
+        except CatchableError:
+          # Fall back to compilation if GIR load fails
+          discard
+    
+    # Read and compile source file
     code = readFile(file)
   
   let start = cpu_time()
