@@ -3175,7 +3175,7 @@ proc exec*(self: VirtualMachine): Value =
         let local_idx = inst.arg0.int64.int
         let current = self.frame.scope.members[local_idx]
         # Inline add operation for performance
-        let result = case current.kind:
+        let sum_result = case current.kind:
           of VkInt:
             case val.kind:
               of VkInt: (current.int64 + val.int64).to_value()
@@ -3187,8 +3187,8 @@ proc exec*(self: VirtualMachine): Value =
               of VkFloat: add_float_fast(current.float, val.float)
               else: current  # Fallback
           else: current  # Fallback
-        self.frame.scope.members[local_idx] = result
-        self.frame.push(result)
+        self.frame.scope.members[local_idx] = sum_result
+        self.frame.push(sum_result)
         {.pop.}
       
       of IkIncLocal:

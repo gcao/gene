@@ -1,7 +1,6 @@
 # Gene Intermediate Representation (GIR) serialization/deserialization
-import streams, hashes, os, times, tables, json, strutils
+import streams, hashes, os, times, json, strutils
 import ./types
-import ./compiler
 
 const 
   GIR_MAGIC = "GENE"
@@ -69,7 +68,7 @@ proc writeValue(stream: Stream, v: Value) =
     stream.write(cast[uint64](v))
 
 proc readValue(stream: Stream): Value =
-  let kind = stream.readUint16().ValueKind
+  let kind = cast[ValueKind](stream.readUint16())
   
   case kind:
   of VkNil:
@@ -101,7 +100,7 @@ proc writeInstruction(stream: Stream, inst: Instruction) =
   stream.write(inst.arg1)
 
 proc readInstruction(stream: Stream): Instruction =
-  result.kind = stream.readUint16().InstructionKind
+  result.kind = cast[InstructionKind](stream.readUint16())
   result.label = stream.readUint32().Label
   result.arg0 = stream.readValue()
   result.arg1 = stream.readInt32()
