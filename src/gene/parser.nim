@@ -95,18 +95,30 @@ type
 
   StreamHandler = proc(value: Value)
 
+  ParserConfig* = ref object
+    initialized*: bool
+    defaultUnits*: Table[string, Value]
+    hexTable*: Table[char, uint8]
+    dateFormat*: TimeFormat
+    datetimeFormat*: TimeFormat
+    macros*: MacroArray
+    dispatchMacros*: MacroArray
+    handlers*: Table[Key, Handler]
+
 const non_constituents: seq[char] = @[]
 
-var INITIALIZED {.threadvar.}: bool
-var DEFAULT_UNITS {.threadvar.}: Table[string, Value]
-var HEX {.threadvar.}: Table[char, uint8]
-var DATE_FORMAT {.threadvar.}: TimeFormat
-var DATETIME_FORMAT {.threadvar.}: TimeFormat
+# Global parser configuration - thread-local for safety
+var parserConfig {.threadvar.}: ParserConfig
 
-var macros {.threadvar.}: MacroArray
-var dispatch_macros {.threadvar.}: MacroArray
-
-var handlers {.threadvar.}: Table[Key, Handler]
+# Backward compatibility aliases
+template INITIALIZED(): bool = parserConfig.initialized
+template DEFAULT_UNITS(): Table[string, Value] = parserConfig.defaultUnits
+template HEX(): Table[char, uint8] = parserConfig.hexTable
+template DATE_FORMAT(): TimeFormat = parserConfig.dateFormat
+template DATETIME_FORMAT(): TimeFormat = parserConfig.datetimeFormat
+template macros(): MacroArray = parserConfig.macros
+template dispatch_macros(): MacroArray = parserConfig.dispatchMacros
+template handlers(): Table[Key, Handler] = parserConfig.handlers
 
 #################### Interfaces ##################
 
@@ -923,26 +935,28 @@ proc init_handlers() =
   discard
 
 proc init*() =
-  if INITIALIZED:
+  if parserConfig != nil and parserConfig.initialized:
     return
 
-  INITIALIZED = true
-  DEFAULT_UNITS = {
-    "m": 60.to_value(),       # m  = minute
-    "s": 1.to_value(),        # s  = second (default)
-    "ms": 0.001.to_value(),   # ms = millisecond
-    "ns": 1e-9.to_value(),    # ns = nanosecond
-  }.to_table()
-
-  HEX = {
-    '0': 0u8, '1': 1u8, '2': 2u8, '3': 3u8, '4': 4u8,
-    '5': 5u8, '6': 6u8, '7': 7u8, '8': 8u8, '9': 9u8,
-    'a': 10u8, 'b': 11u8, 'c': 12u8, 'd': 13u8, 'e': 14u8, 'f': 15u8,
-    'A': 10u8, 'B': 11u8, 'C': 12u8, 'D': 13u8, 'E': 14u8, 'F': 15u8,
-  }.to_table()
-
-  DATE_FORMAT = init_time_format("yyyy-MM-dd")
-  DATETIME_FORMAT = init_time_format("yyyy-MM-dd'T'HH:mm:sszzz")
+  # Create new parser configuration
+  parserConfig = ParserConfig(
+    initialized: true,
+    defaultUnits: {
+      "m": 60.to_value(),       # m  = minute
+      "s": 1.to_value(),        # s  = second (default)
+      "ms": 0.001.to_value(),   # ms = millisecond
+      "ns": 1e-9.to_value(),    # ns = nanosecond
+    }.to_table(),
+    hexTable: {
+      '0': 0u8, '1': 1u8, '2': 2u8, '3': 3u8, '4': 4u8,
+      '5': 5u8, '6': 6u8, '7': 7u8, '8': 8u8, '9': 9u8,
+      'a': 10u8, 'b': 11u8, 'c': 12u8, 'd': 13u8, 'e': 14u8, 'f': 15u8,
+      'A': 10u8, 'B': 11u8, 'C': 12u8, 'D': 13u8, 'E': 14u8, 'F': 15u8,
+    }.to_table(),
+    dateFormat: init_time_format("yyyy-MM-dd"),
+    datetimeFormat: init_time_format("yyyy-MM-dd'T'HH:mm:sszzz"),
+    handlers: initTable[Key, Handler]()
+  )
 
   init_macro_array()
   init_dispatch_macro_array()
