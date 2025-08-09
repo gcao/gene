@@ -465,6 +465,7 @@ type
     name*: string
     members*: Table[Key, Value]
     on_member_missing*: seq[Value]
+    version*: uint64  # Incremented on any mutation for cache invalidation
 
   Class* = ref object
     parent*: Class
@@ -794,6 +795,7 @@ type
     matcher*: RootMatcher
     instructions*: seq[Instruction]
     labels*: Table[Label, int]
+    inline_caches*: seq[InlineCache]  # Inline caches indexed by PC
 
   # Used by the compiler to keep track of scopes and variables
   #
@@ -837,6 +839,12 @@ type
     total_time*: float64  # Total time in seconds
     min_time*: float64
     max_time*: float64
+    
+  # Inline cache for symbol resolution
+  InlineCache* = object
+    version*: uint64      # Namespace version when cached
+    value*: Value         # Cached value
+    ns*: Namespace        # Namespace where value was found
     
   VirtualMachine* = ref object
     cu*: CompilationUnit
@@ -2068,6 +2076,7 @@ proc locate*(self: Namespace, key: Key): (Value, Namespace) =
 
 proc `[]=`*(self: Namespace, key: Key, val: Value) {.inline.} =
   self.members[key] = val
+  self.version.inc()  # Invalidate caches on mutation
 
 proc get_members*(self: Namespace): Value =
   todo()
@@ -2927,6 +2936,7 @@ proc to_value*(self: ScopeTracker): Value =
 proc new_compilation_unit*(): CompilationUnit =
   CompilationUnit(
     id: new_id(),
+    inline_caches: @[],
   )
 
 proc `$`*(self: Instruction): string =
@@ -3068,6 +3078,12 @@ proc init_app_and_vm*() =
   exception_ref.class = exception_class
   # Add to global namespace so it's accessible everywhere
   App.app.global_ns.ref.ns["GeneException".to_key()] = exception_ref.to_ref_value()
+  
+  # Add time namespace stub to prevent errors
+  let time_ns = new_namespace("time")
+  # For now, just return a dummy value for time/now
+  time_ns["now".to_key()] = 0.0.to_value()  # Placeholder
+  App.app.global_ns.ref.ns["time".to_key()] = time_ns.to_value()
 
   for callback in VmCreatedCallbacks:
     callback()

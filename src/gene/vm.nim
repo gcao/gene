@@ -625,20 +625,62 @@ proc exec*(self: VirtualMachine): Value =
             self.frame.push(r.to_ref_value())
           else:
             let name = cast[Key](inst.arg0)
-            var value = self.frame.ns[name]
-            if value == NIL:
-              # Try global namespace
-              value = App.app.global_ns.ref.ns[name]
-              if value == NIL:
-                # Try gene namespace
-                value = App.app.gene_ns.ref.ns[name]
+            
+            # Inline cache implementation
+            if pc < self.cu.inline_caches.len:
+              # Check if cache hit
+              let cache = self.cu.inline_caches[pc].addr
+              if cache.ns != nil and cache.version == cache.ns.version and name in cache.ns.members:
+                # Cache hit - use cached value
+                self.frame.push(cache.ns.members[name])
+              else:
+                # Cache miss - do full lookup
+                var value = self.frame.ns[name]
+                var found_ns = self.frame.ns
                 if value == NIL:
-                  let symbol_name = try:
-                    get_symbol(name.int)
-                  except:
-                    "<invalid key: " & $name.int & ">"
-                  not_allowed("Unknown symbol: " & symbol_name)
-            self.frame.push(value)
+                  # Try global namespace
+                  value = App.app.global_ns.ref.ns[name]
+                  if value != NIL:
+                    found_ns = App.app.global_ns.ref.ns
+                  else:
+                    # Try gene namespace
+                    value = App.app.gene_ns.ref.ns[name]
+                    if value != NIL:
+                      found_ns = App.app.gene_ns.ref.ns
+                
+                # Update cache if we found the value
+                if value != NIL:
+                  cache.ns = found_ns
+                  cache.version = found_ns.version
+                  cache.value = value
+                
+                self.frame.push(value)
+            else:
+              # Extend cache array if needed
+              while self.cu.inline_caches.len <= pc:
+                self.cu.inline_caches.add(InlineCache())
+              
+              # Do full lookup
+              var value = self.frame.ns[name]
+              var found_ns = self.frame.ns
+              if value == NIL:
+                # Try global namespace
+                value = App.app.global_ns.ref.ns[name]
+                if value != NIL:
+                  found_ns = App.app.global_ns.ref.ns
+                else:
+                  # Try gene namespace
+                  value = App.app.gene_ns.ref.ns[name]
+                  if value != NIL:
+                    found_ns = App.app.gene_ns.ref.ns
+              
+              # Initialize cache if we found the value
+              if value != NIL:
+                self.cu.inline_caches[pc].ns = found_ns
+                self.cu.inline_caches[pc].version = found_ns.version
+                self.cu.inline_caches[pc].value = value
+              
+              self.frame.push(value)
 
       of IkSelf:
         # Get self from first argument  
@@ -769,7 +811,16 @@ proc exec*(self: VirtualMachine): Value =
         var value: Value
         self.frame.pop2(value)
         # echo "IkGetMember " & $value & " " & $name
+        
+        # Check for NIL first to give better error message
+        if value.kind == VkNil:
+          let symbol_name = get_symbol(name.int)
+          not_allowed("Cannot access member '" & symbol_name & "' on nil value")
+        
         case value.kind:
+          of VkNil:
+            # Already handled above, but needed for exhaustive case
+            discard
           of VkMap:
             self.frame.push(value.ref.map[name])
           of VkGene:
