@@ -285,6 +285,8 @@ proc exec*(self: VirtualMachine): Value =
   when not defined(release):
     var indent = ""
 
+  # Hot VM execution loop - disable checks for maximum performance
+  {.push boundChecks: off, overflowChecks: off, nilChecks: off, assertions: off.}
   while true:
     when not defined(release):
       if self.trace:
@@ -3085,6 +3087,123 @@ proc exec*(self: VirtualMachine): Value =
         else:
           todo($obj.kind & " method: " & method_name)
       
+      # Superinstructions for performance
+      of IkPushCallPop:
+        # Combined PUSH; CALL; POP for void function calls
+        # This is a placeholder - needs proper implementation
+        self.frame.push(inst.arg0)
+        # TODO: Implement actual call logic
+        discard self.frame.pop()
+      
+      of IkLoadCallPop:
+        # Combined LOADK; CALL1; POP
+        # TODO: Implement
+        discard
+      
+      of IkGetLocal:
+        # Optimized local variable access
+        {.push checks: off.}
+        self.frame.push(self.frame.scope.members[inst.arg0.int64.int])
+        {.pop.}
+      
+      of IkSetLocal:
+        # Optimized local variable set
+        {.push checks: off.}
+        self.frame.scope.members[inst.arg0.int64.int] = self.frame.current()
+        {.pop.}
+      
+      of IkAddLocal:
+        # Combined local variable add
+        {.push checks: off.}
+        let val = self.frame.pop()
+        let local_idx = inst.arg0.int64.int
+        let current = self.frame.scope.members[local_idx]
+        # Inline add operation for performance
+        let result = case current.kind:
+          of VkInt:
+            case val.kind:
+              of VkInt: (current.int64 + val.int64).to_value()
+              of VkFloat: add_mixed(current.int64, val.float)
+              else: current  # Fallback
+          of VkFloat:
+            case val.kind:
+              of VkInt: add_mixed(val.int64, current.float)
+              of VkFloat: add_float_fast(current.float, val.float)
+              else: current  # Fallback
+          else: current  # Fallback
+        self.frame.scope.members[local_idx] = result
+        self.frame.push(result)
+        {.pop.}
+      
+      of IkIncLocal:
+        # Increment local variable by 1
+        {.push checks: off.}
+        let local_idx = inst.arg0.int64.int
+        let current = self.frame.scope.members[local_idx]
+        if current.kind == VkInt:
+          self.frame.scope.members[local_idx] = (current.int64 + 1).to_value()
+        self.frame.push(self.frame.scope.members[local_idx])
+        {.pop.}
+      
+      of IkDecLocal:
+        # Decrement local variable by 1
+        {.push checks: off.}
+        let local_idx = inst.arg0.int64.int
+        let current = self.frame.scope.members[local_idx]
+        if current.kind == VkInt:
+          self.frame.scope.members[local_idx] = (current.int64 - 1).to_value()
+        self.frame.push(self.frame.scope.members[local_idx])
+        {.pop.}
+      
+      of IkCallDirect1:
+        # Direct call with 1 arg (specialized)
+        # TODO: Implement specialized single-arg call
+        discard
+      
+      of IkCallDirect2:
+        # Direct call with 2 args (specialized)
+        # TODO: Implement specialized two-arg call
+        discard
+      
+      of IkReturnNil:
+        # Common pattern: return nil
+        if self.frame.caller_frame == nil:
+          return NIL
+        else:
+          self.cu = self.frame.caller_address.cu
+          pc = self.frame.caller_address.pc
+          inst = self.cu.instructions[pc].addr
+          self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()
+          self.frame.push(NIL)
+          continue
+      
+      of IkReturnTrue:
+        # Common pattern: return true
+        if self.frame.caller_frame == nil:
+          return TRUE
+        else:
+          self.cu = self.frame.caller_address.cu
+          pc = self.frame.caller_address.pc
+          inst = self.cu.instructions[pc].addr
+          self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()
+          self.frame.push(TRUE)
+          continue
+      
+      of IkReturnFalse:
+        # Common pattern: return false
+        if self.frame.caller_frame == nil:
+          return FALSE
+        else:
+          self.cu = self.frame.caller_address.cu
+          pc = self.frame.caller_address.pc
+          inst = self.cu.instructions[pc].addr
+          self.frame.update(self.frame.caller_frame)
+          self.frame.ref_count.dec()
+          self.frame.push(FALSE)
+          continue
+      
       else:
         todo($inst.kind)
 
@@ -3114,6 +3233,7 @@ proc exec*(self: VirtualMachine): Value =
     pc.inc()
     inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
     {.pop}
+  {.pop.}  # End of hot VM execution loop pragma push
 
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   let compiled = compile(read_all(code))

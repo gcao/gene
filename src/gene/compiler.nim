@@ -1827,6 +1827,70 @@ proc update_jumps(self: CompilationUnit) =
         discard
 
 # Merge IkNoop instructions with following instructions before jump resolution
+proc peephole_optimize(self: CompilationUnit) =
+  # Apply peephole optimizations to convert common patterns to superinstructions
+  var new_instructions: seq[Instruction] = @[]
+  var i = 0
+  
+  while i < self.instructions.len:
+    let inst = self.instructions[i]
+    
+    # Check for common patterns and replace with superinstructions
+    if i + 2 < self.instructions.len:
+      let next1 = self.instructions[i + 1]
+      let next2 = self.instructions[i + 2]
+      
+      # Pattern: PUSH; CALL; POP -> IkPushCallPop
+      if inst.kind == IkPushValue and next1.kind == IkCallDirect and next2.kind == IkPop:
+        new_instructions.add(Instruction(
+          kind: IkPushCallPop,
+          arg0: inst.arg0,
+          label: inst.label
+        ))
+        i += 3
+        continue
+      
+      # Pattern: VAR_RESOLVE; ADD; VAR_ASSIGN -> IkAddLocal
+      if inst.kind == IkVarResolve and next1.kind == IkAdd and next2.kind == IkVarAssign:
+        if inst.arg0 == next2.arg0:  # Same variable
+          new_instructions.add(Instruction(
+            kind: IkAddLocal,
+            arg0: inst.arg0,
+            label: inst.label
+          ))
+          i += 3
+          continue
+    
+    if i + 1 < self.instructions.len:
+      let next1 = self.instructions[i + 1]
+      
+      # Pattern: INC_VAR (VAR_RESOLVE; ADD 1; VAR_ASSIGN)
+      if inst.kind == IkVarResolve and next1.kind == IkAddValue:
+        if i + 2 < self.instructions.len and self.instructions[i + 2].kind == IkVarAssign:
+          if next1.arg0.kind == VkInt and next1.arg0.int64 == 1:
+            new_instructions.add(Instruction(
+              kind: IkIncLocal,
+              arg0: inst.arg0,
+              label: inst.label
+            ))
+            i += 3
+            continue
+      
+      # Pattern: RETURN NIL
+      if inst.kind == IkPushNil and next1.kind == IkEnd:
+        new_instructions.add(Instruction(
+          kind: IkReturnNil,
+          label: inst.label
+        ))
+        i += 2
+        continue
+    
+    # No pattern matched, keep original instruction
+    new_instructions.add(inst)
+    i += 1
+  
+  self.instructions = new_instructions
+
 proc optimize_noops(self: CompilationUnit) =
   # Move labels from Noop instructions to the next real instruction
   # This must be done BEFORE jump resolution
@@ -1912,6 +1976,7 @@ proc compile*(input: seq[Value]): CompilationUnit =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.optimize_noops()  # Optimize BEFORE resolving jumps
+  # self.output.peephole_optimize()  # Apply peephole optimizations (temporarily disabled)
   self.output.update_jumps()
   result = self.output
 
@@ -2388,6 +2453,7 @@ proc compile_init*(input: Value): CompilationUnit =
   self.end_scope()
   self.output.instructions.add(Instruction(kind: IkEnd))
   self.output.optimize_noops()  # Optimize BEFORE resolving jumps
+  # self.output.peephole_optimize()  # Apply peephole optimizations (temporarily disabled)
   self.output.update_jumps()
   result = self.output
 

@@ -749,6 +749,20 @@ type
     IkAsyncEnd     # End async block and create future
     IkAwait        # Wait for Future to complete
 
+    # Superinstructions for common patterns
+    IkPushCallPop      # PUSH; CALL; POP (common for void function calls)
+    IkLoadCallPop      # LOADK; CALL1; POP
+    IkGetLocal         # Optimized local variable access
+    IkSetLocal         # Optimized local variable set
+    IkAddLocal         # GETLOCAL x; ADD; SETLOCAL y
+    IkIncLocal         # Increment local variable
+    IkDecLocal         # Decrement local variable
+    IkCallDirect1      # Direct call with 1 arg (specialized)
+    IkCallDirect2      # Direct call with 2 args (specialized)
+    IkReturnNil        # Common pattern: return nil
+    IkReturnTrue       # Common pattern: return true
+    IkReturnFalse      # Common pattern: return false
+    
     IkYield
     IkResume
 
@@ -2835,7 +2849,8 @@ proc free*(self: var Frame) =
 var FRAME_ALLOCS* = 0
 var FRAME_REUSES* = 0
 
-proc new_frame*(): Frame =
+proc new_frame*(): Frame {.inline.} =
+  {.push boundChecks: off, overflowChecks: off.}
   if FRAMES.len > 0:
     result = FRAMES.pop()
     FRAME_REUSES.inc()
@@ -2843,7 +2858,8 @@ proc new_frame*(): Frame =
     result = cast[Frame](alloc0(sizeof(FrameObj)))
     FRAME_ALLOCS.inc()
   result.ref_count = 1
-  # result.stack_index = REG_DEFAULT
+  result.stack_index = 0  # Reset stack index
+  {.pop.}
 
 proc new_frame*(ns: Namespace): Frame {.inline.} =
   result = new_frame()
@@ -2874,21 +2890,29 @@ template current*(self: Frame): Value =
   self.stack[self.stack_index - 1]
 
 proc replace*(self: var Frame, v: Value) {.inline.} =
+  {.push boundChecks: off, overflowChecks: off.}
   self.stack[self.stack_index - 1] = v
+  {.pop.}
 
 template push*(self: var Frame, value: sink Value) =
+  {.push boundChecks: off, overflowChecks: off.}
   self.stack[self.stack_index] = value
   self.stack_index.inc()
+  {.pop.}
 
 proc pop*(self: var Frame): Value {.inline.} =
+  {.push boundChecks: off, overflowChecks: off.}
   self.stack_index.dec()
   result = self.stack[self.stack_index]
   self.stack[self.stack_index] = NIL
+  {.pop.}
 
 template pop2*(self: var Frame, to: var Value) =
+  {.push boundChecks: off, overflowChecks: off.}
   self.stack_index.dec()
   copy_mem(to.addr, self.stack[self.stack_index].addr, 8)
   self.stack[self.stack_index] = NIL
+  {.pop.}
 
 # template default*(self: Frame): Value =
 #   self.stack[REG_DEFAULT]

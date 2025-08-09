@@ -1,0 +1,14 @@
+# Fibonacci benchmark for Gene
+(fn fib n
+  (if (<= n 1)
+    n
+    (+ (fib (- n 1)) (fib (- n 2)))))
+
+# Run the benchmark
+(var n 30)
+(println "Computing fib(" n ")...")
+(var start (time/now))
+(var result (fib n))
+(var elapsed (- (time/now) start))
+(println "fib(" n ") = " result)
+(println "Time: " elapsed "ms")

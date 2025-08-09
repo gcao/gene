@@ -12,6 +12,12 @@ bin           = @["gene"]
 # Dependencies
 requires "nim >= 1.4.0"
 
+task speedy, "Optimized build for maximum performance":
+  exec "nim c -d:release --mm:orc --opt:speed --passC:\"-march=native -O3\" -o:gene src/gene.nim"
+
+task bench, "Build and run benchmarks":
+  exec "nim c -d:release --mm:orc --opt:speed --passC:\"-march=native\" -r bench/run_benchmarks.nim"
+
 task test, "Runs the test suite":
   exec "nim c -r tests/test_types.nim"
   exec "nim c -r tests/test_parser.nim"

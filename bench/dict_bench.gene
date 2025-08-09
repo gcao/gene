@@ -1,0 +1,23 @@
+# Dictionary/Map operations benchmark
+(fn dict_bench n
+  (var d {})
+  
+  # Insert n items
+  (for i 0 n
+    (= d/$i i))
+  
+  # Lookup n items
+  (var sum 0)
+  (for i 0 n
+    (= sum (+ sum d/$i)))
+  
+  sum)
+
+# Run benchmark
+(var n 10000)
+(println "Dictionary benchmark with n=" n)
+
+(var start (time/now))
+(var result (dict_bench n))
+(var elapsed (- (time/now) start))
+(println "Result: " result " in " elapsed "ms")
