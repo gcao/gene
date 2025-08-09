@@ -20,15 +20,15 @@ type
     compile: bool
     code: string
 
-proc handle*(cmd: string, args: seq[string]): string
+proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.add_help("eval <code>: evaluate <code> as a gene expression")
-  manager.add_help("  -d, --debug: enable debug output")
-  manager.add_help("  --csv: print result as CSV")
-  manager.add_help("  --gene: print result as gene expression")
-  manager.add_help("  --line: evaluate as a single line")
+  manager.addHelp("eval <code>: evaluate <code> as a gene expression")
+  manager.addHelp("  -d, --debug: enable debug output")
+  manager.addHelp("  --csv: print result as CSV")
+  manager.addHelp("  --gene: print result as gene expression")
+  manager.addHelp("  --line: evaluate as a single line")
 
 let short_no_val = {'d'}
 let long_no_val = @[
@@ -75,7 +75,7 @@ proc parse_options(args: seq[string]): Options =
   
   result.code = code_parts.join(" ")
 
-proc handle*(cmd: string, args: seq[string]): string =
+proc handle*(cmd: string, args: seq[string]): CommandResult =
   let options = parse_options(args)
   setup_logger(options.debugging)
   
@@ -91,10 +91,10 @@ proc handle*(cmd: string, args: seq[string]): string =
     if lines.len > 0:
       code = lines.join("\n")
     else:
-      return "Error: no code provided to evaluate"
+      return failure("No code provided to evaluate")
   
   if code.len == 0:
-    return "Error: no code provided to evaluate"
+    return failure("No code provided to evaluate")
   
   init_app_and_vm()
   
@@ -146,11 +146,13 @@ proc handle*(cmd: string, args: seq[string]): string =
       echo $value
         
   except ValueError as e:
-    return "Error: " & e.msg
+    return failure(e.msg)
+  
+  return success()
 
 when isMainModule:
   let cmd = DEFAULT_COMMAND
   let args: seq[string] = @[]
-  let status = handle(cmd, args)
-  if status.len > 0:
-    echo "Failed with error: " & status
+  let result = handle(cmd, args)
+  if not result.success:
+    echo "Failed with error: " & result.error

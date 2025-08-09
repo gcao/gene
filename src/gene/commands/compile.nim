@@ -18,7 +18,7 @@ type
     force: bool      # Force rebuild even if cache is up-to-date
     emit_debug: bool # Include debug info in GIR
 
-proc handle*(cmd: string, args: seq[string]): string
+proc handle*(cmd: string, args: seq[string]): CommandResult
 
 let short_no_val = {'h', 'a'}
 let long_no_val = @[
@@ -308,7 +308,7 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
         if shown: result &= " "
         result &= formatValue(inst.arg1)
 
-proc handle*(cmd: string, args: seq[string]): string =
+proc handle*(cmd: string, args: seq[string]): CommandResult =
   var options = parseArgs(args)
   
   # Set default format if not specified
@@ -320,7 +320,7 @@ proc handle*(cmd: string, args: seq[string]): string =
   
   if options.help:
     echo help_text
-    return ""
+    return success()
   
   var code: string
   var source_name: string
@@ -388,7 +388,7 @@ proc handle*(cmd: string, args: seq[string]): string =
           stderr.writeLine("Compilation error in " & source_name & ": " & e.msg)
           quit(1)
     
-    return ""
+    return success()
   else:
     # No code or files provided, try to read from stdin
     if not stdin.isatty():
@@ -423,8 +423,8 @@ proc handle*(cmd: string, args: seq[string]): string =
     stderr.writeLine("Compilation error: " & e.msg)
     quit(1)
   
-  return ""
+  return success()
 
 proc init*(manager: CommandManager) =
   manager.register("compile", handle)
-  manager.add_help("  compile  Compile Gene code and output bytecode")
+  manager.addHelp("  compile  Compile Gene code and output bytecode")

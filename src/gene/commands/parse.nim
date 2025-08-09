@@ -12,7 +12,7 @@ type
     code: string
     format: string  # "pretty" (default), "compact", "sexp"
 
-proc handle*(cmd: string, args: seq[string]): string
+proc handle*(cmd: string, args: seq[string]): CommandResult
 
 let short_no_val = {'h'}
 let long_no_val = @[
@@ -202,12 +202,12 @@ proc formatValue(value: Value, format: string, indent: int = 0): string =
     else:
       return spaces & $value
 
-proc handle*(cmd: string, args: seq[string]): string =
+proc handle*(cmd: string, args: seq[string]): CommandResult =
   let options = parseArgs(args)
   
   if options.help:
     echo help_text
-    return ""
+    return success()
   
   var code: string
   var source_name: string
@@ -243,7 +243,7 @@ proc handle*(cmd: string, args: seq[string]): string =
         stderr.writeLine("Parse error in " & source_name & ": " & e.msg)
         quit(1)
     
-    return ""
+    return success()
   else:
     # No code or files provided, try to read from stdin
     if not stdin.isatty():
@@ -276,8 +276,8 @@ proc handle*(cmd: string, args: seq[string]): string =
     stderr.writeLine("Parse error: " & e.msg)
     quit(1)
   
-  return ""
+  return success()
 
 proc init*(manager: CommandManager) =
   manager.register("parse", handle)
-  manager.add_help("  parse    Parse Gene code and output AST")
+  manager.addHelp("  parse    Parse Gene code and output AST")

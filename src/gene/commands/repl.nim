@@ -10,12 +10,12 @@ type
   Options = ref object
     debugging: bool
 
-proc handle*(cmd: string, args: seq[string]): string
+proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.add_help("repl: start an interactive REPL")
-  manager.add_help("  -d, --debug: enable debug output")
+  manager.addHelp("repl: start an interactive REPL")
+  manager.addHelp("  -d, --debug: enable debug output")
 
 let short_no_val = {'d'}
 let long_no_val: seq[string] = @[]
@@ -80,14 +80,14 @@ proc start_repl(debugging: bool) =
       # EOF (Ctrl+D)
       break
 
-proc handle*(cmd: string, args: seq[string]): string =
+proc handle*(cmd: string, args: seq[string]): CommandResult =
   let options = parse_options(args)
   start_repl(options.debugging)
-  return ""
+  return success()
 
 when isMainModule:
   let cmd = DEFAULT_COMMAND
   let args: seq[string] = @[]
-  let status = handle(cmd, args)
-  if status.len > 0:
-    echo "Failed with error: " & status
+  let result = handle(cmd, args)
+  if not result.success:
+    echo "Failed with error: " & result.error

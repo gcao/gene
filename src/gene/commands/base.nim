@@ -52,8 +52,3 @@ proc register*(self: CommandManager, cmds: seq[string], cmd: Command) =
 proc addHelp*(self: CommandManager, help: string) =
   ## Adds help text to the command manager
   self.help &= help & "\n"
-
-# Keep the old name as an alias for backward compatibility
-template add_help*(self: CommandManager, help: string) =
-  ## Deprecated: Use addHelp() following Nim conventions
-  addHelp(self, help)

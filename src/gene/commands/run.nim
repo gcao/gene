@@ -25,11 +25,11 @@ type
     file: string
     args: seq[string]
 
-proc handle*(cmd: string, args: seq[string]): string
+proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.add_help("run <file>: parse and execute <file>")
+  manager.addHelp("run <file>: parse and execute <file>")
 
 let short_no_val = {'d'}
 let long_no_val = @[
@@ -85,7 +85,7 @@ proc parse_options(args: seq[string]): Options =
     of cmdEnd:
       discard
 
-proc handle*(cmd: string, args: seq[string]): string =
+proc handle*(cmd: string, args: seq[string]): CommandResult =
   let options = parse_options(args)
   setup_logger(options.debugging)
 
@@ -111,13 +111,13 @@ proc handle*(cmd: string, args: seq[string]): string =
         code = lines.join("\n")
         file = "<stdin>"
       else:
-        return "Error: No input provided. Provide a file to run."
+        return failure("No input provided. Provide a file to run.")
     else:
-      return "Error: No file provided to run."
+      return failure("No file provided to run.")
   else:
     # Check if file exists
     if not fileExists(file):
-      return "Error: File not found: " & file
+      return failure("File not found: " & file)
     
     # Check if it's a .gir file
     if file.endsWith(".gir"):
@@ -160,9 +160,9 @@ proc handle*(cmd: string, args: seq[string]): string =
         if options.benchmark:
           echo fmt"Execution time: {elapsed * 1000:.3f} ms"
         
-        return ""
+        return success()
       except CatchableError as e:
-        return "Error loading GIR file: " & e.msg
+        return failure("Loading GIR file: " & e.msg)
     
     # Regular .gene file - check for cached GIR
     if not options.no_gir_cache:
@@ -200,7 +200,7 @@ proc handle*(cmd: string, args: seq[string]): string =
           if options.benchmark:
             echo fmt"Execution time: {elapsed * 1000:.3f} ms (from cache)"
           
-          return ""
+          return success()
         except CatchableError:
           # Fall back to compilation if GIR load fails
           discard
@@ -267,10 +267,12 @@ proc handle*(cmd: string, args: seq[string]): string =
     VM.print_profile()
   if options.profile_instructions:
     VM.print_instruction_profile()
+  
+  return success()
 
 when isMainModule:
   let cmd = DEFAULT_COMMAND
   let args: seq[string] = @[]
-  let status = handle(cmd, args)
-  if status.len > 0:
-    echo "Failed with error: " & status
+  let result = handle(cmd, args)
+  if not result.success:
+    echo "Failed with error: " & result.error
