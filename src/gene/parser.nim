@@ -194,7 +194,7 @@ proc `unit`*(self: ParseOptions, name: string): Value =
 #################### Parser ######################
 
 proc new_parser*(options: ParseOptions): Parser =
-  if not INITIALIZED:
+  if parserConfig == nil or not parserConfig.initialized:
     init()
 
   return Parser(
@@ -204,7 +204,7 @@ proc new_parser*(options: ParseOptions): Parser =
   )
 
 proc new_parser*(): Parser =
-  if not INITIALIZED:
+  if parserConfig == nil or not parserConfig.initialized:
     init()
 
   return Parser(
