@@ -1,0 +1,101 @@
+#!/usr/bin/env gene
+
+# Simple LLM Inference Example - Working Version
+# This demonstrates LLM concepts using only existing Gene features
+
+(println "=== Simple LLM Demo ===")
+(println)
+
+# Model configuration using simple variables
+(var model-name "gene-gpt-small")
+(var vocab-size 50000)
+(var hidden-size 768)
+(var num-layers 12)
+(var num-heads 12)
+
+(println "Model: " model-name)
+(println "Vocabulary: " vocab-size " tokens")
+(println "Hidden size: " hidden-size)
+(println "Layers: " num-layers)
+(println)
+
+# 1. Simulate tokenization
+(fn tokenize [text]
+  (println "Tokenizing: " text)
+  # Simple character-based tokenization
+  (var tokens [])
+  (var chars (split text ""))
+  (for c in chars
+    (var tokens (append tokens 100)))  # Mock token ID
+  (println "  Generated " (len tokens) " tokens")
+  tokens)
+
+# 2. Simulate attention mechanism
+(fn attention [query-len key-len]
+  (println "  Computing attention for " query-len "x" key-len)
+  # Return mock attention scores
+  [0.1 0.3 0.4 0.2])
+
+# 3. Simulate transformer layer
+(fn transformer-layer [input layer-num]
+  (println "  Layer " layer-num " processing...")
+  # Mock transformation - just return input
+  input)
+
+# 4. Simple text generation
+(fn generate-text [prompt max-tokens]
+  (println "\nGenerating text...")
+  (println "Prompt: \"" prompt "\"")
+  
+  # Tokenize
+  (var tokens (tokenize prompt))
+  
+  # Mock generation
+  (var generated "")
+  (var next-words ["is" "a" "powerful" "language" "for" "AI"])
+  
+  (print "Generated: \"" prompt " ")
+  (loop [i 0 .. 4]
+    (var word "word")
+    (print word " ")
+    (var generated (str generated word " ")))
+  (println "\"")
+  
+  generated)
+
+# 5. Demo execution
+(println "=== Running Demo ===")
+(println)
+
+# Example 1: Tokenization
+(var text "Hello Gene")
+(var tokens (tokenize text))
+(println "Tokens: " tokens)
+(println)
+
+# Example 2: Text generation
+(var prompt "Gene programming")
+(var output (generate-text prompt 4))
+(println)
+
+# Example 3: Simulated model info
+(println "=== Model Information ===")
+(println "Total parameters: ~37K")
+(println "Memory usage: ~147MB for embeddings")
+(println)
+
+# Show what a real implementation would include
+(println "=== In a Full Implementation ===")
+(println "Would include:")
+(println "  • Tensor operations for matrix multiplication")
+(println "  • FFI bindings to ML libraries (ONNX, llama.cpp)")
+(println "  • GPU acceleration via CUDA/Metal")
+(println "  • Proper tokenizers (BPE, SentencePiece)")
+(println "  • Model weight loading from files")
+(println "  • Optimized inference with KV-cache")
+(println)
+
+(println "This demo shows the conceptual structure")
+(println "without requiring unimplemented VM features.")
+
+true
