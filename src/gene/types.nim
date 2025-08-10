@@ -1591,6 +1591,56 @@ proc `$`*(self: Value): string {.gcsafe.} =
         result = $self.ref.time_hour & ":" & $self.ref.time_minute & ":" & $self.ref.time_second
       of VkFuture:
         result = "<Future " & $self.ref.future.state & ">"
+      of VkTensor:
+        let t = self.ref.tensor
+        let dtype_str = case t.dtype:
+          of DtFloat32: "float32"
+          of DtFloat16: "float16"
+          of DtBFloat16: "bfloat16"
+          of DtInt8: "int8"
+          of DtInt16: "int16"
+          of DtInt32: "int32"
+          of DtInt64: "int64"
+          of DtUInt8: "uint8"
+          of DtBool: "bool"
+        let device_str = case t.device:
+          of DevCPU: "cpu"
+          of DevCUDA: "cuda"
+          of DevMetal: "metal"
+          of DevTPU: "tpu"
+        result = "<Tensor shape=" & $t.shape & " dtype=" & dtype_str & " device=" & device_str & ">"
+      of VkModel:
+        result = "<Model name=" & self.ref.model.name & " format=" & self.ref.model.format & ">"
+      of VkDevice:
+        let dev_str = case self.ref.device.kind:
+          of DevCPU: "cpu"
+          of DevCUDA: "cuda"
+          of DevMetal: "metal"
+          of DevTPU: "tpu"
+        result = "<Device " & dev_str & ":" & $self.ref.device.id & ">"
+      of VkGradient:
+        result = "<GradientTape tensors=" & $self.ref.gradient.tensors.len & ">"
+      of VkModelSession:
+        result = "<ModelSession>"
+      of VkTokenizer:
+        result = "<Tokenizer vocab_size=" & $self.ref.tokenizer.vocab_size & ">"
+      of VkEmbedding:
+        result = "<Embedding dim=" & $self.ref.embedding.dim & ">"
+      of VkDataLoader:
+        result = "<DataLoader batch_size=" & $self.ref.dataloader.batch_size & ">"
+      of VkDType:
+        result = case self.ref.dtype_val:
+          of DtFloat32: "dtype:float32"
+          of DtFloat16: "dtype:float16"
+          of DtBFloat16: "dtype:bfloat16"
+          of DtInt8: "dtype:int8"
+          of DtInt16: "dtype:int16"
+          of DtInt32: "dtype:int32"
+          of DtInt64: "dtype:int64"
+          of DtUInt8: "dtype:uint8"
+          of DtBool: "dtype:bool"
+      of VkShape:
+        result = "<Shape " & $self.ref.shape_val & ">"
       else:
         result = $self.kind
 
