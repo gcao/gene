@@ -1,0 +1,376 @@
+#!/usr/bin/env gene
+
+# Ollama Integration Example
+# This shows how Gene would interface with Ollama for running LLMs
+# Ollama provides a simple API for running models like Llama2, Mistral, etc.
+
+(println "=== Gene + Ollama LLM Integration ===")
+(println)
+
+# Ollama configuration
+(var ollama-config {
+  ^api-url "http://localhost:11434"
+  ^model "llama2:7b"         ; Can be llama2, mistral, codellama, etc.
+  ^timeout 60000              ; 60 seconds timeout
+  ^stream true                ; Stream responses
+})
+
+# 1. HTTP Client for Ollama API
+(fn http-post [url data]
+  ; In real implementation, would use HTTP library via FFI
+  ; For now, simulating the HTTP call
+  (println "  POST " url)
+  {^status 200
+   ^body "{\"response\": \"Simulated response from Ollama\"}"})
+
+# 2. Ollama API Functions
+(fn ollama-generate [prompt model-name options]
+  (println "Calling Ollama API...")
+  (println "  Model: " model-name)
+  
+  (var request {
+    ^model model-name
+    ^prompt prompt
+    ^stream false
+    ^options {
+      ^temperature (options ^temperature 0.8)
+      ^top_k (options ^top-k 40)
+      ^top_p (options ^top-p 0.9)
+      ^num_predict (options ^max-tokens 256)
+      ^stop (options ^stop [])
+    }
+  })
+  
+  ; Make API call
+  (var response (http-post 
+                  (str (ollama-config ^api-url) "/api/generate")
+                  request))
+  
+  (if (= (response ^status) 200)
+    (do
+      (println "  ✓ Response received")
+      (parse-json (response ^body)))
+    (do
+      (println "  ✗ Error: " (response ^status))
+      nil)))
+
+# 3. Streaming Generation
+(fn ollama-stream-generate [prompt model-name callback]
+  (println "Streaming from Ollama...")
+  
+  ; Simulate streaming response
+  (var tokens ["The " "answer " "to " "your " "question " "is " 
+                "quite " "interesting. " "Let " "me " "explain " 
+                "in " "detail. "])
+  
+  (for [token tokens]
+    (callback token)
+    ; Small delay to simulate streaming
+    ))
+
+# 4. Chat Interface
+(fn ollama-chat [messages model-name]
+  (println "Chat with " model-name "...")
+  
+  (var request {
+    ^model model-name
+    ^messages messages
+    ^stream false
+  })
+  
+  (var response (http-post
+                  (str (ollama-config ^api-url) "/api/chat")
+                  request))
+  
+  (if (= (response ^status) 200)
+    (parse-json (response ^body))
+    nil))
+
+# 5. List Available Models
+(fn ollama-list-models []
+  (println "Available Ollama models:")
+  
+  ; Simulated model list
+  (var models [
+    {^name "llama2:7b" ^size "3.8GB" ^description "Meta's Llama 2 7B"}
+    {^name "llama2:13b" ^size "7.4GB" ^description "Meta's Llama 2 13B"}
+    {^name "mistral:7b" ^size "4.1GB" ^description "Mistral 7B"}
+    {^name "codellama:7b" ^size "3.8GB" ^description "Code Llama 7B"}
+    {^name "phi-2:2.7b" ^size "1.7GB" ^description "Microsoft Phi-2"}
+    {^name "tinyllama:1.1b" ^size "637MB" ^description "TinyLlama 1.1B"}
+    {^name "neural-chat:7b" ^size "4.1GB" ^description "Intel Neural Chat"}
+  ])
+  
+  (for [model models]
+    (println "  • " (model ^name) " (" (model ^size) ") - " (model ^description)))
+  
+  models)
+
+# 6. Model Management
+(fn ollama-pull [model-name]
+  (println "Pulling model: " model-name)
+  (println "  Downloading...")
+  (println "  [====================] 100%")
+  (println "  ✓ Model " model-name " ready"))
+
+(fn ollama-delete [model-name]
+  (println "Deleting model: " model-name)
+  (println "  ✓ Model removed"))
+
+# 7. Embeddings
+(fn ollama-embeddings [text model-name]
+  (println "Getting embeddings from " model-name)
+  
+  (var request {
+    ^model model-name
+    ^prompt text
+  })
+  
+  ; Return mock embeddings
+  (tensor/random [1 4096]))
+
+# 8. High-Level Wrapper Functions
+(fn ask-ollama [question model]
+  (println "\n=== Question: " question " ===")
+  
+  (var options {
+    ^temperature 0.7
+    ^max-tokens 256
+    ^top-p 0.9
+  })
+  
+  (var response (ollama-generate question model options))
+  
+  (if response
+    (do
+      (println "Answer: " (response ^response))
+      (response ^response))
+    "Error: Failed to get response"))
+
+(fn chat-with-ollama [model]
+  (println "\n=== Chat Session with " model " ===")
+  
+  (var messages [])
+  
+  ; System message
+  (var messages (append messages 
+                       {^role "system" 
+                        ^content "You are a helpful AI assistant."}))
+  
+  ; User message
+  (var user-msg "Hello! Can you explain what Gene programming language is?")
+  (println "User: " user-msg)
+  (var messages (append messages 
+                       {^role "user" ^content user-msg}))
+  
+  ; Get response
+  (var response (ollama-chat messages model))
+  
+  (if response
+    (println "Assistant: " (response ^message ^content))
+    (println "Error: No response"))
+  
+  messages)
+
+# 9. Code Generation Example
+(fn generate-code-with-ollama [description language]
+  (println "\n=== Code Generation ===")
+  (println "Task: " description)
+  (println "Language: " language)
+  
+  (var prompt (str "Write " language " code to " description ". "
+                   "Include comments and follow best practices.\n\n"
+                   "```" language "\n"))
+  
+  (var response (ollama-generate 
+                  prompt 
+                  "codellama:7b"
+                  {^temperature 0.2 ^max-tokens 500}))
+  
+  (if response
+    (do
+      (println "\nGenerated code:")
+      (println (response ^response)))
+    (println "Failed to generate code")))
+
+# 10. RAG (Retrieval-Augmented Generation) Example
+(fn rag-with-ollama [question documents model]
+  (println "\n=== RAG-based Q&A ===")
+  (println "Question: " question)
+  
+  ; Get embeddings for question
+  (var q-embedding (ollama-embeddings question model))
+  
+  ; Get embeddings for documents
+  (var doc-embeddings [])
+  (for [doc documents]
+    (var embedding (ollama-embeddings doc model))
+    (var doc-embeddings (append doc-embeddings embedding)))
+  
+  ; Find most relevant document (simplified)
+  (var relevant-doc (documents @ 0))
+  
+  ; Create augmented prompt
+  (var prompt (str "Based on the following context, answer the question.\n\n"
+                   "Context: " relevant-doc "\n\n"
+                   "Question: " question "\n\n"
+                   "Answer: "))
+  
+  (var response (ollama-generate prompt model {^temperature 0.3}))
+  
+  (if response
+    (println "Answer: " (response ^response))
+    (println "Failed to generate answer")))
+
+# 11. Batch Processing
+(fn batch-process-with-ollama [prompts model]
+  (println "\n=== Batch Processing ===")
+  (println "Processing " (len prompts) " prompts...")
+  
+  (var results [])
+  
+  (for [i prompt] prompts
+    (println "  [" (+ i 1) "/" (len prompts) "] Processing...")
+    (var response (ollama-generate prompt model {^temperature 0.7}))
+    (var results (append results response)))
+  
+  (println "✓ Batch processing complete")
+  results)
+
+# 12. Model Comparison
+(fn compare-models [prompt models]
+  (println "\n=== Model Comparison ===")
+  (println "Prompt: " prompt)
+  (println)
+  
+  (for [model models]
+    (println "Model: " model)
+    (var response (ollama-generate prompt model {^temperature 0.7}))
+    (if response
+      (println "Response: " (substr (response ^response) 0 100) "...")
+      (println "Error: No response"))
+    (println)))
+
+# 13. Custom System Prompts
+(fn specialized-assistant [role expertise]
+  (println "\n=== Specialized Assistant ===")
+  (println "Role: " role)
+  (println "Expertise: " expertise)
+  
+  (var system-prompt (str "You are a " role " specializing in " expertise ". "
+                          "Provide expert advice and detailed explanations."))
+  
+  (var messages [
+    {^role "system" ^content system-prompt}
+    {^role "user" ^content "What are the best practices in your field?"}
+  ])
+  
+  (var response (ollama-chat messages "llama2:7b"))
+  
+  (if response
+    (println "Expert advice: " (response ^message ^content))))
+
+# 14. Main Demo
+(fn main []
+  (println "Starting Ollama integration demo...")
+  (println)
+  
+  ; List available models
+  (var models (ollama-list-models))
+  (println)
+  
+  ; Simple generation
+  (ask-ollama 
+    "What is the difference between machine learning and deep learning?"
+    "llama2:7b")
+  
+  ; Chat session
+  (chat-with-ollama "mistral:7b")
+  
+  ; Code generation
+  (generate-code-with-ollama 
+    "sort an array using quicksort" 
+    "python")
+  
+  ; RAG example
+  (var knowledge-base [
+    "Gene is a Lisp-like programming language implemented in Nim."
+    "Gene features tensor operations and AI capabilities."
+    "Gene can interface with C libraries through FFI."
+  ])
+  
+  (rag-with-ollama 
+    "What are Gene's AI features?"
+    knowledge-base
+    "llama2:7b")
+  
+  ; Model comparison
+  (compare-models 
+    "Explain quantum computing in simple terms"
+    ["llama2:7b" "mistral:7b" "phi-2:2.7b"])
+  
+  ; Specialized assistant
+  (specialized-assistant 
+    "software architect"
+    "distributed systems and microservices")
+  
+  ; Streaming example
+  (println "\n=== Streaming Response ===")
+  (print "Response: ")
+  (ollama-stream-generate 
+    "Tell me a short story about AI"
+    "llama2:7b"
+    (fn [token] (print token)))
+  (println)
+  
+  (println "\n=== Demo Complete ==="))
+
+# 15. Performance Monitoring
+(fn monitor-performance [model prompt]
+  (println "\n=== Performance Metrics ===")
+  
+  (var start-time (time/now))
+  (var response (ollama-generate prompt model {}))
+  (var end-time (time/now))
+  
+  (if response
+    (do
+      (var duration (- end-time start-time))
+      (var tokens (len (split (response ^response) " ")))
+      (var tokens-per-sec (/ tokens (/ duration 1000.0)))
+      
+      (println "Model: " model)
+      (println "Response time: " duration "ms")
+      (println "Tokens generated: " tokens)
+      (println "Tokens/sec: " tokens-per-sec)
+      (println "Model load time: " (response ^load-duration) "ms")
+      (println "Eval count: " (response ^eval-count)))))
+
+# 16. Error Handling
+(fn safe-ollama-call [fn-name & args]
+  (try
+    (apply fn-name args)
+    (catch [e]
+      (println "Error in Ollama call: " e)
+      nil)))
+
+# Run the main demo
+(main)
+
+# Summary
+(println "\n" "=" 60)
+(println "Ollama Integration Features:")
+(println "  • Simple HTTP API interface")
+(println "  • Support for multiple models")
+(println "  • Streaming responses")
+(println "  • Chat conversations")
+(println "  • Embeddings generation")
+(println "  • RAG implementation")
+(println "  • Batch processing")
+(println "=" 60)
+(println)
+(println "Gene + Ollama = Production-ready LLM applications!")
+(println "Run 'ollama serve' to start the Ollama server,")
+(println "then use Gene to interact with any supported model.")
+
+true

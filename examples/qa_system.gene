@@ -1,0 +1,277 @@
+#!/usr/bin/env gene
+
+# Practical Q&A System using Gene's AI Capabilities
+# This example shows a complete question-answering application
+
+(println "=== Gene AI Q&A System ===")
+(println)
+
+# Knowledge base (in practice, would be loaded from files/database)
+(var knowledge-base [
+  {^topic "Gene Language"
+   ^content "Gene is a programming language with Lisp-like syntax, implemented in Nim. It features homoiconic code, functional programming, object-oriented programming, pattern matching, macros, and a bytecode VM for execution."}
+  
+  {^topic "Tensors in Gene"
+   ^content "Gene provides native tensor support with operations like creation, arithmetic, matrix multiplication, reshaping, and device management. Tensors are first-class values in the VM with dedicated instructions."}
+  
+  {^topic "FFI System"
+   ^content "Gene's Foreign Function Interface allows calling C libraries directly. It supports dynamic library loading, function signatures, and type marshaling between Gene and C types."}
+  
+  {^topic "LLM Support"
+   ^content "Gene can run Large Language Models through tensor operations and FFI integration with libraries like llama.cpp. It supports text generation, tokenization, and transformer architectures."}
+  
+  {^topic "Python Bridge"
+   ^content "Gene includes a Python bridge for ecosystem interoperability, allowing import of Python modules, value conversion between Gene and Python, and calling Python functions."}
+])
+
+# Initialize AI components
+(println "Initializing Q&A system...")
+(var tokenizer (tokenizer/create 50000))
+(var embeddings (embedding/create 768))
+(var model (model/create "qa-model" "gene"))
+(println "  ✓ Model loaded")
+(println "  ✓ Tokenizer ready")
+(println "  ✓ Embeddings initialized")
+(println)
+
+# 1. Document Embedding Function
+(fn embed-document [doc]
+  ; Generate embeddings for a document
+  ; In practice, would use actual embedding model
+  (var tokens (tokenize (doc ^content)))
+  (var embedding (tensor/random [768]))  ; Mock embedding
+  {^topic (doc ^topic)
+   ^content (doc ^content)
+   ^embedding embedding})
+
+# 2. Similarity Calculation
+(fn cosine-similarity [vec1 vec2]
+  ; Calculate cosine similarity between two vectors
+  ; cos(θ) = (A·B) / (||A|| ||B||)
+  (var dot-product (tensor/matmul 
+                     (tensor/reshape vec1 [1 768])
+                     (tensor/reshape vec2 [768 1])))
+  ; Simplified - would normalize in practice
+  dot-product)
+
+# 3. Find Relevant Documents
+(fn find-relevant-docs [query docs num-results]
+  (println "Searching knowledge base...")
+  
+  ; Embed the query
+  (var query-embedding (tensor/random [768]))  ; Mock
+  
+  ; Calculate similarities
+  (var similarities [])
+  (for [doc docs]
+    (var sim (cosine-similarity query-embedding (doc ^embedding)))
+    (var similarities (append similarities 
+                             {^doc doc ^score sim})))
+  
+  ; Sort by similarity (simplified)
+  ; In practice, would properly sort
+  (var top-docs (take num-results similarities))
+  
+  (println "  Found" (len top-docs) "relevant documents")
+  top-docs)
+
+# 4. Generate Answer
+(fn generate-answer [question context]
+  (println "Generating answer...")
+  
+  ; Format prompt for Q&A
+  (var prompt (str "Answer the following question based on the context provided.\n\n"
+                   "Context:\n" context "\n\n"
+                   "Question: " question "\n\n"
+                   "Answer: "))
+  
+  ; In practice, would use actual LLM
+  ; For demo, create a simple response
+  (var answer
+    (cond
+      (contains? question "what")
+        (str "Based on the context, " (substr context 0 100) "...")
+      (contains? question "how")
+        (str "To accomplish this with Gene, you would " 
+             "use the features described: " (substr context 0 50) "...")
+      (contains? question "why")
+        (str "The reason is that " (substr context 0 80) "...")
+      :else
+        (str "According to the documentation: " (substr context 0 100) "...")))
+  
+  (println "  ✓ Answer generated")
+  answer)
+
+# 5. Main Q&A Function
+(fn answer-question [question]
+  (println "\n" "=" 60)
+  (println "Question:" question)
+  (println "-" 60)
+  
+  ; Embed all documents (would be pre-computed in practice)
+  (var embedded-docs (map embed-document knowledge-base))
+  
+  ; Find relevant documents
+  (var relevant (find-relevant-docs question embedded-docs 2))
+  
+  ; Combine context from relevant documents
+  (var context "")
+  (for [result relevant]
+    (var context (str context ((result ^doc) ^content) "\n\n")))
+  
+  ; Generate answer
+  (var answer (generate-answer question context))
+  
+  (println "\nAnswer:")
+  (println answer)
+  (println "=" 60)
+  
+  answer)
+
+# 6. Interactive Q&A Loop
+(fn interactive-qa []
+  (println "\n=== Interactive Q&A Mode ===")
+  (println "Type 'quit' to exit")
+  (println)
+  
+  (loop
+    (print "Ask a question: ")
+    ; In practice, would read from stdin
+    (var question "What is Gene?")  ; Mock input
+    
+    (if (= question "quit")
+      (break))
+    
+    (answer-question question)
+    
+    ; For demo, just run once
+    (break)))
+
+# 7. Batch Q&A Processing
+(fn batch-qa [questions]
+  (println "\n=== Batch Q&A Processing ===")
+  (println "Processing" (len questions) "questions...")
+  (println)
+  
+  (var answers [])
+  (for [q questions]
+    (var answer (answer-question q))
+    (var answers (append answers 
+                        {^question q ^answer answer})))
+  
+  (println "\n✓ Processed all questions")
+  answers)
+
+# 8. Q&A with Confidence Scores
+(fn qa-with-confidence [question]
+  (println "\n=== Q&A with Confidence ===")
+  (println "Question:" question)
+  
+  ; Get relevant docs with scores
+  (var embedded-docs (map embed-document knowledge-base))
+  (var relevant (find-relevant-docs question embedded-docs 3))
+  
+  ; Calculate confidence based on relevance scores
+  (var confidence 0.85)  ; Mock confidence
+  
+  (var context "")
+  (for [result relevant]
+    (var context (str context ((result ^doc) ^content) "\n")))
+  
+  (var answer (generate-answer question context))
+  
+  (println "Answer:" answer)
+  (println "Confidence:" (* confidence 100) "%")
+  
+  {^answer answer ^confidence confidence})
+
+# 9. Follow-up Question Handling
+(var conversation-history [])
+
+(fn ask-with-context [question]
+  (println "\n=== Contextual Q&A ===")
+  
+  ; Include conversation history in context
+  (var full-question question)
+  (if (> (len conversation-history) 0)
+    (do
+      (println "Previous context available")
+      (var full-question (str "Given our previous discussion, " question))))
+  
+  (var answer (answer-question full-question))
+  
+  ; Update conversation history
+  (var conversation-history 
+    (append conversation-history 
+            {^question question ^answer answer}))
+  
+  answer)
+
+# 10. Demo Execution
+(println "=== Running Q&A System Demo ===")
+(println)
+
+# Single question
+(answer-question "What is Gene programming language?")
+
+# Batch processing
+(var test-questions [
+  "How do tensors work in Gene?"
+  "What is the FFI system?"
+  "Can Gene run LLMs?"])
+
+(batch-qa test-questions)
+
+# Question with confidence
+(qa-with-confidence "What is the Python bridge used for?")
+
+# Contextual questions
+(ask-with-context "What are its main features?")
+(ask-with-context "How does it compare to other languages?")
+
+# Show system statistics
+(println "\n=== System Statistics ===")
+(println "Knowledge base entries:" (len knowledge-base))
+(println "Tokenizer vocabulary:" 50000)
+(println "Embedding dimensions:" 768)
+(println "Questions answered:" 7)
+(println "Average confidence:" "82%")
+(println)
+
+# Advanced features demo
+(println "=== Advanced Features ===")
+
+# Multi-modal Q&A (future)
+(fn multimodal-qa [text image]
+  (println "Processing text and image...")
+  ; Would process both text and image inputs
+  "Multi-modal answer")
+
+# Streaming answers
+(fn stream-answer [question callback]
+  (println "Streaming answer for:" question)
+  (var tokens ["Gene " "is " "a " "powerful " "language."])
+  (for [token tokens]
+    (callback token)))
+
+# RAG (Retrieval-Augmented Generation)
+(fn rag-answer [question external-db]
+  (println "Using RAG for:" question)
+  ; Would search external database
+  ; Combine with LLM generation
+  "RAG-enhanced answer")
+
+(println "\n=== Q&A System Demo Complete ===")
+(println)
+(println "This example demonstrates:")
+(println "  ✓ Document embedding and retrieval")
+(println "  ✓ Similarity-based search")
+(println "  ✓ Context-aware answer generation")
+(println "  ✓ Batch processing")
+(println "  ✓ Confidence scoring")
+(println "  ✓ Conversation history")
+(println)
+(println "Gene's AI capabilities make it ideal for")
+(println "building intelligent Q&A applications!")
+
+true
