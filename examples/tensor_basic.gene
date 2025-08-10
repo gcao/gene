@@ -1,0 +1,54 @@
+# Basic tensor operations example
+
+# Create tensors with shape
+(var tensor1 (tensor/create [2 3]))  # 2x3 tensor
+(var tensor2 (tensor/create [2 3]))  # 2x3 tensor
+
+# Display tensor info
+(println "Tensor 1 shape: [2 3]")
+(println "Tensor 2 shape: [2 3]")
+
+# Element-wise operations
+(var sum (tensor/add tensor1 tensor2))
+(println "Sum tensor created")
+
+(var diff (tensor/sub tensor1 tensor2))
+(println "Difference tensor created")
+
+(var product (tensor/mul tensor1 tensor2))
+(println "Product tensor created")
+
+(var quotient (tensor/div tensor1 tensor2))
+(println "Quotient tensor created")
+
+# Matrix multiplication (2x3 * 3x2 = 2x2)
+(var tensor3 (tensor/create [3 2]))
+(var matmul_result (tensor/matmul tensor1 tensor3))
+(println "Matrix multiplication result: 2x2 tensor")
+
+# Reshape operations
+(var reshaped (tensor/reshape tensor1 [3 2]))
+(println "Reshaped 2x3 to 3x2")
+
+(var flat (tensor/reshape tensor1 [6]))
+(println "Flattened to 1D tensor with 6 elements")
+
+# Transpose (only for 2D tensors)
+(var transposed (tensor/transpose tensor1))
+(println "Transposed 2x3 to 3x2")
+
+# Slicing
+(var slice (tensor/slice tensor1 [0 0] [1 2]))
+(println "Sliced tensor: subset of original")
+
+# Special tensor creation
+(var zeros (tensor/zeros [3 3]))
+(println "Created 3x3 zero tensor")
+
+(var ones (tensor/ones [3 3]))
+(println "Created 3x3 ones tensor")
+
+(var random (tensor/random [3 3]))
+(println "Created 3x3 random tensor")
+
+(println "Tensor operations test completed!")

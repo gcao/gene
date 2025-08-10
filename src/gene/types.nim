@@ -38,6 +38,71 @@ type
   Thread* = ref object
   ThreadMessage* = ref object
   NativeFn2* = proc(vm_data: pointer, args: Value): Value {.gcsafe.}
+  
+  # AI/ML type definitions
+  DType* = enum
+    DtFloat32
+    DtFloat16
+    DtBFloat16
+    DtInt8
+    DtInt16
+    DtInt32
+    DtInt64
+    DtUInt8
+    DtBool
+    
+  DeviceKind* = enum
+    DevCPU
+    DevCUDA
+    DevMetal
+    DevTPU
+    
+  TensorData* = ref object
+    shape*: seq[int]
+    dtype*: DType
+    device*: DeviceKind
+    device_id*: int
+    data_ptr*: pointer
+    size*: int64
+    strides*: seq[int]
+    
+  ModelData* = ref object
+    name*: string
+    format*: string  # onnx, pytorch, tensorflow, gguf
+    weights*: pointer
+    size*: int64
+    metadata*: Table[string, Value]
+    
+  GradientTape* = ref object
+    tensors*: seq[Value]
+    operations*: seq[string]
+    
+  DeviceInfo* = ref object
+    kind*: DeviceKind
+    id*: int
+    name*: string
+    memory_total*: int64
+    memory_available*: int64
+    
+  ModelSession* = ref object
+    model*: Value
+    state*: Table[string, Value]
+    device*: DeviceInfo
+    
+  TokenizerData* = ref object
+    vocab*: Table[string, int]
+    vocab_size*: int
+    special_tokens*: Table[string, int]
+    
+  EmbeddingData* = ref object
+    vectors*: TensorData
+    dim*: int
+    
+  DataLoaderData* = ref object
+    dataset*: Value
+    batch_size*: int
+    shuffle*: bool
+    current_batch*: int
 
 type
   ValueKind* {.size: sizeof(int16) .} = enum
@@ -138,6 +203,18 @@ type
     # JSON integration
     VkJson               # JSON values
     VkNativeFile         # Native file handles
+    
+    # AI/ML types
+    VkTensor             # N-dimensional array with shape, dtype, device
+    VkModel              # Trained model container
+    VkGradient           # Gradient tape for autograd
+    VkDevice             # CPU/GPU/TPU device handle
+    VkDType              # Data type descriptor (f32, f16, bf16, int8)
+    VkShape              # Tensor shape descriptor
+    VkModelSession       # Inference session with state
+    VkTokenizer          # Text tokenization handle
+    VkEmbedding          # Vector embedding
+    VkDataLoader         # Batched data iteration
     
     # Internal VM types
     VkCompiledUnit
@@ -314,6 +391,28 @@ type
         json_data*: string  # Serialized JSON
       of VkNativeFile:
         native_file*: File
+      
+      # AI/ML types
+      of VkTensor:
+        tensor*: TensorData
+      of VkModel:
+        model*: ModelData
+      of VkGradient:
+        gradient*: GradientTape
+      of VkDevice:
+        device*: DeviceInfo
+      of VkDType:
+        dtype_val*: DType
+      of VkShape:
+        shape_val*: seq[int]
+      of VkModelSession:
+        session*: ModelSession
+      of VkTokenizer:
+        tokenizer*: TokenizerData
+      of VkEmbedding:
+        embedding*: EmbeddingData
+      of VkDataLoader:
+        dataloader*: DataLoaderData
       
       # Internal VM types
       of VkCompiledUnit:
@@ -766,6 +865,33 @@ type
     
     IkYield
     IkResume
+    
+    # AI/ML tensor operations
+    IkTensorCreate      # Create tensor with shape
+    IkTensorAdd         # Element-wise addition
+    IkTensorSub         # Element-wise subtraction
+    IkTensorMul         # Element-wise multiplication
+    IkTensorDiv         # Element-wise division
+    IkTensorMatMul      # Matrix multiplication
+    IkTensorReshape     # Reshape tensor
+    IkTensorTranspose   # Transpose tensor
+    IkTensorSlice       # Slice tensor
+    IkTensorConv2d      # 2D convolution
+    IkTensorPool        # Pooling operation
+    IkTensorToDevice    # Move tensor to device
+    
+    # FFI operations
+    IkFFILoad           # Load external library
+    IkFFICall           # Call foreign function
+    IkFFIPrepare        # Prepare FFI arguments
+    IkFFICleanup        # Cleanup after FFI call
+    
+    # Python bridge operations
+    IkPythonImport      # Import Python module
+    IkPythonEval        # Evaluate Python code
+    IkPythonCall        # Call Python function
+    IkPythonGetAttr     # Get Python object attribute
+    IkPythonSetAttr     # Set Python object attribute
 
   # Keep the size of Instruction to 2*8 = 16 bytes
   Instruction* = object
@@ -2764,6 +2890,101 @@ proc `[]`*(self: Value, name: string): Value =
     return self.ref.enum_def.members[name].to_value()
   else:
     not_allowed("enum " & self.ref.enum_def.name & " has no member " & name)
+
+#################### AI/ML Types ##################
+
+proc new_tensor*(shape: seq[int], dtype: DType = DtFloat32, device: DeviceKind = DevCPU): Value =
+  let r = new_ref(VkTensor)
+  r.tensor = TensorData(
+    shape: shape,
+    dtype: dtype,
+    device: device,
+    device_id: 0,
+    data_ptr: nil,
+    size: 0,
+    strides: @[]
+  )
+  # Calculate size and strides
+  var size = 1
+  for dim in shape:
+    size *= dim
+  r.tensor.size = size
+  
+  # Calculate strides (row-major order)
+  var strides = newSeq[int](shape.len)
+  if shape.len > 0:
+    strides[shape.len - 1] = 1
+    for i in countdown(shape.len - 2, 0):
+      strides[i] = strides[i + 1] * shape[i + 1]
+  r.tensor.strides = strides
+  
+  return r.to_ref_value()
+
+proc new_model*(name: string, format: string): Value =
+  let r = new_ref(VkModel)
+  r.model = ModelData(
+    name: name,
+    format: format,
+    weights: nil,
+    size: 0,
+    metadata: initTable[string, Value]()
+  )
+  return r.to_ref_value()
+
+proc new_device*(kind: DeviceKind, id: int = 0): Value =
+  let r = new_ref(VkDevice)
+  r.device = DeviceInfo(
+    kind: kind,
+    id: id,
+    name: $kind & ":" & $id,
+    memory_total: 0,
+    memory_available: 0
+  )
+  return r.to_ref_value()
+
+proc new_gradient_tape*(): Value =
+  let r = new_ref(VkGradient)
+  r.gradient = GradientTape(
+    tensors: @[],
+    operations: @[]
+  )
+  return r.to_ref_value()
+
+proc new_model_session*(model: Value, device: DeviceInfo): Value =
+  let r = new_ref(VkModelSession)
+  r.session = ModelSession(
+    model: model,
+    state: initTable[string, Value](),
+    device: device
+  )
+  return r.to_ref_value()
+
+proc new_tokenizer*(vocab_size: int): Value =
+  let r = new_ref(VkTokenizer)
+  r.tokenizer = TokenizerData(
+    vocab: initTable[string, int](),
+    vocab_size: vocab_size,
+    special_tokens: initTable[string, int]()
+  )
+  return r.to_ref_value()
+
+proc new_embedding*(dim: int): Value =
+  let r = new_ref(VkEmbedding)
+  r.embedding = EmbeddingData(
+    vectors: nil,
+    dim: dim
+  )
+  return r.to_ref_value()
+
+proc new_dataloader*(dataset: Value, batch_size: int, shuffle: bool = false): Value =
+  let r = new_ref(VkDataLoader)
+  r.dataloader = DataLoaderData(
+    dataset: dataset,
+    batch_size: batch_size,
+    shuffle: shuffle,
+    current_batch: 0
+  )
+  return r.to_ref_value()
 
 #################### Native ######################
 

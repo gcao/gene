@@ -7,6 +7,9 @@ import ./compiler
 import ./vm/args
 import ./vm/module
 import ./vm/arithmetic
+import ./vm/tensor
+import ./vm/ffi
+import ./vm/python_bridge
 
 when not defined(noExtensions):
   import ./vm/extension
@@ -3079,6 +3082,157 @@ proc exec*(self: VirtualMachine): Value =
             # For now, we don't support actual async operations
             not_allowed("Cannot await a pending future in pseudo-async mode")
         {.pop.}
+      
+      # AI/ML tensor operations
+      of IkTensorCreate:
+        # Create tensor with shape from stack
+        let shape_val = self.frame.pop()
+        if shape_val.kind != VkArray:
+          not_allowed("tensor shape must be an array")
+        var shape: seq[int] = @[]
+        for v in shape_val.ref.arr:
+          if v.kind != VkInt:
+            not_allowed("tensor shape elements must be integers")
+          shape.add(v.int64.int)
+        self.frame.push(new_tensor(shape))
+      
+      of IkTensorAdd:
+        let b = self.frame.pop()
+        let a = self.frame.pop()
+        self.frame.push(tensor_add(a, b))
+      
+      of IkTensorSub:
+        let b = self.frame.pop()
+        let a = self.frame.pop()
+        self.frame.push(tensor_sub(a, b))
+      
+      of IkTensorMul:
+        let b = self.frame.pop()
+        let a = self.frame.pop()
+        self.frame.push(tensor_mul(a, b))
+      
+      of IkTensorDiv:
+        let b = self.frame.pop()
+        let a = self.frame.pop()
+        self.frame.push(tensor_div(a, b))
+      
+      of IkTensorMatMul:
+        let b = self.frame.pop()
+        let a = self.frame.pop()
+        self.frame.push(tensor_matmul(a, b))
+      
+      of IkTensorReshape:
+        let shape_val = self.frame.pop()
+        let tensor = self.frame.pop()
+        if shape_val.kind != VkArray:
+          not_allowed("reshape shape must be an array")
+        var shape: seq[int] = @[]
+        for v in shape_val.ref.arr:
+          if v.kind != VkInt:
+            not_allowed("reshape shape elements must be integers")
+          shape.add(v.int64.int)
+        self.frame.push(tensor_reshape(tensor, shape))
+      
+      of IkTensorTranspose:
+        let tensor = self.frame.pop()
+        self.frame.push(tensor_transpose(tensor))
+      
+      of IkTensorSlice:
+        let stop_val = self.frame.pop()
+        let start_val = self.frame.pop()
+        let tensor = self.frame.pop()
+        if start_val.kind != VkArray or stop_val.kind != VkArray:
+          not_allowed("slice indices must be arrays")
+        var start, stop: seq[int] = @[]
+        for v in start_val.ref.arr:
+          if v.kind != VkInt:
+            not_allowed("slice indices must be integers")
+          start.add(v.int64.int)
+        for v in stop_val.ref.arr:
+          if v.kind != VkInt:
+            not_allowed("slice indices must be integers")
+          stop.add(v.int64.int)
+        self.frame.push(tensor_slice(tensor, start, stop))
+      
+      of IkTensorConv2d:
+        # Placeholder for 2D convolution
+        not_allowed("IkTensorConv2d not yet implemented")
+      
+      of IkTensorPool:
+        # Placeholder for pooling
+        not_allowed("IkTensorPool not yet implemented")
+      
+      of IkTensorToDevice:
+        let device_val = self.frame.pop()
+        let tensor = self.frame.pop()
+        if device_val.kind != VkDevice:
+          not_allowed("second argument must be a device")
+        # In real implementation, would copy tensor to device
+        self.frame.push(tensor)
+      
+      # FFI operations
+      of IkFFILoad:
+        let path = self.frame.pop()
+        let name = self.frame.pop()
+        if name.kind != VkString or path.kind != VkString:
+          not_allowed("FFI load requires string name and path")
+        handle_ffi_load(self, name.str, path.str)
+      
+      of IkFFICall:
+        # arg0 contains the arg count
+        let arg_count = inst.arg1
+        let fn_name = self.frame.pop()
+        let lib_name = self.frame.pop()
+        if lib_name.kind != VkString or fn_name.kind != VkString:
+          not_allowed("FFI call requires string library and function names")
+        handle_ffi_call(self, lib_name.str, fn_name.str, arg_count)
+      
+      of IkFFIPrepare:
+        # Prepare FFI arguments - placeholder
+        not_allowed("IkFFIPrepare not yet implemented")
+      
+      of IkFFICleanup:
+        # Cleanup after FFI call - placeholder
+        not_allowed("IkFFICleanup not yet implemented")
+      
+      # Python bridge operations
+      of IkPythonImport:
+        let module_name = self.frame.pop()
+        if module_name.kind != VkString:
+          not_allowed("Python import requires string module name")
+        self.frame.push(python_import(module_name.str))
+      
+      of IkPythonEval:
+        let code = self.frame.pop()
+        if code.kind != VkString:
+          not_allowed("Python eval requires string code")
+        self.frame.push(python_eval(code.str))
+      
+      of IkPythonCall:
+        # arg0 contains the arg count
+        let arg_count = inst.arg1
+        var args: seq[Value] = @[]
+        for i in 0..<arg_count:
+          args.insert(self.frame.pop(), 0)
+        let callable = self.frame.pop()
+        self.frame.push(python_call(callable, args))
+      
+      of IkPythonGetAttr:
+        let attr_name = self.frame.pop()
+        let obj = self.frame.pop()
+        if attr_name.kind != VkString:
+          not_allowed("Python getattr requires string attribute name")
+        # Placeholder - would use Python C API
+        not_allowed("IkPythonGetAttr not yet implemented")
+      
+      of IkPythonSetAttr:
+        let value = self.frame.pop()
+        let attr_name = self.frame.pop()
+        let obj = self.frame.pop()
+        if attr_name.kind != VkString:
+          not_allowed("Python setattr requires string attribute name")
+        # Placeholder - would use Python C API
+        not_allowed("IkPythonSetAttr not yet implemented")
       
       of IkCallMethodNoArgs:
         # Method call with no arguments (e.g., obj.name)

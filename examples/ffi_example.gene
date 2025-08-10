@@ -1,0 +1,64 @@
+# FFI (Foreign Function Interface) example
+
+# Load a C library
+# Note: In real usage, would load actual libraries like libtorch, libonnxruntime, etc.
+(ffi/load "math" "libm.so")
+
+# Define external function signatures
+(ffi/defun c-sqrt
+  :lib "math"
+  :symbol "sqrt"
+  :returns :float64
+  :params [:float64])
+
+(ffi/defun c-sin
+  :lib "math"
+  :symbol "sin"
+  :returns :float64
+  :params [:float64])
+
+(ffi/defun c-cos
+  :lib "math"
+  :symbol "cos"
+  :returns :float64
+  :params [:float64])
+
+# Use the FFI functions
+(var x 2.0)
+(println "Square root of" x "=" (c-sqrt x))
+
+(var angle 3.14159265)
+(println "sin(" angle ") =" (c-sin angle))
+(println "cos(" angle ") =" (c-cos angle))
+
+# Example of loading ML libraries (conceptual)
+# (ffi/load "torch" "/usr/local/lib/libtorch.so")
+# (ffi/load "onnx" "/usr/local/lib/libonnxruntime.so")
+
+# Define tensor operation from C library (conceptual)
+# (ffi/defun torch-matmul
+#   :lib "torch"
+#   :symbol "torch_matmul"
+#   :returns :pointer
+#   :params [:pointer :pointer])
+
+# Python interop example (conceptual)
+# (python/init)
+# (var np (python/import "numpy"))
+# (var torch (python/import "torch"))
+# (var tf (python/import "transformers"))
+
+# Use Python objects
+# (var py-array (python/call np.array [[1 2 3] [4 5 6]]))
+# (var py-tensor (python/call torch.from_numpy py-array))
+
+# Load a pre-trained model from Hugging Face (conceptual)
+# (var model (python/call tf.AutoModel.from_pretrained "bert-base-uncased"))
+# (var tokenizer (python/call tf.AutoTokenizer.from_pretrained "bert-base-uncased"))
+
+# Process text with the model (conceptual)
+# (var text "Hello, world!")
+# (var inputs (python/call tokenizer text :return_tensors "pt"))
+# (var outputs (python/call model inputs))
+
+(println "FFI example completed!")
