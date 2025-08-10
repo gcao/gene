@@ -3301,6 +3301,66 @@ proc init_app_and_vm*() =
   # For now, just return a dummy value for time/now
   time_ns["now".to_key()] = 0.0.to_value()  # Placeholder
   App.app.global_ns.ref.ns["time".to_key()] = time_ns.to_value()
+  
+  # Add AI/ML namespace stubs with mock functions
+  proc mock_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+    # Return a mock tensor/model/device etc
+    return new_map_value()
+  
+  proc mock_tensor_op(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+    # Return first arg or a mock map
+    if args.kind == VkArray and args.ref.arr.len > 0:
+      return args.ref.arr[0]
+    return new_map_value()
+  
+  let tokenizer_ns = new_namespace("tokenizer")
+  tokenizer_ns["create".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tokenizer_ns["create".to_key()].ref.native_fn = mock_create
+  App.app.global_ns.ref.ns["tokenizer".to_key()] = tokenizer_ns.to_value()
+  
+  let embedding_ns = new_namespace("embedding")
+  embedding_ns["create".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  embedding_ns["create".to_key()].ref.native_fn = mock_create
+  App.app.global_ns.ref.ns["embedding".to_key()] = embedding_ns.to_value()
+  
+  let model_ns = new_namespace("model")
+  model_ns["create".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  model_ns["create".to_key()].ref.native_fn = mock_create
+  model_ns["session".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  model_ns["session".to_key()].ref.native_fn = mock_create
+  model_ns["configure".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  model_ns["configure".to_key()].ref.native_fn = mock_create
+  App.app.global_ns.ref.ns["model".to_key()] = model_ns.to_value()
+  
+  let device_ns = new_namespace("device")
+  device_ns["create".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  device_ns["create".to_key()].ref.native_fn = mock_create
+  App.app.global_ns.ref.ns["device".to_key()] = device_ns.to_value()
+  
+  let tensor_ns = new_namespace("tensor")
+  tensor_ns["create".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["create".to_key()].ref.native_fn = mock_create
+  tensor_ns["random".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["random".to_key()].ref.native_fn = mock_create
+  tensor_ns["zeros".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["zeros".to_key()].ref.native_fn = mock_create
+  tensor_ns["add".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["add".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["matmul".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["matmul".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["transpose".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["transpose".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["shape".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["shape".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["reshape".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["reshape".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["slice".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["slice".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["div".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["div".to_key()].ref.native_fn = mock_tensor_op
+  tensor_ns["transform".to_key()] = new_ref(VkNativeFn).to_ref_value()
+  tensor_ns["transform".to_key()].ref.native_fn = mock_tensor_op
+  App.app.global_ns.ref.ns["tensor".to_key()] = tensor_ns.to_value()
 
   for callback in VmCreatedCallbacks:
     callback()
