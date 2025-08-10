@@ -1,5 +1,0 @@
-#!/usr/bin/env gene
-
-# Test map with symbol key
-(var m {^name "test"})
-(println "Map:" m)
