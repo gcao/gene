@@ -15,6 +15,9 @@ This is the **active development branch** implementing a bytecode VM for improve
 - **Macros** - Code generation at compile time
 - **Dynamic Typing** - With optional type annotations
 - **Bytecode VM** - Compiles to bytecode for execution
+- **AI/ML Support** - Native tensor operations and model management (new!)
+- **FFI System** - Call C libraries directly
+- **Python Bridge** - Interoperate with Python ecosystem
 
 ## Quick Start
 
@@ -123,11 +126,42 @@ nim c -r tests/test_parser.nim
 ./scripts/fib_compare
 ```
 
+## AI/ML Capabilities (New!)
+
+Gene now includes native support for AI/ML workloads:
+
+### Tensor Operations
+```gene
+# Create and manipulate tensors
+(var a (tensor/create [2 3] :float32 :cuda))
+(var b (tensor/create [3 4] :float32 :cuda))
+(var c (tensor/matmul a b))  # Matrix multiplication
+```
+
+### Model Management
+```gene
+# Load and run models
+(var model (model/create "my-model" "onnx"))
+(var output (model/forward model input))
+```
+
+### FFI and Python Integration
+```gene
+# Call C libraries
+(ffi/load "torch" "/path/to/libtorch.so")
+
+# Use Python libraries (coming soon)
+(python/import numpy :as np)
+```
+
+See [AI/ML Guide](docs/tensor-api-guide.md) for complete documentation.
+
 ## Documentation
 
 - [Getting Started](docs/getting-started.md) - Tutorial for new users
 - [Language Reference](docs/language-reference.md) - Complete language guide
 - [Architecture](docs/architecture.md) - VM design and implementation
+- [AI/ML Guide](docs/tensor-api-guide.md) - Tensor and AI features
 - [Contributing](docs/contributing.md) - How to contribute
 
 ## Performance

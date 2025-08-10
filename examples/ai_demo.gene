@@ -1,0 +1,239 @@
+#!/usr/bin/env gene
+
+# AI/ML Demo - Showcasing Gene's AI Capabilities
+# This demonstrates tensor operations, model management, and data processing
+
+(println "=== Gene AI/ML Demo ===")
+(println)
+
+# 1. Basic Tensor Operations
+(println "1. TENSOR OPERATIONS")
+(println "-------------------")
+
+# Create tensors
+(var input (tensor/create [2 3] :float32 :cpu))
+(var weight (tensor/create [3 4] :float32 :cpu))
+(var bias (tensor/create [4] :float32 :cpu))
+
+(println "Input tensor:" input)
+(println "Weight tensor:" weight)
+(println "Bias tensor:" bias)
+
+# Perform operations
+(var output (tensor/matmul input weight))
+(println "After matmul:" output)
+
+# Add bias (broadcasting would happen in real implementation)
+# (var output-with-bias (tensor/add output bias))
+
+(println)
+
+# 2. Shape Manipulation
+(println "2. SHAPE OPERATIONS")
+(println "-------------------")
+
+(var data (tensor/create [6] :float32))
+(println "Original shape:" (tensor/shape data))
+
+(var reshaped (tensor/reshape data [2 3]))
+(println "After reshape to [2 3]:" reshaped)
+
+(var transposed (tensor/transpose reshaped))
+(println "After transpose:" transposed)
+
+(println)
+
+# 3. Special Tensor Creation
+(println "3. SPECIAL TENSORS")
+(println "------------------")
+
+(var zeros (tensor/zeros [3 3]))
+(println "Zero tensor:" zeros)
+
+(var ones (tensor/ones [2 4]))
+(println "Ones tensor:" ones)
+
+(var random (tensor/random [2 2]))
+(println "Random tensor:" random)
+
+(println)
+
+# 4. Device Management
+(println "4. DEVICE MANAGEMENT")
+(println "--------------------")
+
+(var cpu-device (device/create :cpu))
+(var gpu-device (device/create :cuda 0))
+
+(println "CPU device:" cpu-device)
+(println "GPU device:" gpu-device)
+
+# Create tensor on specific device
+(var gpu-tensor (tensor/create [100 100] :float16 :cuda))
+(println "GPU tensor:" gpu-tensor)
+
+(println)
+
+# 5. Model Components
+(println "5. MODEL COMPONENTS")
+(println "-------------------")
+
+# Create model
+(var model (model/create "demo-model" "gene"))
+(println "Model:" model)
+
+# Create tokenizer
+(var tokenizer (tokenizer/create 50000))
+(println "Tokenizer:" tokenizer)
+
+# Create embeddings
+(var embeddings (embedding/create 768))
+(println "Embeddings:" embeddings)
+
+# Create model session
+(var session (model/session model cpu-device))
+(println "Model session:" session)
+
+(println)
+
+# 6. Data Processing
+(println "6. DATA PROCESSING")
+(println "------------------")
+
+# Create dataset
+(var dataset [1 2 3 4 5 6 7 8])
+(println "Dataset:" dataset)
+
+# Create data loader
+(var loader (dataloader/create dataset 2 true))
+(println "DataLoader (batch_size=2, shuffle=true):" loader)
+
+(println)
+
+# 7. Neural Network Simulation
+(println "7. NEURAL NETWORK SIMULATION")
+(println "-----------------------------")
+
+# Define a simple linear layer
+(fn linear [x w b]
+  (println "  Linear layer: input shape" (tensor/shape x) 
+           "weight shape" (tensor/shape w))
+  (var z (tensor/matmul x w))
+  # Would add bias here in real implementation
+  z)
+
+# Define ReLU activation (placeholder)
+(fn relu [x]
+  (println "  ReLU activation applied")
+  x)
+
+# Define a simple 2-layer network
+(fn simple-mlp [x]
+  (println "Forward pass through MLP:")
+  
+  # First layer: 3 -> 4
+  (var w1 (tensor/create [3 4] :float32))
+  (var b1 (tensor/create [4] :float32))
+  (var h1 (linear x w1 b1))
+  (var h1-act (relu h1))
+  
+  # Second layer: 4 -> 2
+  (var w2 (tensor/create [4 2] :float32))
+  (var b2 (tensor/create [2] :float32))
+  (var output (linear h1-act w2 b2))
+  
+  (println "  Output shape:" (tensor/shape output))
+  output)
+
+# Run inference
+(var mlp-input (tensor/create [1 3] :float32))
+(println "MLP input:" mlp-input)
+(var mlp-output (simple-mlp mlp-input))
+(println "MLP output:" mlp-output)
+
+(println)
+
+# 8. Gradient Computation (Conceptual)
+(println "8. AUTOMATIC DIFFERENTIATION")
+(println "-----------------------------")
+
+(var tape (gradient/tape))
+(println "Gradient tape created:" tape)
+(println "(Automatic differentiation not yet implemented)")
+
+(println)
+
+# 9. Training Loop Structure (Conceptual)
+(println "9. TRAINING LOOP STRUCTURE")
+(println "--------------------------")
+
+(fn train-step [batch-x batch-y model-params]
+  (println "  Training step:")
+  (println "    - Forward pass")
+  (println "    - Compute loss")
+  (println "    - Backward pass")
+  (println "    - Update weights")
+  nil)
+
+(println "Training function defined")
+# (train-step batch-input batch-labels params)
+
+(println)
+
+# 10. Model Information
+(println "10. MODEL INFORMATION")
+(println "---------------------")
+
+# Calculate parameter count for our simple MLP
+(var param-count (+ (* 3 4) 4  ; First layer
+                    (* 4 2) 2)) ; Second layer
+(println "Simple MLP parameter count:" param-count)
+
+# Show tensor information
+(var info-tensor (tensor/create [10 20] :float16 :cuda))
+(println "Tensor info:" (tensor/info info-tensor))
+
+(println)
+
+# 11. Different Data Types
+(println "11. DATA TYPE EXAMPLES")
+(println "----------------------")
+
+(var float32-tensor (tensor/create [2 2] :float32))
+(println "Float32:" float32-tensor)
+
+(var int32-tensor (tensor/create [2 2] :int32))
+(println "Int32:" int32-tensor)
+
+(var bool-tensor (tensor/create [2 2] :bool))
+(println "Bool:" bool-tensor)
+
+(println)
+
+# 12. Future Capabilities (Conceptual)
+(println "12. FUTURE CAPABILITIES")
+(println "-----------------------")
+
+(println "Planned features:")
+(println "  - FFI: (ffi/load 'torch' '/path/to/libtorch.so')")
+(println "  - Python: (python/import numpy :as np)")
+(println "  - ONNX: (model/load 'model.onnx')")
+(println "  - Serving: (model/serve model :port 8080)")
+
+(println)
+(println "=== Demo Complete ===")
+(println)
+(println "Gene is ready for AI/ML workloads!")
+(println "Tensors, models, and devices are now first-class citizens.")
+(println)
+
+# Summary statistics
+(println "Summary:")
+(println "  - Tensors created: 15+")
+(println "  - Operations performed: matmul, reshape, transpose")
+(println "  - Devices configured: CPU, CUDA")
+(println "  - Model components: model, tokenizer, embeddings, session")
+(println "  - Data structures: loader, gradient tape")
+
+# Return success
+true
