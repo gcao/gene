@@ -1,0 +1,6 @@
+#!/usr/bin/env gene
+
+# Test map syntax
+(var m {^name "test", ^value 42})
+(println "Map created")
+(println m)

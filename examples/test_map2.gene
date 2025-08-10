@@ -1,0 +1,9 @@
+#!/usr/bin/env gene
+
+# Simple test without maps
+(var x 42)
+(println "x =" x)
+
+# Array test
+(var arr [1 2 3])
+(println "arr =" arr)

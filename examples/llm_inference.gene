@@ -8,57 +8,52 @@
 (println)
 
 # Model configuration (simulating a small GPT-like model)
-(var model-config {
-  ^name "gene-gpt-small"
-  ^vocab-size 50000
-  ^hidden-size 768
-  ^num-layers 12
-  ^num-heads 12
-  ^max-seq-length 512
-  ^device :cpu  ; Use :cuda for GPU
-})
+(var model-name "gene-gpt-small")
+(var vocab-size 50000)
+(var hidden-size 768)
+(var num-layers 12)
+(var num-heads 12)
+(var max-seq-length 512)
+(var device :cpu)  # Use :cuda for GPU
 
-(println "Model:" (model-config ^name))
-(println "Parameters:" (* (model-config ^hidden-size) 
-                          (model-config ^num-layers) 
-                          4)  ; Approximate parameter count
-         "million")
+(println "Model:" model-name)
+(println "Parameters: ~37 million")  # Approximate parameter count
 (println)
 
 # 1. Initialize Model Components
 (println "Loading model components...")
 
 # Create tokenizer
-(var tokenizer (tokenizer/create (model-config ^vocab-size)))
+(var tokenizer (tokenizer/create vocab-size))
 (println "  ✓ Tokenizer loaded")
 
 # Create embeddings
-(var embeddings (embedding/create (model-config ^hidden-size)))
+(var embeddings (embedding/create hidden-size))
 (println "  ✓ Embeddings initialized")
 
 # Create model (in real implementation, would load weights)
-(var model (model/create (model-config ^name) "gene"))
+(var model (model/create model-name "gene"))
 (println "  ✓ Model loaded")
 
 # Create device
-(var device (device/create (model-config ^device)))
-(println "  ✓ Device:" device)
+(var device-obj (device/create device))
+(println "  ✓ Device:" device-obj)
 
 # Create model session
-(var session (model/session model device))
+(var session (model/session model device-obj))
 (println "  ✓ Inference session ready")
 (println)
 
 # 2. Tokenization Functions (simulated)
 (fn tokenize [text]
-  ; Simulate tokenization - in reality would use actual tokenizer
+  # Simulate tokenization - in reality would use actual tokenizer
   (println "Tokenizing:" text)
-  ; Return mock token IDs
-  [101 2023 2003 1037 6291 102])  ; [CLS] this is a test [SEP]
+  # Return mock token IDs
+  [101 2023 2003 1037 6291 102])  # [CLS] this is a test [SEP]
 
 (fn decode-tokens [tokens]
-  ; Simulate decoding tokens back to text
-  ; In reality would use tokenizer vocabulary
+  # Simulate decoding tokens back to text
+  # In reality would use tokenizer vocabulary
   (case (tokens @ 0)
     198 "\n"
     13 "."
@@ -68,21 +63,21 @@
 
 # 3. Attention Mechanism (simplified structure)
 (fn multi-head-attention [query key value num-heads]
-  ; Simplified attention calculation
-  ; Q, K, V would be [batch_size, seq_len, hidden_size]
+  # Simplified attention calculation
+  # Q, K, V would be [batch_size, seq_len, hidden_size]
   (var head-dim (/ (tensor/shape query @ 2) num-heads))
   
-  ; Split into heads (simplified)
-  ; In reality: reshape and transpose for multi-head
+  # Split into heads (simplified)
+  # In reality: reshape and transpose for multi-head
   
-  ; Compute attention scores: Q @ K^T / sqrt(d_k)
+  # Compute attention scores: Q @ K^T / sqrt(d_k)
   (var scores (tensor/matmul query (tensor/transpose key)))
-  ; (var scores (/ scores (sqrt head-dim)))  ; Scale
+  # (var scores (/ scores (sqrt head-dim)))  # Scale
   
-  ; Apply softmax (placeholder)
-  ; (var attn-weights (softmax scores))
+  # Apply softmax (placeholder)
+  # (var attn-weights (softmax scores))
   
-  ; Apply attention to values
+  # Apply attention to values
   (var output (tensor/matmul scores value))
   
   output)
@@ -91,18 +86,18 @@
 (fn transformer-layer [input layer-idx]
   (println "    Layer" layer-idx "processing...")
   
-  ; Self-attention
+  # Self-attention
   (var attn-output (multi-head-attention 
                      input input input 
-                     (model-config ^num-heads)))
+                     num-heads))
   
-  ; Add & Norm (residual connection)
+  # Add & Norm (residual connection)
   (var hidden (tensor/add input attn-output))
   
-  ; Feed-forward network (simplified)
-  (var ff-output hidden)  ; Placeholder for FFN
+  # Feed-forward network (simplified)
+  (var ff-output hidden)  # Placeholder for FFN
   
-  ; Add & Norm again
+  # Add & Norm again
   (var output (tensor/add hidden ff-output))
   
   output)
@@ -111,20 +106,20 @@
 (fn model-forward [input-ids]
   (println "  Running forward pass...")
   
-  ; Convert tokens to embeddings
-  ; Shape: [batch_size, seq_len] -> [batch_size, seq_len, hidden_size]
+  # Convert tokens to embeddings
+  # Shape: [batch_size, seq_len] -> [batch_size, seq_len, hidden_size]
   (var hidden-states (tensor/create 
-                       [1 (len input-ids) (model-config ^hidden-size)]
+                       [1 (len input-ids) hidden-size]
                        :float32))
   
-  ; Pass through transformer layers
-  (loop [layer 0 .. (model-config ^num-layers)]
+  # Pass through transformer layers
+  (loop [layer 0 .. num-layers]
     (var hidden-states (transformer-layer hidden-states layer)))
   
-  ; Final layer norm and projection to vocabulary
-  ; Output shape: [batch_size, seq_len, vocab_size]
+  # Final layer norm and projection to vocabulary
+  # Output shape: [batch_size, seq_len, vocab_size]
   (var logits (tensor/create 
-                [1 (len input-ids) (model-config ^vocab-size)]
+                [1 (len input-ids) vocab-size]
                 :float32))
   
   (println "  ✓ Forward pass complete")
@@ -132,13 +127,13 @@
 
 # 6. Sampling Strategy
 (fn sample-next-token [logits temperature]
-  ; Get logits for last position
-  ; In reality: apply temperature, top-k, top-p sampling
+  # Get logits for last position
+  # In reality: apply temperature, top-k, top-p sampling
   
-  ; Simplified: return a mock token
+  # Simplified: return a mock token
   (if (> temperature 0.7)
-    198  ; Newline for variety
-    13)) ; Period for conservative sampling
+    198  # Newline for variety
+    13)) # Period for conservative sampling
 
 # 7. Text Generation Loop
 (fn generate-text [prompt max-tokens temperature]
@@ -148,30 +143,30 @@
   (println "Temperature:" temperature)
   (println)
   
-  ; Tokenize input
+  # Tokenize input
   (var input-ids (tokenize prompt))
   (var generated-tokens [])
   
-  ; Generation loop
+  # Generation loop
   (println "Generation:")
   (print "  \"" prompt)
   
   (loop [step 0 .. max-tokens]
-    ; Forward pass
+    # Forward pass
     (var logits (model-forward input-ids))
     
-    ; Sample next token
+    # Sample next token
     (var next-token (sample-next-token logits temperature))
     
-    ; Decode and print
+    # Decode and print
     (var next-text (decode-tokens [next-token]))
     (print next-text)
     
-    ; Add to sequence
+    # Add to sequence
     (var input-ids (append input-ids next-token))
     (var generated-tokens (append generated-tokens next-token))
     
-    ; Stop if end-of-sequence token
+    # Stop if end-of-sequence token
     (if (= next-token 0)
       (break)))
   
@@ -187,12 +182,12 @@
   (println "Context:" context)
   (println)
   
-  ; Format as QA prompt
+  # Format as QA prompt
   (var prompt (str "Context: " context "\n"
                    "Question: " question "\n"
                    "Answer:"))
   
-  ; Generate answer
+  # Generate answer
   (var answer-tokens (generate-text prompt 50 0.7))
   
   (println "Answer generated with" (len answer-tokens) "tokens"))
@@ -202,12 +197,12 @@
   (println "=== Chat Mode ===")
   (println "User:" message)
   
-  ; Format chat history
+  # Format chat history
   (var prompt (str "Assistant: I'm a helpful AI assistant.\n"
                    "User: " message "\n"
                    "Assistant:"))
   
-  ; Generate response
+  # Generate response
   (var response (generate-text prompt 100 0.8))
   
   (println "Response generated"))
@@ -235,13 +230,11 @@
 
 # 11. Performance Metrics
 (println "=== Performance Metrics ===")
-(println "Model size:" (/ (* (model-config ^hidden-size) 
-                           (model-config ^num-layers) 
-                           4 4) 
+(println "Model size:" (/ (* hidden-size num-layers 4 4) 
                         1024) "MB (estimated)")
-(println "Inference device:" (model-config ^device))
-(println "Max sequence length:" (model-config ^max-seq-length))
-(println "Vocabulary size:" (model-config ^vocab-size))
+(println "Inference device:" device)
+(println "Max sequence length:" max-seq-length)
+(println "Vocabulary size:" vocab-size)
 (println)
 
 # 12. Advanced Features (Conceptual)
@@ -261,14 +254,14 @@
   (var tokens (tokenize prompt))
   
   (loop [i 0 .. 10]
-    ; Generate one token
+    # Generate one token
     (var next-token (sample-next-token nil 0.8))
     (var text (decode-tokens [next-token]))
     
-    ; Stream to callback
+    # Stream to callback
     (callback text)
     
-    ; Add to context
+    # Add to context
     (var tokens (append tokens next-token))))
 
 # Example callback
@@ -287,22 +280,15 @@
 # Show how to load different models
 (fn load-model [model-path]
   (println "Loading model from:" model-path)
-  ; In reality: (model/load model-path)
+  # In reality: (model/load model-path)
   (model/create "custom-model" "gguf"))
 
 # Show model variants
-(var model-variants [
-  {^name "gene-gpt-tiny" ^params "100M" ^context 512}
-  {^name "gene-gpt-small" ^params "300M" ^context 2048}
-  {^name "gene-gpt-medium" ^params "1B" ^context 4096}
-  {^name "gene-gpt-large" ^params "7B" ^context 8192}
-])
-
 (println "Available models:")
-(for [variant model-variants]
-  (println "  •" (variant ^name) 
-           "-" (variant ^params) "parameters,"
-           (variant ^context) "context"))
+(println "  • gene-gpt-tiny - 100M parameters, 512 context")
+(println "  • gene-gpt-small - 300M parameters, 2048 context")
+(println "  • gene-gpt-medium - 1B parameters, 4096 context")
+(println "  • gene-gpt-large - 7B parameters, 8192 context")
 (println)
 
 # 14. Conclusion

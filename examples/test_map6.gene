@@ -1,0 +1,7 @@
+#!/usr/bin/env gene
+
+# Test map access
+(var m {^name "test" ^value 42})
+(println "Map:" m)
+(println "Name:" (m .name))
+(println "Value:" (m .value))

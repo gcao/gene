@@ -8,17 +8,15 @@
 (println)
 
 # Ollama configuration
-(var ollama-config {
-  ^api-url "http://localhost:11434"
-  ^model "llama2:7b"         ; Can be llama2, mistral, codellama, etc.
-  ^timeout 60000              ; 60 seconds timeout
-  ^stream true                ; Stream responses
-})
+(var ollama-api-url "http://localhost:11434")
+(var ollama-model "llama2:7b")  # Can be llama2, mistral, codellama, etc.
+(var ollama-timeout 60000)      # 60 seconds timeout
+(var ollama-stream true)        # Stream responses
 
 # 1. HTTP Client for Ollama API
 (fn http-post [url data]
-  ; In real implementation, would use HTTP library via FFI
-  ; For now, simulating the HTTP call
+  # In real implementation, would use HTTP library via FFI
+  # For now, simulating the HTTP call
   (println "  POST " url)
   {^status 200
    ^body "{\"response\": \"Simulated response from Ollama\"}"})
@@ -41,9 +39,9 @@
     }
   })
   
-  ; Make API call
+  # Make API call
   (var response (http-post 
-                  (str (ollama-config ^api-url) "/api/generate")
+                  (str ollama-api-url "/api/generate")
                   request))
   
   (if (= (response ^status) 200)
@@ -58,14 +56,14 @@
 (fn ollama-stream-generate [prompt model-name callback]
   (println "Streaming from Ollama...")
   
-  ; Simulate streaming response
+  # Simulate streaming response
   (var tokens ["The " "answer " "to " "your " "question " "is " 
                 "quite " "interesting. " "Let " "me " "explain " 
                 "in " "detail. "])
   
   (for [token tokens]
     (callback token)
-    ; Small delay to simulate streaming
+    # Small delay to simulate streaming
     ))
 
 # 4. Chat Interface
@@ -79,7 +77,7 @@
   })
   
   (var response (http-post
-                  (str (ollama-config ^api-url) "/api/chat")
+                  (str ollama-api-url "/api/chat")
                   request))
   
   (if (= (response ^status) 200)
@@ -90,7 +88,7 @@
 (fn ollama-list-models []
   (println "Available Ollama models:")
   
-  ; Simulated model list
+  # Simulated model list
   (var models [
     {^name "llama2:7b" ^size "3.8GB" ^description "Meta's Llama 2 7B"}
     {^name "llama2:13b" ^size "7.4GB" ^description "Meta's Llama 2 13B"}
@@ -126,7 +124,7 @@
     ^prompt text
   })
   
-  ; Return mock embeddings
+  # Return mock embeddings
   (tensor/random [1 4096]))
 
 # 8. High-Level Wrapper Functions
@@ -152,18 +150,18 @@
   
   (var messages [])
   
-  ; System message
+  # System message
   (var messages (append messages 
                        {^role "system" 
                         ^content "You are a helpful AI assistant."}))
   
-  ; User message
+  # User message
   (var user-msg "Hello! Can you explain what Gene programming language is?")
   (println "User: " user-msg)
   (var messages (append messages 
                        {^role "user" ^content user-msg}))
   
-  ; Get response
+  # Get response
   (var response (ollama-chat messages model))
   
   (if response
@@ -198,19 +196,19 @@
   (println "\n=== RAG-based Q&A ===")
   (println "Question: " question)
   
-  ; Get embeddings for question
+  # Get embeddings for question
   (var q-embedding (ollama-embeddings question model))
   
-  ; Get embeddings for documents
+  # Get embeddings for documents
   (var doc-embeddings [])
   (for [doc documents]
     (var embedding (ollama-embeddings doc model))
     (var doc-embeddings (append doc-embeddings embedding)))
   
-  ; Find most relevant document (simplified)
+  # Find most relevant document (simplified)
   (var relevant-doc (documents @ 0))
   
-  ; Create augmented prompt
+  # Create augmented prompt
   (var prompt (str "Based on the following context, answer the question.\n\n"
                    "Context: " relevant-doc "\n\n"
                    "Question: " question "\n\n"
@@ -275,24 +273,24 @@
   (println "Starting Ollama integration demo...")
   (println)
   
-  ; List available models
+  # List available models
   (var models (ollama-list-models))
   (println)
   
-  ; Simple generation
+  # Simple generation
   (ask-ollama 
     "What is the difference between machine learning and deep learning?"
     "llama2:7b")
   
-  ; Chat session
+  # Chat session
   (chat-with-ollama "mistral:7b")
   
-  ; Code generation
+  # Code generation
   (generate-code-with-ollama 
     "sort an array using quicksort" 
     "python")
   
-  ; RAG example
+  # RAG example
   (var knowledge-base [
     "Gene is a Lisp-like programming language implemented in Nim."
     "Gene features tensor operations and AI capabilities."
@@ -304,17 +302,17 @@
     knowledge-base
     "llama2:7b")
   
-  ; Model comparison
+  # Model comparison
   (compare-models 
     "Explain quantum computing in simple terms"
     ["llama2:7b" "mistral:7b" "phi-2:2.7b"])
   
-  ; Specialized assistant
+  # Specialized assistant
   (specialized-assistant 
     "software architect"
     "distributed systems and microservices")
   
-  ; Streaming example
+  # Streaming example
   (println "\n=== Streaming Response ===")
   (print "Response: ")
   (ollama-stream-generate 

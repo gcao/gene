@@ -1,0 +1,5 @@
+#!/usr/bin/env gene
+
+# Test map with string keys
+(var m {"name" "test", "value" 42})
+(println "Map:" m)

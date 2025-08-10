@@ -36,40 +36,40 @@
 
 # 1. Document Embedding Function
 (fn embed-document [doc]
-  ; Generate embeddings for a document
-  ; In practice, would use actual embedding model
+  # Generate embeddings for a document
+  # In practice, would use actual embedding model
   (var tokens (tokenize (doc ^content)))
-  (var embedding (tensor/random [768]))  ; Mock embedding
+  (var embedding (tensor/random [768]))  # Mock embedding
   {^topic (doc ^topic)
    ^content (doc ^content)
    ^embedding embedding})
 
 # 2. Similarity Calculation
 (fn cosine-similarity [vec1 vec2]
-  ; Calculate cosine similarity between two vectors
-  ; cos(θ) = (A·B) / (||A|| ||B||)
+  # Calculate cosine similarity between two vectors
+  # cos(θ) = (A·B) / (||A|| ||B||)
   (var dot-product (tensor/matmul 
                      (tensor/reshape vec1 [1 768])
                      (tensor/reshape vec2 [768 1])))
-  ; Simplified - would normalize in practice
+  # Simplified - would normalize in practice
   dot-product)
 
 # 3. Find Relevant Documents
 (fn find-relevant-docs [query docs num-results]
   (println "Searching knowledge base...")
   
-  ; Embed the query
-  (var query-embedding (tensor/random [768]))  ; Mock
+  # Embed the query
+  (var query-embedding (tensor/random [768]))  # Mock
   
-  ; Calculate similarities
+  # Calculate similarities
   (var similarities [])
   (for [doc docs]
     (var sim (cosine-similarity query-embedding (doc ^embedding)))
     (var similarities (append similarities 
                              {^doc doc ^score sim})))
   
-  ; Sort by similarity (simplified)
-  ; In practice, would properly sort
+  # Sort by similarity (simplified)
+  # In practice, would properly sort
   (var top-docs (take num-results similarities))
   
   (println "  Found" (len top-docs) "relevant documents")
@@ -79,14 +79,14 @@
 (fn generate-answer [question context]
   (println "Generating answer...")
   
-  ; Format prompt for Q&A
+  # Format prompt for Q&A
   (var prompt (str "Answer the following question based on the context provided.\n\n"
                    "Context:\n" context "\n\n"
                    "Question: " question "\n\n"
                    "Answer: "))
   
-  ; In practice, would use actual LLM
-  ; For demo, create a simple response
+  # In practice, would use actual LLM
+  # For demo, create a simple response
   (var answer
     (cond
       (contains? question "what")
@@ -108,18 +108,18 @@
   (println "Question:" question)
   (println "-" 60)
   
-  ; Embed all documents (would be pre-computed in practice)
+  # Embed all documents (would be pre-computed in practice)
   (var embedded-docs (map embed-document knowledge-base))
   
-  ; Find relevant documents
+  # Find relevant documents
   (var relevant (find-relevant-docs question embedded-docs 2))
   
-  ; Combine context from relevant documents
+  # Combine context from relevant documents
   (var context "")
   (for [result relevant]
     (var context (str context ((result ^doc) ^content) "\n\n")))
   
-  ; Generate answer
+  # Generate answer
   (var answer (generate-answer question context))
   
   (println "\nAnswer:")
@@ -136,15 +136,15 @@
   
   (loop
     (print "Ask a question: ")
-    ; In practice, would read from stdin
-    (var question "What is Gene?")  ; Mock input
+    # In practice, would read from stdin
+    (var question "What is Gene?")  # Mock input
     
     (if (= question "quit")
       (break))
     
     (answer-question question)
     
-    ; For demo, just run once
+    # For demo, just run once
     (break)))
 
 # 7. Batch Q&A Processing
@@ -167,12 +167,12 @@
   (println "\n=== Q&A with Confidence ===")
   (println "Question:" question)
   
-  ; Get relevant docs with scores
+  # Get relevant docs with scores
   (var embedded-docs (map embed-document knowledge-base))
   (var relevant (find-relevant-docs question embedded-docs 3))
   
-  ; Calculate confidence based on relevance scores
-  (var confidence 0.85)  ; Mock confidence
+  # Calculate confidence based on relevance scores
+  (var confidence 0.85)  # Mock confidence
   
   (var context "")
   (for [result relevant]
@@ -191,7 +191,7 @@
 (fn ask-with-context [question]
   (println "\n=== Contextual Q&A ===")
   
-  ; Include conversation history in context
+  # Include conversation history in context
   (var full-question question)
   (if (> (len conversation-history) 0)
     (do
@@ -200,7 +200,7 @@
   
   (var answer (answer-question full-question))
   
-  ; Update conversation history
+  # Update conversation history
   (var conversation-history 
     (append conversation-history 
             {^question question ^answer answer}))
@@ -244,7 +244,7 @@
 # Multi-modal Q&A (future)
 (fn multimodal-qa [text image]
   (println "Processing text and image...")
-  ; Would process both text and image inputs
+  # Would process both text and image inputs
   "Multi-modal answer")
 
 # Streaming answers
@@ -257,8 +257,8 @@
 # RAG (Retrieval-Augmented Generation)
 (fn rag-answer [question external-db]
   (println "Using RAG for:" question)
-  ; Would search external database
-  ; Combine with LLM generation
+  # Would search external database
+  # Combine with LLM generation
   "RAG-enhanced answer")
 
 (println "\n=== Q&A System Demo Complete ===")
