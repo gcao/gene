@@ -24,11 +24,11 @@ proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.addHelp("eval <code>: evaluate <code> as a gene expression")
-  manager.addHelp("  -d, --debug: enable debug output")
-  manager.addHelp("  --csv: print result as CSV")
-  manager.addHelp("  --gene: print result as gene expression")
-  manager.addHelp("  --line: evaluate as a single line")
+  manager.add_help("eval <code>: evaluate <code> as a gene expression")
+  manager.add_help("  -d, --debug: enable debug output")
+  manager.add_help("  --csv: print result as CSV")
+  manager.add_help("  --gene: print result as gene expression")
+  manager.add_help("  --line: evaluate as a single line")
 
 let short_no_val = {'d'}
 let long_no_val = @[

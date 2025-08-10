@@ -14,8 +14,8 @@ proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.addHelp("repl: start an interactive REPL")
-  manager.addHelp("  -d, --debug: enable debug output")
+  manager.add_help("repl: start an interactive REPL")
+  manager.add_help("  -d, --debug: enable debug output")
 
 let short_no_val = {'d'}
 let long_no_val: seq[string] = @[]

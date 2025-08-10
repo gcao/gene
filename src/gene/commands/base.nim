@@ -49,6 +49,6 @@ proc register*(self: CommandManager, cmds: seq[string], cmd: Command) =
   for c in cmds:
     self.data[c] = cmd
 
-proc addHelp*(self: CommandManager, help: string) =
+proc add_help*(self: CommandManager, help: string) =
   ## Adds help text to the command manager
   self.help &= help & "\n"

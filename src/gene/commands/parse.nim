@@ -35,7 +35,7 @@ Examples:
   gene parse --format sexp file.gene # Output in S-expression format
 """
 
-proc parseArgs(args: seq[string]): ParseOptions =
+proc parse_args(args: seq[string]): ParseOptions =
   result.format = "pretty"
   
   # Workaround: get_opt reads from command line when given empty args
@@ -64,7 +64,7 @@ proc parseArgs(args: seq[string]): ParseOptions =
     of cmdEnd:
       discard
 
-proc formatValue(value: Value, format: string, indent: int = 0): string =
+proc format_value(value: Value, format: string, indent: int = 0): string =
   case format
   of "compact":
     # Output valid Gene syntax without extra whitespace
@@ -99,7 +99,7 @@ proc formatValue(value: Value, format: string, indent: int = 0): string =
       result = "["
       for i, item in value.ref.arr:
         if i > 0: result &= " "
-        result &= formatValue(item, format)
+        result &= format_value(item, format)
       result &= "]"
     of VkMap:
       result = "{"
@@ -108,20 +108,20 @@ proc formatValue(value: Value, format: string, indent: int = 0): string =
         if not first: result &= " "
         let symbol_value = cast[Value](k)
         let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
-        result &= "^" & get_symbol(symbol_index.int) & " " & formatValue(v, format)
+        result &= "^" & get_symbol(symbol_index.int) & " " & format_value(v, format)
         first = false
       result &= "}"
     of VkGene:
       result = "("
-      result &= formatValue(value.gene.type, format)
+      result &= format_value(value.gene.type, format)
       # Add properties
       for k, v in value.gene.props:
         let symbol_value = cast[Value](k)
         let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
-        result &= " ^" & get_symbol(symbol_index.int) & " " & formatValue(v, format)
+        result &= " ^" & get_symbol(symbol_index.int) & " " & format_value(v, format)
       # Add children
       for child in value.gene.children:
-        result &= " " & formatValue(child, format)
+        result &= " " & format_value(child, format)
       result &= ")"
     else:
       return $value
@@ -130,16 +130,16 @@ proc formatValue(value: Value, format: string, indent: int = 0): string =
     case value.kind
     of VkGene:
       result = "("
-      result &= formatValue(value.gene.type, "compact")
+      result &= format_value(value.gene.type, "compact")
       for k, v in value.gene.props:
         let symbol_value = cast[Value](k)
         let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
-        result &= " :" & get_symbol(symbol_index.int) & " " & formatValue(v, "compact")
+        result &= " :" & get_symbol(symbol_index.int) & " " & format_value(v, "compact")
       for child in value.gene.children:
-        result &= " " & formatValue(child, "compact")
+        result &= " " & format_value(child, "compact")
       result &= ")"
     else:
-      return formatValue(value, "compact")
+      return format_value(value, "compact")
   else:  # "pretty"
     let spaces = "  ".repeat(indent)
     case value.kind
@@ -174,7 +174,7 @@ proc formatValue(value: Value, format: string, indent: int = 0): string =
         return spaces & "[]"
       result = spaces & "[\n"
       for item in value.ref.arr:
-        result &= formatValue(item, format, indent + 1) & "\n"
+        result &= format_value(item, format, indent + 1) & "\n"
       result &= spaces & "]"
     of VkMap:
       if value.ref.map.len == 0:
@@ -183,27 +183,27 @@ proc formatValue(value: Value, format: string, indent: int = 0): string =
       for k, v in value.ref.map:
         let symbol_value = cast[Value](k)
         let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
-        result &= spaces & "  ^" & get_symbol(symbol_index.int) & " " & formatValue(v, "compact") & "\n"
+        result &= spaces & "  ^" & get_symbol(symbol_index.int) & " " & format_value(v, "compact") & "\n"
       result &= spaces & "}"
     of VkGene:
-      result = spaces & "(" & formatValue(value.gene.type, "compact")
+      result = spaces & "(" & format_value(value.gene.type, "compact")
       # Add properties inline
       for k, v in value.gene.props:
         let symbol_value = cast[Value](k)
         let symbol_index = cast[uint64](symbol_value) and PAYLOAD_MASK
-        result &= " ^" & get_symbol(symbol_index.int) & " " & formatValue(v, "compact")
+        result &= " ^" & get_symbol(symbol_index.int) & " " & format_value(v, "compact")
       # Add children
       if value.gene.children.len > 0:
         result &= "\n"
         for child in value.gene.children:
-          result &= formatValue(child, format, indent + 1) & "\n"
+          result &= format_value(child, format, indent + 1) & "\n"
         result &= spaces
       result &= ")"
     else:
       return spaces & $value
 
 proc handle*(cmd: string, args: seq[string]): CommandResult =
-  let options = parseArgs(args)
+  let options = parse_args(args)
   
   if options.help:
     echo help_text
@@ -238,7 +238,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
           for i, value in parsed:
             if i > 0:
               echo ""
-            echo formatValue(value, options.format)
+            echo format_value(value, options.format)
       except ParseError as e:
         stderr.writeLine("Parse error in " & source_name & ": " & e.msg)
         quit(1)
@@ -271,7 +271,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
       for i, value in parsed:
         if i > 0:
           echo ""
-        echo formatValue(value, options.format)
+        echo format_value(value, options.format)
   except ParseError as e:
     stderr.writeLine("Parse error: " & e.msg)
     quit(1)
@@ -280,4 +280,4 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
 
 proc init*(manager: CommandManager) =
   manager.register("parse", handle)
-  manager.addHelp("  parse    Parse Gene code and output AST")
+  manager.add_help("  parse    Parse Gene code and output AST")

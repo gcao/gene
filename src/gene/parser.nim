@@ -97,28 +97,28 @@ type
 
   ParserConfig* = ref object
     initialized*: bool
-    defaultUnits*: Table[string, Value]
-    hexTable*: Table[char, uint8]
-    dateFormat*: TimeFormat
-    datetimeFormat*: TimeFormat
+    default_units*: Table[string, Value]
+    hex_table*: Table[char, uint8]
+    date_format*: TimeFormat
+    datetime_format*: TimeFormat
     macros*: MacroArray
-    dispatchMacros*: MacroArray
+    dispatch_macros*: MacroArray
     handlers*: Table[Key, Handler]
 
 const non_constituents: seq[char] = @[]
 
 # Global parser configuration - thread-local for safety
-var parserConfig {.threadvar.}: ParserConfig
+var parser_config {.threadvar.}: ParserConfig
 
 # Backward compatibility aliases
-template INITIALIZED(): bool = parserConfig.initialized
-template DEFAULT_UNITS(): Table[string, Value] = parserConfig.defaultUnits
-template HEX(): Table[char, uint8] = parserConfig.hexTable
-template DATE_FORMAT(): TimeFormat = parserConfig.dateFormat
-template DATETIME_FORMAT(): TimeFormat = parserConfig.datetimeFormat
-template macros(): MacroArray = parserConfig.macros
-template dispatch_macros(): MacroArray = parserConfig.dispatchMacros
-template handlers(): Table[Key, Handler] = parserConfig.handlers
+template INITIALIZED(): bool = parser_config.initialized
+template DEFAULT_UNITS(): Table[string, Value] = parser_config.default_units
+template HEX(): Table[char, uint8] = parser_config.hex_table
+template DATE_FORMAT(): TimeFormat = parser_config.date_format
+template DATETIME_FORMAT(): TimeFormat = parser_config.datetime_format
+template macros(): MacroArray = parser_config.macros
+template dispatch_macros(): MacroArray = parser_config.dispatch_macros
+template handlers(): Table[Key, Handler] = parser_config.handlers
 
 #################### Interfaces ##################
 
@@ -194,7 +194,7 @@ proc `unit`*(self: ParseOptions, name: string): Value =
 #################### Parser ######################
 
 proc new_parser*(options: ParseOptions): Parser =
-  if parserConfig == nil or not parserConfig.initialized:
+  if parser_config == nil or not parser_config.initialized:
     init()
 
   return Parser(
@@ -204,7 +204,7 @@ proc new_parser*(options: ParseOptions): Parser =
   )
 
 proc new_parser*(): Parser =
-  if parserConfig == nil or not parserConfig.initialized:
+  if parser_config == nil or not parser_config.initialized:
     init()
 
   return Parser(
@@ -935,26 +935,26 @@ proc init_handlers() =
   discard
 
 proc init*() =
-  if parserConfig != nil and parserConfig.initialized:
+  if parser_config != nil and parser_config.initialized:
     return
 
   # Create new parser configuration
-  parserConfig = ParserConfig(
+  parser_config = ParserConfig(
     initialized: true,
-    defaultUnits: {
+    default_units: {
       "m": 60.to_value(),       # m  = minute
       "s": 1.to_value(),        # s  = second (default)
       "ms": 0.001.to_value(),   # ms = millisecond
       "ns": 1e-9.to_value(),    # ns = nanosecond
     }.to_table(),
-    hexTable: {
+    hex_table: {
       '0': 0u8, '1': 1u8, '2': 2u8, '3': 3u8, '4': 4u8,
       '5': 5u8, '6': 6u8, '7': 7u8, '8': 8u8, '9': 9u8,
       'a': 10u8, 'b': 11u8, 'c': 12u8, 'd': 13u8, 'e': 14u8, 'f': 15u8,
       'A': 10u8, 'B': 11u8, 'C': 12u8, 'D': 13u8, 'E': 14u8, 'F': 15u8,
     }.to_table(),
-    dateFormat: init_time_format("yyyy-MM-dd"),
-    datetimeFormat: init_time_format("yyyy-MM-dd'T'HH:mm:sszzz"),
+    date_format: init_time_format("yyyy-MM-dd"),
+    datetime_format: init_time_format("yyyy-MM-dd'T'HH:mm:sszzz"),
     handlers: initTable[Key, Handler]()
   )
 

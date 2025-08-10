@@ -26,18 +26,18 @@ type
     metadata*: JsonNode
 
 # Serialization helpers
-proc writeString(stream: Stream, s: string) =
+proc write_string(stream: Stream, s: string) =
   stream.write(s.len.uint32)
   if s.len > 0:
     stream.write(s)
 
-proc readString(stream: Stream): string =
+proc read_string(stream: Stream): string =
   let len = stream.readUint32()
   if len > 0:
     result = newString(len)
     discard stream.readData(result[0].addr, len.int)
 
-proc writeValue(stream: Stream, v: Value) =
+proc write_value(stream: Stream, v: Value) =
   # Special handling for scope trackers - write NIL instead
   if v.kind == VkScopeTracker:
     stream.write(VkNil.uint16)
@@ -57,9 +57,9 @@ proc writeValue(stream: Stream, v: Value) =
   of VkFloat:
     stream.write(v.float64)
   of VkString:
-    stream.writeString(v.str)
+    stream.write_string(v.str)
   of VkSymbol:
-    stream.writeString(v.str)
+    stream.write_string(v.str)
   of VkChar:
     stream.write(v.char.uint32)
   else:
@@ -67,7 +67,7 @@ proc writeValue(stream: Stream, v: Value) =
     # or serialized separately
     stream.write(cast[uint64](v))
 
-proc readValue(stream: Stream): Value =
+proc read_value(stream: Stream): Value =
   let kind = cast[ValueKind](stream.readUint16())
   
   case kind:
@@ -84,29 +84,29 @@ proc readValue(stream: Stream): Value =
   of VkFloat:
     result = stream.readFloat64().to_value()
   of VkString:
-    result = stream.readString().to_value()
+    result = stream.read_string().to_value()
   of VkSymbol:
-    result = stream.readString().to_symbol_value()
+    result = stream.read_string().to_symbol_value()
   of VkChar:
     result = stream.readUint32().char.to_value()
   else:
     # Complex types - read raw value for now
     result = cast[Value](stream.readUint64())
 
-proc writeInstruction(stream: Stream, inst: Instruction) =
+proc write_instruction(stream: Stream, inst: Instruction) =
   stream.write(inst.kind.uint16)
   stream.write(inst.label.uint32)
-  stream.writeValue(inst.arg0)
+  stream.write_value(inst.arg0)
   stream.write(inst.arg1)
 
-proc readInstruction(stream: Stream): Instruction =
+proc read_instruction(stream: Stream): Instruction =
   result.kind = cast[InstructionKind](stream.readUint16())
   result.label = stream.readUint32().Label
-  result.arg0 = stream.readValue()
+  result.arg0 = stream.read_value()
   result.arg1 = stream.readInt32()
 
 # Main serialization functions
-proc saveGir*(cu: CompilationUnit, path: string, source_path: string = "", debug: bool = false) =
+proc save_gir*(cu: CompilationUnit, path: string, source_path: string = "", debug: bool = false) =
   ## Save a compilation unit to a GIR file
   let dir = path.parentDir()
   if dir != "" and not dirExists(dir):
@@ -135,8 +135,8 @@ proc saveGir*(cu: CompilationUnit, path: string, source_path: string = "", debug
   # Write header fields
   stream.write(header.magic)
   stream.write(header.version)
-  stream.writeString(header.compiler_version)
-  stream.writeString(header.vm_abi)
+  stream.write_string(header.compiler_version)
+  stream.write_string(header.vm_abi)
   stream.write(header.timestamp)
   stream.write(header.debug)
   stream.write(header.published)
@@ -150,7 +150,7 @@ proc saveGir*(cu: CompilationUnit, path: string, source_path: string = "", debug
   # Write constants
   stream.write(constants.len.uint32)
   for c in constants:
-    stream.writeValue(c)
+    stream.write_value(c)
   
   # Write symbol table (for now empty - will be populated from global symbols)
   stream.write(0'u32)  # symbol count
@@ -161,11 +161,11 @@ proc saveGir*(cu: CompilationUnit, path: string, source_path: string = "", debug
     stream.writeInstruction(inst)
   
   # Write metadata as simple values for now
-  stream.writeString($cu.kind)
+  stream.write_string($cu.kind)
   stream.write(cast[int64](cu.id))
   stream.write(cu.skip_return)
 
-proc loadGir*(path: string): CompilationUnit =
+proc load_gir*(path: string): CompilationUnit =
   ## Load a compilation unit from a GIR file
   if not fileExists(path):
     raise new_exception(types.Exception, "GIR file not found: " & path)
@@ -183,8 +183,8 @@ proc loadGir*(path: string): CompilationUnit =
   if header.version != GIR_VERSION:
     raise new_exception(types.Exception, "Unsupported GIR version: " & $header.version)
   
-  header.compiler_version = stream.readString()
-  header.vm_abi = stream.readString()
+  header.compiler_version = stream.read_string()
+  header.vm_abi = stream.read_string()
   header.timestamp = stream.readInt64()
   header.debug = stream.readBool()
   header.published = stream.readBool()
@@ -194,13 +194,13 @@ proc loadGir*(path: string): CompilationUnit =
   let constant_count = stream.readUint32()
   var constants: seq[Value] = @[]
   for i in 0..<constant_count:
-    constants.add(stream.readValue())
+    constants.add(stream.read_value())
   
   # Read symbol table
   let symbol_count = stream.readUint32()
   var symbols: seq[string] = @[]
   for i in 0..<symbol_count:
-    symbols.add(stream.readString())
+    symbols.add(stream.read_string())
   
   # Read instructions
   let instruction_count = stream.readUint32()
@@ -209,13 +209,13 @@ proc loadGir*(path: string): CompilationUnit =
     result.instructions.add(stream.readInstruction())
   
   # Read metadata
-  let kind_str = stream.readString()
+  let kind_str = stream.read_string()
   if kind_str != "":
     result.kind = parseEnum[CompilationUnitKind](kind_str)
   result.id = stream.readInt64().Id
   result.skip_return = stream.readBool()
 
-proc isGirUpToDate*(gir_path: string, source_path: string): bool =
+proc is_gir_up_to_date*(gir_path: string, source_path: string): bool =
   ## Check if a GIR file is up-to-date with its source
   if not fileExists(gir_path):
     return false
@@ -233,7 +233,7 @@ proc isGirUpToDate*(gir_path: string, source_path: string): bool =
   # TODO: Check source hash from GIR header
   return true
 
-proc getGirPath*(source_path: string, out_dir: string = "build"): string =
+proc get_gir_path*(source_path: string, out_dir: string = "build"): string =
   ## Get the output path for a GIR file based on source path
   let (dir, name, _) = splitFile(source_path)
   let rel_dir = if dir.startsWith("/"): dir[1..^1] else: dir

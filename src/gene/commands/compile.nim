@@ -340,10 +340,10 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
       
       # Check if GIR output is requested
       if options.format == "gir":
-        let gir_path = getGirPath(file, options.out_dir)
+        let gir_path = get_gir_path(file, options.out_dir)
         
         # Check if recompilation is needed
-        if not options.force and isGirUpToDate(gir_path, file):
+        if not options.force and is_gir_up_to_date(gir_path, file):
           echo "Up-to-date: " & gir_path
           continue
         
@@ -354,7 +354,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
           let compiled = compile(parsed)
           
           # Save to GIR file
-          saveGir(compiled, gir_path, file, options.emit_debug)
+          save_gir(compiled, gir_path, file, options.emit_debug)
           echo "Written: " & gir_path
         except ParseError as e:
           stderr.writeLine("Parse error in " & source_name & ": " & e.msg)
@@ -427,4 +427,4 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
 
 proc init*(manager: CommandManager) =
   manager.register("compile", handle)
-  manager.addHelp("  compile  Compile Gene code and output bytecode")
+  manager.add_help("  compile  Compile Gene code and output bytecode")

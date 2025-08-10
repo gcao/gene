@@ -7,7 +7,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.addHelp("help [command]: show help for all commands or specific command")
+  manager.add_help("help [command]: show help for all commands or specific command")
 
 proc handle*(cmd: string, args: seq[string]): CommandResult =
   var output = ""

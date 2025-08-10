@@ -29,7 +29,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult
 
 proc init*(manager: CommandManager) =
   manager.register(COMMANDS, handle)
-  manager.addHelp("run <file>: parse and execute <file>")
+  manager.add_help("run <file>: parse and execute <file>")
 
 let short_no_val = {'d'}
 let long_no_val = @[
@@ -137,7 +137,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
       
       try:
         # Load the GIR file
-        let compiled = loadGir(file)
+        let compiled = load_gir(file)
         
         if options.compile or options.debugging:
           echo "=== Loaded GIR: " & file & " ==="
@@ -166,8 +166,8 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
     
     # Regular .gene file - check for cached GIR
     if not options.no_gir_cache:
-      let gir_path = getGirPath(file, "build")
-      if fileExists(gir_path) and isGirUpToDate(gir_path, file):
+      let gir_path = get_gir_path(file, "build")
+      if fileExists(gir_path) and is_gir_up_to_date(gir_path, file):
         # Use cached GIR
         if options.debugging:
           echo "Using cached GIR: " & gir_path
@@ -183,7 +183,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
           VM.instruction_profiling = true
         
         try:
-          let compiled = loadGir(gir_path)
+          let compiled = load_gir(gir_path)
           
           if VM.frame == nil:
             VM.frame = new_frame(new_namespace(file))
