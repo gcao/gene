@@ -42,10 +42,17 @@ proc native_embedding_create(vm: VirtualMachine, args: Value): Value {.gcsafe, n
     return NIL
   let dim = gene_args.children[0].to_int
   
-  # Mock implementation for embedding
+  # Create embedding using C API
+  let cembedding = embedding_create(dim.cint)
+  if cembedding == nil:
+    return NIL
+  
+  # Wrap in Gene value as a map for now
+  # A full implementation would use VkEmbedding with proper data structure
   let r = new_ref(VkMap)
+  r.map["ptr".to_key()] = to_value(cast[int](cembedding))
   r.map["type".to_key()] = to_value("embedding")
-  r.map["hidden_size".to_key()] = to_value(dim)
+  r.map["dim".to_key()] = to_value(dim)
   return r.to_ref_value()
 
 proc native_model_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
@@ -100,14 +107,23 @@ proc native_model_session(vm: VirtualMachine, args: Value): Value {.gcsafe, nimc
   let gene_args = args.gene
   if gene_args.children.len < 2:
     return NIL
-  # Mock implementation
+  
+  # Extract model and device from arguments
+  let model_arg = gene_args.children[0]
+  let device_arg = gene_args.children[1]
+  
+  # For now, return a simple map representation
+  # A full implementation would extract pointers and call model_session_create
   let r = new_ref(VkMap)
   r.map["type".to_key()] = to_value("model_session")
+  r.map["model".to_key()] = model_arg
+  r.map["device".to_key()] = device_arg
   return r.to_ref_value()
 
 proc native_model_configure(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
-  # Mock implementation
-  return to_value(1)
+  # Configuration would set model parameters
+  # For now, just acknowledge the request
+  return TRUE
 
 proc native_tensor_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   if args.kind != VkGene:
