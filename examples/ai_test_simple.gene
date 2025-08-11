@@ -1,0 +1,42 @@
+#!/usr/bin/env gene
+
+# Simple AI Integration Test
+# Tests core AI functions work correctly
+
+(println "=== AI Function Tests ===")
+(println)
+
+(println "1. Tokenizer:")
+(var tok (tokenizer/create 10000))
+(println "  " tok)
+(println)
+
+(println "2. Tensors:")
+(var t1 (tensor/create [2 3] :float32))
+(println "  Create:" t1)
+(var t2 (tensor/zeros [3 3]))
+(println "  Zeros:" t2)
+(var t3 (tensor/random [2 2]))
+(println "  Random:" t3)
+(println)
+
+(println "3. Tensor Operations:")
+(var a (tensor/create [2 2] :float32))
+(var b (tensor/create [2 2] :float32))
+(var sum (tensor/add a b))
+(println "  Add:" sum)
+(var prod (tensor/matmul a b))
+(println "  MatMul:" prod)
+(println)
+
+(println "4. Model Components:")
+(var mdl (model/create "test" "gene"))
+(println "  Model:" mdl)
+(var dev (device/create "cpu"))
+(println "  Device:" dev)
+(var emb (embedding/create 256))
+(println "  Embedding:" emb)
+(println)
+
+(println "=== All Tests Completed ===")
+true
