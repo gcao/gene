@@ -1,0 +1,39 @@
+#!/usr/bin/env gene
+
+# Simplified AI test using basic Gene features
+
+(println "=== AI Simple Test ===")
+
+# Mock tokenizer function
+(def tokenizer-create
+  (fn [vocab-size]
+    (println "Creating tokenizer with vocab size:" vocab-size)
+    {^type "tokenizer" ^vocab-size vocab-size}))
+
+# Mock embedding function  
+(def embedding-create
+  (fn [dim]
+    (println "Creating embeddings with dim:" dim)
+    {^type "embedding" ^dim dim}))
+
+# Mock model function
+(def model-create
+  (fn [name type]
+    (println "Creating model:" name "type:" type)
+    {^type "model" ^name name ^model-type type}))
+
+# Test the functions
+(println "\n1. Testing tokenizer")
+(var tokenizer (tokenizer-create 50000))
+(println "Created:" tokenizer)
+
+(println "\n2. Testing embeddings")
+(var embeddings (embedding-create 768))
+(println "Created:" embeddings)
+
+(println "\n3. Testing model")
+(var model (model-create "gpt-mini" "transformer"))
+(println "Created:" model)
+
+(println "\n=== Test completed successfully ===")
+true

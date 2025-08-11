@@ -1,0 +1,32 @@
+#!/usr/bin/env gene
+
+# Test actual tensor operations
+
+(println "=== Tensor Operations Test ===")
+(println)
+
+# Test basic tensor creation
+(println "Creating tensor with shape [2 3]...")
+(var t1 (tensor/create [2 3]))
+(println "Tensor created:" t1)
+(println)
+
+(println "Creating tensor with shape [3 2]...")
+(var t2 (tensor/create [3 2]))
+(println "Tensor created:" t2)
+(println)
+
+# Test tensor zeros
+(println "Creating zeros tensor with shape [4 4]...")
+(var zeros (tensor/zeros [4 4]))
+(println "Zeros tensor created:" zeros)
+(println)
+
+# Test tensor random
+(println "Creating random tensor with shape [5 5]...")
+(var random (tensor/random [5 5]))
+(println "Random tensor created:" random)
+(println)
+
+(println "=== Test completed successfully! ===")
+true

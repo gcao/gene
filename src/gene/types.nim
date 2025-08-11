@@ -1518,6 +1518,39 @@ proc str_no_quotes*(self: Value): string {.gcsafe.} =
         result = $self.ref.time_hour & ":" & $self.ref.time_minute & ":" & $self.ref.time_second
       of VkFuture:
         result = "<Future " & $self.ref.future.state & ">"
+      of VkTensor:
+        let t = self.ref.tensor
+        let dtype_str = case t.dtype:
+          of DtFloat32: "float32"
+          of DtFloat16: "float16"
+          of DtBFloat16: "bfloat16"
+          of DtInt8: "int8"
+          of DtInt16: "int16"
+          of DtInt32: "int32"
+          of DtInt64: "int64"
+          of DtUInt8: "uint8"
+          of DtBool: "bool"
+        let device_str = case t.device:
+          of DevCPU: "cpu"
+          of DevCUDA: "cuda"
+          of DevMetal: "metal"
+          of DevTPU: "tpu"
+        result = "<Tensor shape=" & $t.shape & " dtype=" & dtype_str & " device=" & device_str & ">"
+      of VkModel:
+        result = "<Model name=" & self.ref.model.name & " format=" & self.ref.model.format & ">"
+      of VkDevice:
+        let device_kind_str = case self.ref.device.kind:
+          of DevCPU: "cpu"
+          of DevCUDA: "cuda"
+          of DevMetal: "metal"
+          of DevTPU: "tpu"
+        result = "<Device type=" & device_kind_str & " id=" & $self.ref.device.id & ">"
+      of VkTokenizer:
+        result = "<Tokenizer vocab_size=" & $self.ref.tokenizer.vocab_size & ">"
+      of VkEmbedding:
+        result = "<Embedding dim=" & $self.ref.embedding.dim & ">"
+      of VkModelSession:
+        result = "<ModelSession>"
       else:
         result = $self.kind
 
@@ -2552,13 +2585,19 @@ proc to_function*(node: Value): Function {.gcsafe.} =
     case first.kind:
       of VkSymbol, VkString:
         name = first.str
+        matcher.parse(node.gene.children[1])
+        body_start = 2
       of VkComplexSymbol:
         name = first.ref.csymbol[^1]
+        matcher.parse(node.gene.children[1])
+        body_start = 2
+      of VkArray:
+        # Anonymous function: (fn [args] body)
+        name = "<unnamed>"
+        matcher.parse(first)
+        body_start = 1
       else:
         todo($first.kind)
-
-    matcher.parse(node.gene.children[1])
-    body_start = 2
 
   matcher.check_hint()
   var body: seq[Value] = @[]
@@ -3305,13 +3344,28 @@ proc init_app_and_vm*() =
   # Add AI/ML namespace stubs with mock functions
   proc mock_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
     # Return a mock tensor/model/device etc
-    return new_map_value()
+    # For now, just return a simple integer to avoid type issues
+    return to_value(1)
+  
+  # Simple test function
+  proc test_fn(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+    return to_value(42)
+  
+  # Also add some direct global functions as a workaround for namespace issues
+  proc mock_tokenizer_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+    return to_value(100)  # Mock tokenizer ID
+  
+  proc mock_embedding_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+    return to_value(200)  # Mock embedding ID
+  
+  proc mock_model_create(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+    return to_value(300)  # Mock model ID
   
   proc mock_tensor_op(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
-    # Return first arg or a mock map
+    # Return first arg or a simple value
     if args.kind == VkArray and args.ref.arr.len > 0:
       return args.ref.arr[0]
-    return new_map_value()
+    return 1.to_value()
   
   let tokenizer_ns = new_namespace("tokenizer")
   tokenizer_ns["create".to_key()] = new_ref(VkNativeFn).to_ref_value()
@@ -3361,6 +3415,25 @@ proc init_app_and_vm*() =
   tensor_ns["transform".to_key()] = new_ref(VkNativeFn).to_ref_value()
   tensor_ns["transform".to_key()].ref.native_fn = mock_tensor_op
   App.app.global_ns.ref.ns["tensor".to_key()] = tensor_ns.to_value()
+  
+  # Add a simple test function first
+  let test_fn_ref = new_ref(VkNativeFn)
+  test_fn_ref.native_fn = test_fn
+  App.app.global_ns.ref.ns["test_fn".to_key()] = test_fn_ref.to_ref_value()
+  
+  # Add direct functions to global namespace as workaround for namespace lookup
+  # These will be accessible as tokenizer_create, embedding_create, etc.
+  let tokenizer_create_fn = new_ref(VkNativeFn)
+  tokenizer_create_fn.native_fn = mock_tokenizer_create
+  App.app.global_ns.ref.ns["tokenizer_create".to_key()] = tokenizer_create_fn.to_ref_value()
+  
+  let embedding_create_fn = new_ref(VkNativeFn)
+  embedding_create_fn.native_fn = mock_embedding_create
+  App.app.global_ns.ref.ns["embedding_create".to_key()] = embedding_create_fn.to_ref_value()
+  
+  let model_create_fn = new_ref(VkNativeFn)
+  model_create_fn.native_fn = mock_model_create
+  App.app.global_ns.ref.ns["model_create".to_key()] = model_create_fn.to_ref_value()
 
   for callback in VmCreatedCallbacks:
     callback()

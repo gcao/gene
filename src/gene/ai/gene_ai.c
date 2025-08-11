@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <math.h>
 
+// Export macro for shared library visibility
+#ifdef _WIN32
+  #define EXPORT __declspec(dllexport)
+#else
+  #define EXPORT __attribute__((visibility("default")))
+#endif
+
 // Simple tensor structure for Gene
 typedef struct {
     float* data;

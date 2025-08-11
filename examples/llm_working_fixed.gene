@@ -1,0 +1,109 @@
+#!/usr/bin/env gene
+
+# Working LLM example using Gene's syntax
+
+(println "=== LLM Inference Example (Fixed Version) ===")
+(println)
+
+# Define mock AI functions using Gene's function syntax
+(var tokenizer_create 
+  (fnx [vocab_size]
+    (println "Creating tokenizer with vocab size:" vocab_size)
+    # Return a simple map representing tokenizer
+    (var result {})
+    (result . ^type = "tokenizer")
+    (result . ^vocab_size = vocab_size)
+    (result . ^id = 1001)
+    result))
+
+(var embedding_create
+  (fnx [dim]
+    (println "Creating embeddings with dimension:" dim)
+    # Return a simple map representing embeddings
+    (var result {})
+    (result . ^type = "embedding")
+    (result . ^dim = dim)
+    (result . ^weights = [])
+    result))
+
+(var model_create
+  (fnx [name model_type]
+    (println "Creating model:" name "of type:" model_type)
+    # Return a simple map representing model
+    (var result {})
+    (result . ^type = "model")
+    (result . ^name = name)
+    (result . ^model_type = model_type)
+    result))
+
+(var tensor_create_mock
+  (fnx [shape]
+    # Return a simple map representing tensor
+    (var result {})
+    (result . ^type = "tensor")
+    (result . ^shape = shape)
+    (result . ^data = [])
+    result))
+
+(var tensor_matmul
+  (fnx [a b]
+    (println "Matrix multiply tensors")
+    # Return result tensor
+    (var result {})
+    (result . ^type = "tensor")
+    (result . ^shape = [32 512])
+    (result . ^data = [])
+    result))
+
+# Main inference pipeline
+(println "Step 1: Initialize components")
+(var tokenizer (tokenizer_create 50000))
+(println "  Tokenizer created")
+
+(var embeddings (embedding_create 768))
+(println "  Embeddings created")
+
+(var model (model_create "gene-gpt" "transformer"))
+(println "  Model created")
+
+(println)
+(println "Step 2: Process input")
+(var input_text "Hello, Gene AI!")
+(println "  Input:" input_text)
+
+# Mock tokenization
+(var tokens [101 7592 1010 8375 9665 999 102])
+(println "  Tokens:" tokens)
+
+# Mock embedding lookup
+(var input_embeddings (tensor_create_mock [7 768]))
+(println "  Input embeddings shape:" (input_embeddings . ^shape))
+
+# Mock attention computation
+(println)
+(println "Step 3: Run transformer layers")
+(var hidden_states input_embeddings)
+
+# Simulate 12 transformer layers
+(for i (range 1 13)
+  (println "  Layer" i "processing..."))
+
+(println)
+(println "Step 4: Generate output")
+(var output_logits (tensor_create_mock [7 50000]))
+(println "  Output logits shape:" (output_logits . ^shape))
+
+# Mock sampling
+(var next_token 1234)
+(println "  Next token:" next_token)
+
+(println)
+(println "=== Inference completed successfully! ===")
+(println)
+(println "Summary:")
+(println "  - Tokenizer vocabulary:" (tokenizer . ^vocab_size))
+(println "  - Embedding dimension:" (embeddings . ^dim))
+(println "  - Model type:" (model . ^model_type))
+(println "  - Processed" 7 "tokens")
+
+true

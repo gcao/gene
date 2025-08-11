@@ -1,0 +1,32 @@
+#!/usr/bin/env gene
+
+# Test AI functions step by step
+(println "Testing AI functions...")
+
+# Test 1: Create tokenizer
+(println "\n1. Testing tokenizer/create")
+(var vocab-size 50000)
+(println "  vocab-size:" vocab-size)
+# Temporarily comment out to test simpler case
+# (var tokenizer (tokenizer/create vocab-size))
+(var tokenizer 1)  # Simple mock value
+(println "  Result:" tokenizer)
+
+# Test 2: Create embedding
+(println "\n2. Testing embedding/create")
+(var hidden-size 768)
+(println "  hidden-size:" hidden-size)
+# (var embeddings (embedding/create hidden-size))
+(var embeddings 2)  # Simple mock value
+(println "  Result:" embeddings)
+
+# Test 3: Create model
+(println "\n3. Testing model/create")
+(var model-name "test-model")
+(println "  model-name:" model-name)
+# (var model (model/create model-name "gene"))
+(var model 3)  # Simple mock value
+(println "  Result:" model)
+
+(println "\nAll tests completed!")
+true

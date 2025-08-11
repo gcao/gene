@@ -8,40 +8,40 @@
 (println)
 
 # Model configuration (simulating a small GPT-like model)
-(var model-name "gene-gpt-small")
-(var vocab-size 50000)
-(var hidden-size 768)
-(var num-layers 12)
-(var num-heads 12)
-(var max-seq-length 512)
-(var device :cpu)  # Use :cuda for GPU
+(var model_name "gene_gpt_small")
+(var vocab_size 50000)
+(var hidden_size 768)
+(var num_layers 12)
+(var num_heads 12)
+(var max_seq_length 512)
+(var device_type "cpu")  # Use "cuda" for GPU
 
-(println "Model:" model-name)
-(println "Parameters: ~37 million")  # Approximate parameter count
+(println "Model:" model_name)
+(println "Parameters: 37 million (approx)")  # Approximate parameter count
 (println)
 
 # 1. Initialize Model Components
 (println "Loading model components...")
 
 # Create tokenizer
-(var tokenizer (tokenizer/create vocab-size))
-(println "  ✓ Tokenizer loaded")
+(var tokenizer_obj (tokenizer/create vocab_size))
+(println "  Tokenizer loaded")
 
 # Create embeddings
-(var embeddings (embedding/create hidden-size))
-(println "  ✓ Embeddings initialized")
+(var embeddings (embedding/create hidden_size))
+(println "  Embeddings initialized")
 
 # Create model (in real implementation, would load weights)
-(var model (model/create model-name "gene"))
-(println "  ✓ Model loaded")
+(var model_obj (model/create model_name "gene"))
+(println "  Model loaded")
 
 # Create device
-(var device-obj (device/create device))
-(println "  ✓ Device:" device-obj)
+(var device_obj (device/create device_type))
+(println "  Device:" device_obj)
 
 # Create model session
-(var session (model/session model device-obj))
-(println "  ✓ Inference session ready")
+(var session (model/session model_obj device_obj))
+(println "  Inference session ready")
 (println)
 
 # 2. Tokenization Functions (simulated)
@@ -51,7 +51,7 @@
   # Return mock token IDs
   [101 2023 2003 1037 6291 102])  # [CLS] this is a test [SEP]
 
-(fn decode-tokens [tokens]
+(fn decode_tokens [tokens]
   # Simulate decoding tokens back to text
   # In reality would use tokenizer vocabulary
   (case (tokens @ 0)
@@ -62,17 +62,17 @@
     "I"))
 
 # 3. Attention Mechanism (simplified structure)
-(fn multi-head-attention [query key value num-heads]
+(fn multi_head_attention [query key value num_heads]
   # Simplified attention calculation
   # Q, K, V would be [batch_size, seq_len, hidden_size]
-  (var head-dim (/ (tensor/shape query @ 2) num-heads))
+  (var head_dim (/ (tensor/shape query @ 2) num_heads))
   
   # Split into heads (simplified)
   # In reality: reshape and transpose for multi-head
   
   # Compute attention scores: Q @ K^T / sqrt(d_k)
   (var scores (tensor/matmul query (tensor/transpose key)))
-  # (var scores (/ scores (sqrt head-dim)))  # Scale
+  # (var scores (/ scores (sqrt head_dim)))  # Scale
   
   # Apply softmax (placeholder)
   # (var attn-weights (softmax scores))
@@ -83,46 +83,46 @@
   output)
 
 # 4. Transformer Layer
-(fn transformer-layer [input layer-idx]
-  (println "    Layer" layer-idx "processing...")
+(fn transformer_layer [input layer_idx]
+  (println "    Layer" layer_idx "processing...")
   
   # Self-attention
-  (var attn-output (multi-head-attention 
+  (var attn_output (multi_head_attention 
                      input input input 
-                     num-heads))
+                     num_heads))
   
   # Add & Norm (residual connection)
-  (var hidden (tensor/add input attn-output))
+  (var hidden (tensor/add input attn_output))
   
   # Feed-forward network (simplified)
-  (var ff-output hidden)  # Placeholder for FFN
+  (var ff_output hidden)  # Placeholder for FFN
   
   # Add & Norm again
-  (var output (tensor/add hidden ff-output))
+  (var output (tensor/add hidden ff_output))
   
   output)
 
 # 5. Model Forward Pass
-(fn model-forward [input-ids]
+(fn model_forward [input_ids]
   (println "  Running forward pass...")
   
   # Convert tokens to embeddings
   # Shape: [batch_size, seq_len] -> [batch_size, seq_len, hidden_size]
-  (var hidden-states (tensor/create 
-                       [1 (len input-ids) hidden-size]
+  (var hidden_states (tensor/create 
+                       [1 (len input_ids) hidden_size]
                        :float32))
   
   # Pass through transformer layers
-  (loop [layer 0 .. num-layers]
-    (var hidden-states (transformer-layer hidden-states layer)))
+  (for layer in (range 0 num_layers)
+    (var hidden_states (transformer_layer hidden_states layer)))
   
   # Final layer norm and projection to vocabulary
   # Output shape: [batch_size, seq_len, vocab_size]
   (var logits (tensor/create 
-                [1 (len input-ids) vocab-size]
+                [1 (len input_ids) vocab_size]
                 :float32))
   
-  (println "  ✓ Forward pass complete")
+  (println "  Forward pass complete")
   logits)
 
 # 6. Sampling Strategy
@@ -144,7 +144,7 @@
   (println)
   
   # Tokenize input
-  (var input-ids (tokenize prompt))
+  (var input_ids (tokenize prompt))
   (var generated-tokens [])
   
   # Generation loop
@@ -153,17 +153,17 @@
   
   (loop [step 0 .. max-tokens]
     # Forward pass
-    (var logits (model-forward input-ids))
+    (var logits (model_forward input_ids))
     
     # Sample next token
     (var next-token (sample-next-token logits temperature))
     
     # Decode and print
-    (var next-text (decode-tokens [next-token]))
+    (var next-text (decode_tokens [next-token]))
     (print next-text)
     
     # Add to sequence
-    (var input-ids (append input-ids next-token))
+    (var input_ids (append input_ids next-token))
     (var generated-tokens (append generated-tokens next-token))
     
     # Stop if end-of-sequence token
@@ -230,11 +230,11 @@
 
 # 11. Performance Metrics
 (println "=== Performance Metrics ===")
-(println "Model size:" (/ (* hidden-size num-layers 4 4) 
+(println "Model size:" (/ (* hidden_size num_layers 4 4) 
                         1024) "MB (estimated)")
 (println "Inference device:" device)
-(println "Max sequence length:" max-seq-length)
-(println "Vocabulary size:" vocab-size)
+(println "Max sequence length:" max_seq_length)
+(println "Vocabulary size:" vocab_size)
 (println)
 
 # 12. Advanced Features (Conceptual)
@@ -256,7 +256,7 @@
   (loop [i 0 .. 10]
     # Generate one token
     (var next-token (sample-next-token nil 0.8))
-    (var text (decode-tokens [next-token]))
+    (var text (decode_tokens [next-token]))
     
     # Stream to callback
     (callback text)
@@ -296,13 +296,13 @@
 (println "Gene LLM Inference Demonstration Complete!")
 (println)
 (println "This example demonstrates:")
-(println "  ✓ Model loading and initialization")
-(println "  ✓ Tokenization pipeline")
-(println "  ✓ Transformer architecture structure")
-(println "  ✓ Text generation loop")
-(println "  ✓ Question answering")
-(println "  ✓ Chat interface")
-(println "  ✓ Performance considerations")
+(println "  Model loading and initialization")
+(println "  Tokenization pipeline")
+(println "  Transformer architecture structure")
+(println "  Text generation loop")
+(println "  Question answering")
+(println "  Chat interface")
+(println "  Performance considerations")
 (println)
 (println "With actual model weights and computation, Gene could run")
 (println "real LLMs efficiently using its native tensor operations!")

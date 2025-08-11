@@ -4,6 +4,7 @@ import ../vm
 import ../parser
 import ../compiler
 import ./base
+import ../ai/ai_natives
 
 const DEFAULT_COMMAND = "eval"
 const COMMANDS = @[DEFAULT_COMMAND, "e"]
@@ -97,6 +98,9 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
     return failure("No code provided to evaluate")
   
   init_app_and_vm()
+  
+  # Initialize AI module
+  register_ai_natives(VM)
   
   try:
     # Enable tracing if requested

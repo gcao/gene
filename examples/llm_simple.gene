@@ -22,13 +22,8 @@
 # 1. Simulate tokenization
 (fn tokenize [text]
   (println "Tokenizing: " text)
-  # Simple character-based tokenization
-  (var tokens [])
-  (var chars (split text ""))
-  (for c in chars
-    (var tokens (append tokens 100)))  # Mock token ID
-  (println "  Generated " (len tokens) " tokens")
-  tokens)
+  # Return mock tokens - one per word for simplicity
+  [101 7592 1010 102])
 
 # 2. Simulate attention mechanism
 (fn attention [query-len key-len]
@@ -52,11 +47,10 @@
   
   # Mock generation
   (var generated "")
-  (var next-words ["is" "a" "powerful" "language" "for" "AI"])
+  (var next-words ["is" "a" "powerful" "language"])
   
   (print "Generated: \"" prompt " ")
-  (loop [i 0 .. 4]
-    (var word "word")
+  (for word in next-words
     (print word " ")
     (var generated (str generated word " ")))
   (println "\"")

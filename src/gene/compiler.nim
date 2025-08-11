@@ -1,4 +1,4 @@
-import tables, strutils
+import tables, strutils, strformat
 
 import ./types
 import "./compiler/if"
@@ -1186,6 +1186,7 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
         self.output.instructions.add(Instruction(kind: IkGetMemberOrNil))
       return
   
+  
   let start_pos = self.output.instructions.len
   self.compile(gene.type)
 
@@ -1736,7 +1737,9 @@ proc compile_gene(self: Compiler, input: Value) =
             of "$emit":
               self.compile_emit(gene)
               return
-
+  
+  # Special handling for complex symbols that might be functions
+  # For now, treat them like any other unknown function call
   self.compile_gene_unknown(gene)
 
 proc compile*(self: Compiler, input: Value) =

@@ -1,0 +1,47 @@
+#!/usr/bin/env gene
+
+# Simplified LLM demo that avoids parser issues
+
+(println "=== Simple LLM Demo ===")
+(println)
+
+# Configuration
+(var vocab_size 50000)
+(var hidden_size 768)
+(var num_layers 12)
+
+(println "Configuration:")
+(println "  Vocabulary:" vocab_size)
+(println "  Hidden size:" hidden_size)
+(println "  Layers:" num_layers)
+(println)
+
+# Simple tokenization
+(fn tokenize [text]
+  (println "  Tokenizing:" text)
+  [101 7592 1010 8375 9665 999 102])
+
+# Process layers  
+(fn process_layers [data num]
+  (println "  Processing" num "layers...")
+  (for i in (range 1 (+ num 1))
+    (println "    Layer" i))
+  data)
+
+# Main demo
+(println "Step 1: Tokenize input")
+(var input "Hello, Gene AI!")
+(var tokens (tokenize input))
+(println "  Tokens:" tokens)
+(println)
+
+(println "Step 2: Process through model")
+(var result (process_layers tokens num_layers))
+(println)
+
+(println "Step 3: Generate output")
+(println "  Generated token: 1234")
+(println)
+
+(println "Demo complete!")
+true

@@ -2,76 +2,101 @@
 ## Provides FFI bindings to the C implementation
 
 import ../types
-import ../vm
-import std/[dynlib, os]
+import std/[os, tables]
 
-{.compile: "gene_ai.c".}
+# Compile the C implementation
+const gene_ai_c = currentSourcePath.parentDir() / "gene_ai.c"
+{.compile: gene_ai_c.}
+
+# Use the header for type definitions
+const gene_ai_h = currentSourcePath.parentDir() / "gene_ai.h"
 
 type
-  CGeneTensor {.importc: "GeneTensor", header: "gene_ai.c".} = object
+  CGeneTensor {.importc: "GeneTensor", header: gene_ai_h.} = object
     data: ptr cfloat
     shape: ptr cint
     ndim: cint
     size: cint
     device: cstring
 
-  CTokenizer {.importc: "GeneTokenizer", header: "gene_ai.c".} = object
+  CTokenizer {.importc: "GeneTokenizer", header: gene_ai_h.} = object
     vocab_size: cint
     vocab: ptr cstring
 
-  CModel {.importc: "GeneModel", header: "gene_ai.c".} = object
+  CModel {.importc: "GeneModel", header: gene_ai_h.} = object
     name: cstring
-    modelType: cstring {.importc: "type".}
+    modelType {.importc: "type".}: cstring
     weights: pointer
     num_params: cint
 
-  CDevice {.importc: "GeneDevice", header: "gene_ai.c".} = object
-    deviceType: cstring {.importc: "type".}
+  CDevice {.importc: "GeneDevice", header: gene_ai_h.} = object
+    deviceType {.importc: "type".}: cstring
     id: cint
 
-  CEmbedding {.importc: "GeneEmbedding", header: "gene_ai.c".} = object
+  CEmbedding {.importc: "GeneEmbedding", header: gene_ai_h.} = object
     dim: cint
     weights: ptr CGeneTensor
 
-  CModelSession {.importc: "GeneModelSession", header: "gene_ai.c".} = object
+  CModelSession {.importc: "GeneModelSession", header: gene_ai_h.} = object
     model: ptr CModel
     device: ptr CDevice
 
-# C function declarations
-proc tensor_create(shape: ptr cint, ndim: cint, dtype: cstring, device: cstring): ptr CGeneTensor {.importc, cdecl.}
-proc tensor_random(shape: ptr cint, ndim: cint): ptr CGeneTensor {.importc, cdecl.}
-proc tensor_zeros(shape: ptr cint, ndim: cint): ptr CGeneTensor {.importc, cdecl.}
-proc tensor_add(a, b: ptr CGeneTensor): ptr CGeneTensor {.importc, cdecl.}
-proc tensor_matmul(a, b: ptr CGeneTensor): ptr CGeneTensor {.importc, cdecl.}
-proc tensor_transpose(tensor: ptr CGeneTensor): ptr CGeneTensor {.importc, cdecl.}
-proc tensor_free(tensor: ptr CGeneTensor) {.importc, cdecl.}
-proc tensor_ndim(tensor: ptr CGeneTensor): cint {.importc, cdecl.}
-proc tensor_shape(tensor: ptr CGeneTensor): ptr cint {.importc, cdecl.}
-proc tensor_data(tensor: ptr CGeneTensor): ptr cfloat {.importc, cdecl.}
-proc tensor_size(tensor: ptr CGeneTensor): cint {.importc, cdecl.}
+# C function declarations - these are defined in the compiled C file
+proc tensor_create*(shape: ptr cint, ndim: cint, dtype: cstring, device: cstring): ptr CGeneTensor {.importc, nodecl.}
+proc tensor_random*(shape: ptr cint, ndim: cint): ptr CGeneTensor {.importc, nodecl.}
+proc tensor_zeros*(shape: ptr cint, ndim: cint): ptr CGeneTensor {.importc, nodecl.}
+proc tensor_add*(a, b: ptr CGeneTensor): ptr CGeneTensor {.importc, nodecl.}
+proc tensor_matmul*(a, b: ptr CGeneTensor): ptr CGeneTensor {.importc, nodecl.}
+proc tensor_transpose*(tensor: ptr CGeneTensor): ptr CGeneTensor {.importc, nodecl.}
+proc tensor_free(tensor: ptr CGeneTensor) {.importc, nodecl.}
+proc tensor_ndim(tensor: ptr CGeneTensor): cint {.importc, nodecl.}
+proc tensor_shape(tensor: ptr CGeneTensor): ptr cint {.importc, nodecl.}
+proc tensor_data(tensor: ptr CGeneTensor): ptr cfloat {.importc, nodecl.}
+proc tensor_size(tensor: ptr CGeneTensor): cint {.importc, nodecl.}
 
-proc tokenizer_create(vocab_size: cint): ptr CTokenizer {.importc, cdecl.}
-proc tokenizer_free(tokenizer: ptr CTokenizer) {.importc, cdecl.}
+proc tokenizer_create*(vocab_size: cint): ptr CTokenizer {.importc, nodecl.}
+proc tokenizer_free(tokenizer: ptr CTokenizer) {.importc, nodecl.}
 
-proc model_create(name: cstring, modelType: cstring): ptr CModel {.importc, cdecl.}
-proc model_free(model: ptr CModel) {.importc, cdecl.}
+proc model_create*(name: cstring, modelType: cstring): ptr CModel {.importc, nodecl.}
+proc model_free(model: ptr CModel) {.importc, nodecl.}
 
-proc device_create(deviceType: cstring): ptr CDevice {.importc, cdecl.}
-proc device_free(device: ptr CDevice) {.importc, cdecl.}
+proc device_create*(deviceType: cstring): ptr CDevice {.importc, nodecl.}
+proc device_free(device: ptr CDevice) {.importc, nodecl.}
 
-proc embedding_create(dim: cint): ptr CEmbedding {.importc, cdecl.}
-proc embedding_free(embedding: ptr CEmbedding) {.importc, cdecl.}
+proc embedding_create*(dim: cint): ptr CEmbedding {.importc, nodecl.}
+proc embedding_free(embedding: ptr CEmbedding) {.importc, nodecl.}
 
-proc model_session_create(model: ptr CModel, device: ptr CDevice): ptr CModelSession {.importc, cdecl.}
-proc model_session_free(session: ptr CModelSession) {.importc, cdecl.}
+proc model_session_create*(model: ptr CModel, device: ptr CDevice): ptr CModelSession {.importc, nodecl.}
+proc model_session_free(session: ptr CModelSession) {.importc, nodecl.}
 
 # Helper to convert Nim seq to C array
 proc toCIntArray(s: seq[int]): ptr cint =
   if s.len == 0:
     return nil
   result = cast[ptr cint](alloc(s.len * sizeof(cint)))
+  let arr = cast[ptr UncheckedArray[cint]](result)
   for i in 0..<s.len:
-    result[i] = s[i].cint
+    arr[i] = s[i].cint
+
+# Helper to convert string to DType
+proc toDType(s: string): DType =
+  case s:
+    of "float32", "f32": DtFloat32
+    of "float16", "f16": DtFloat16
+    of "bfloat16", "bf16": DtBFloat16
+    of "int8", "i8": DtInt8
+    of "int16", "i16": DtInt16
+    of "int32", "i32": DtInt32
+    else: DtFloat32  # default
+
+# Helper to convert string to DeviceKind
+proc toDeviceKind(s: string): DeviceKind =
+  case s:
+    of "cpu": DevCPU
+    of "cuda", "gpu": DevCUDA
+    of "metal": DevMetal
+    of "tpu": DevTPU
+    else: DevCPU  # default
 
 # Nim wrapper functions that return Gene Values
 proc gene_tensor_create*(shape: seq[int], dtype: string = "float32", device: string = "cpu"): Value =
@@ -83,12 +108,14 @@ proc gene_tensor_create*(shape: seq[int], dtype: string = "float32", device: str
     return NIL
   
   # Create Gene Tensor value
-  result = new_ref(VkTensor)
-  result.ref.tensor = new(Tensor)
-  result.ref.tensor.shape = shape
-  result.ref.tensor.dtype = dtype
-  result.ref.tensor.device = device
-  result.ref.tensor.data_ptr = cast[pointer](tensor_ptr)
+  let r = new_ref(VkTensor)
+  r.tensor = new(TensorData)
+  r.tensor.shape = shape
+  r.tensor.dtype = toDType(dtype)
+  r.tensor.device = toDeviceKind(device)
+  r.tensor.device_id = 0
+  r.tensor.data_ptr = cast[pointer](tensor_ptr)
+  result = r.to_ref_value()
 
 proc gene_tensor_random*(shape: seq[int]): Value =
   let shape_ptr = toCIntArray(shape)
@@ -98,12 +125,14 @@ proc gene_tensor_random*(shape: seq[int]): Value =
   if tensor_ptr.isNil:
     return NIL
   
-  result = new_ref(VkTensor)
-  result.ref.tensor = new(Tensor)
-  result.ref.tensor.shape = shape
-  result.ref.tensor.dtype = "float32"
-  result.ref.tensor.device = "cpu"
-  result.ref.tensor.data_ptr = cast[pointer](tensor_ptr)
+  let r = new_ref(VkTensor)
+  r.tensor = new(TensorData)
+  r.tensor.shape = shape
+  r.tensor.dtype = DtFloat32
+  r.tensor.device = DevCPU
+  r.tensor.device_id = 0
+  r.tensor.data_ptr = cast[pointer](tensor_ptr)
+  result = r.to_ref_value()
 
 proc gene_tensor_zeros*(shape: seq[int]): Value =
   let shape_ptr = toCIntArray(shape)
@@ -113,12 +142,14 @@ proc gene_tensor_zeros*(shape: seq[int]): Value =
   if tensor_ptr.isNil:
     return NIL
   
-  result = new_ref(VkTensor)
-  result.ref.tensor = new(Tensor)
-  result.ref.tensor.shape = shape
-  result.ref.tensor.dtype = "float32"
-  result.ref.tensor.device = "cpu"
-  result.ref.tensor.data_ptr = cast[pointer](tensor_ptr)
+  let r = new_ref(VkTensor)
+  r.tensor = new(TensorData)
+  r.tensor.shape = shape
+  r.tensor.dtype = DtFloat32
+  r.tensor.device = DevCPU
+  r.tensor.device_id = 0
+  r.tensor.data_ptr = cast[pointer](tensor_ptr)
+  result = r.to_ref_value()
 
 proc gene_tensor_add*(a, b: Value): Value =
   if a.kind != VkTensor or b.kind != VkTensor:
@@ -131,12 +162,14 @@ proc gene_tensor_add*(a, b: Value): Value =
   if result_ptr.isNil:
     return NIL
   
-  result = new_ref(VkTensor)
-  result.ref.tensor = new(Tensor)
-  result.ref.tensor.shape = a.ref.tensor.shape
-  result.ref.tensor.dtype = a.ref.tensor.dtype
-  result.ref.tensor.device = a.ref.tensor.device
-  result.ref.tensor.data_ptr = cast[pointer](result_ptr)
+  let r = new_ref(VkTensor)
+  r.tensor = new(TensorData)
+  r.tensor.shape = a.ref.tensor.shape
+  r.tensor.dtype = a.ref.tensor.dtype
+  r.tensor.device = a.ref.tensor.device
+  r.tensor.device_id = a.ref.tensor.device_id
+  r.tensor.data_ptr = cast[pointer](result_ptr)
+  result = r.to_ref_value()
 
 proc gene_tensor_matmul*(a, b: Value): Value =
   if a.kind != VkTensor or b.kind != VkTensor:
@@ -156,12 +189,14 @@ proc gene_tensor_matmul*(a, b: Value): Value =
   else:
     result_shape = a.ref.tensor.shape  # Fallback
   
-  result = new_ref(VkTensor)
-  result.ref.tensor = new(Tensor)
-  result.ref.tensor.shape = result_shape
-  result.ref.tensor.dtype = a.ref.tensor.dtype
-  result.ref.tensor.device = a.ref.tensor.device
-  result.ref.tensor.data_ptr = cast[pointer](result_ptr)
+  let r = new_ref(VkTensor)
+  r.tensor = new(TensorData)
+  r.tensor.shape = result_shape
+  r.tensor.dtype = a.ref.tensor.dtype
+  r.tensor.device = a.ref.tensor.device
+  r.tensor.device_id = a.ref.tensor.device_id
+  r.tensor.data_ptr = cast[pointer](result_ptr)
+  result = r.to_ref_value()
 
 proc gene_tensor_transpose*(tensor: Value): Value =
   if tensor.kind != VkTensor:
@@ -178,12 +213,14 @@ proc gene_tensor_transpose*(tensor: Value): Value =
   if result_shape.len == 2:
     swap(result_shape[0], result_shape[1])
   
-  result = new_ref(VkTensor)
-  result.ref.tensor = new(Tensor)
-  result.ref.tensor.shape = result_shape
-  result.ref.tensor.dtype = tensor.ref.tensor.dtype
-  result.ref.tensor.device = tensor.ref.tensor.device
-  result.ref.tensor.data_ptr = cast[pointer](result_ptr)
+  let r = new_ref(VkTensor)
+  r.tensor = new(TensorData)
+  r.tensor.shape = result_shape
+  r.tensor.dtype = tensor.ref.tensor.dtype
+  r.tensor.device = tensor.ref.tensor.device
+  r.tensor.device_id = tensor.ref.tensor.device_id
+  r.tensor.data_ptr = cast[pointer](result_ptr)
+  result = r.to_ref_value()
 
 proc gene_tokenizer_create*(vocab_size: int): Value =
   let tokenizer_ptr = tokenizer_create(vocab_size.cint)
@@ -191,10 +228,12 @@ proc gene_tokenizer_create*(vocab_size: int): Value =
   if tokenizer_ptr.isNil:
     return NIL
   
-  result = new_ref(VkTokenizer)
-  result.ref.tokenizer = new(Tokenizer)
-  result.ref.tokenizer.vocab_size = vocab_size
-  result.ref.tokenizer.data_ptr = cast[pointer](tokenizer_ptr)
+  let r = new_ref(VkTokenizer)
+  r.tokenizer = new(TokenizerData)
+  r.tokenizer.vocab_size = vocab_size
+  r.tokenizer.vocab = initTable[string, int]()
+  r.tokenizer.special_tokens = initTable[string, int]()
+  result = r.to_ref_value()
 
 proc gene_model_create*(name: string, modelType: string): Value =
   let model_ptr = model_create(name.cstring, modelType.cstring)
@@ -202,22 +241,37 @@ proc gene_model_create*(name: string, modelType: string): Value =
   if model_ptr.isNil:
     return NIL
   
-  result = new_ref(VkModel)
-  result.ref.model = new(Model)
-  result.ref.model.name = name
-  result.ref.model.model_type = modelType
-  result.ref.model.data_ptr = cast[pointer](model_ptr)
+  let r = new_ref(VkModel)
+  r.model = new(ModelData)
+  r.model.name = name
+  r.model.format = modelType
+  r.model.weights = cast[pointer](model_ptr)
+  r.model.size = 0
+  r.model.metadata = initTable[string, Value]()
+  result = r.to_ref_value()
 
 proc gene_device_create*(deviceType: string): Value =
   let device_ptr = device_create(deviceType.cstring)
   
   if device_ptr.isNil:
-    return NIL
+    # For now, create a mock device
+    let r = new_ref(VkDevice)
+    r.device = new(DeviceInfo)
+    r.device.kind = toDeviceKind(deviceType)
+    r.device.id = 0
+    r.device.name = deviceType & ":0"
+    r.device.memory_total = 0
+    r.device.memory_available = 0
+    return r.to_ref_value()
   
-  result = new_ref(VkDevice)
-  result.ref.device = new(Device)
-  result.ref.device.device_type = deviceType
-  result.ref.device.data_ptr = cast[pointer](device_ptr)
+  let r = new_ref(VkDevice)
+  r.device = new(DeviceInfo)
+  r.device.kind = toDeviceKind(deviceType)
+  r.device.id = 0
+  r.device.name = deviceType & ":0"
+  r.device.memory_total = 0
+  r.device.memory_available = 0
+  result = r.to_ref_value()
 
 proc gene_embedding_create*(dim: int): Value =
   let embedding_ptr = embedding_create(dim.cint)
@@ -225,25 +279,35 @@ proc gene_embedding_create*(dim: int): Value =
   if embedding_ptr.isNil:
     return NIL
   
-  result = new_ref(VkEmbedding)
-  result.ref.embedding = new(Embedding)
-  result.ref.embedding.dim = dim
-  result.ref.embedding.data_ptr = cast[pointer](embedding_ptr)
+  let r = new_ref(VkEmbedding)
+  r.embedding = new(EmbeddingData)
+  r.embedding.dim = dim
+  # Create empty tensor for vectors
+  r.embedding.vectors = new(TensorData)
+  r.embedding.vectors.shape = @[0, dim]
+  r.embedding.vectors.dtype = DtFloat32
+  r.embedding.vectors.device = DevCPU
+  r.embedding.vectors.device_id = 0
+  r.embedding.vectors.data_ptr = cast[pointer](embedding_ptr)
+  result = r.to_ref_value()
 
 proc gene_model_session_create*(model: Value, device: Value): Value =
   if model.kind != VkModel or device.kind != VkDevice:
     return NIL
   
-  let model_ptr = cast[ptr CModel](model.ref.model.data_ptr)
-  let device_ptr = cast[ptr CDevice](device.ref.device.data_ptr)
+  let model_ptr = cast[ptr CModel](model.ref.model.weights)
+  let device_ptr = cast[ptr CDevice](device.ref.device)  # DeviceInfo is already a ref object
   let session_ptr = model_session_create(model_ptr, device_ptr)
   
   if session_ptr.isNil:
     return NIL
   
-  result = new_ref(VkModelSession)
-  result.ref.model_session = new(ModelSession)
-  result.ref.model_session.data_ptr = cast[pointer](session_ptr)
+  let r = new_ref(VkModelSession)
+  r.session = new(ModelSession)
+  r.session.model = model
+  r.session.state = initTable[string, Value]()
+  r.session.device = device.ref.device
+  result = r.to_ref_value()
 
 # Cleanup functions
 proc gene_tensor_free*(tensor: Value) =
@@ -252,26 +316,27 @@ proc gene_tensor_free*(tensor: Value) =
     tensor.ref.tensor.data_ptr = nil
 
 proc gene_tokenizer_free*(tokenizer: Value) =
-  if tokenizer.kind == VkTokenizer and not tokenizer.ref.tokenizer.data_ptr.isNil:
-    tokenizer_free(cast[ptr CTokenizer](tokenizer.ref.tokenizer.data_ptr))
-    tokenizer.ref.tokenizer.data_ptr = nil
+  if tokenizer.kind == VkTokenizer:
+    # TokenizerData doesn't have data_ptr, just clear the vocab
+    tokenizer.ref.tokenizer.vocab.clear()
+    tokenizer.ref.tokenizer.special_tokens.clear()
 
 proc gene_model_free*(model: Value) =
-  if model.kind == VkModel and not model.ref.model.data_ptr.isNil:
-    model_free(cast[ptr CModel](model.ref.model.data_ptr))
-    model.ref.model.data_ptr = nil
+  if model.kind == VkModel and not model.ref.model.weights.isNil:
+    model_free(cast[ptr CModel](model.ref.model.weights))
+    model.ref.model.weights = nil
 
 proc gene_device_free*(device: Value) =
-  if device.kind == VkDevice and not device.ref.device.data_ptr.isNil:
-    device_free(cast[ptr CDevice](device.ref.device.data_ptr))
-    device.ref.device.data_ptr = nil
+  if device.kind == VkDevice:
+    # DeviceInfo doesn't have data_ptr, it's a simple ref object
+    discard
 
 proc gene_embedding_free*(embedding: Value) =
-  if embedding.kind == VkEmbedding and not embedding.ref.embedding.data_ptr.isNil:
-    embedding_free(cast[ptr CEmbedding](embedding.ref.embedding.data_ptr))
-    embedding.ref.embedding.data_ptr = nil
+  if embedding.kind == VkEmbedding and not embedding.ref.embedding.vectors.data_ptr.isNil:
+    embedding_free(cast[ptr CEmbedding](embedding.ref.embedding.vectors.data_ptr))
+    embedding.ref.embedding.vectors.data_ptr = nil
 
 proc gene_model_session_free*(session: Value) =
-  if session.kind == VkModelSession and not session.ref.model_session.data_ptr.isNil:
-    model_session_free(cast[ptr CModelSession](session.ref.model_session.data_ptr))
-    session.ref.model_session.data_ptr = nil
+  if session.kind == VkModelSession:
+    # ModelSession doesn't have data_ptr, just clear state
+    session.ref.session.state.clear()

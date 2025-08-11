@@ -2,6 +2,7 @@ import parseopt, strutils
 import ../types
 import ../vm
 import ./base
+import ../ai/ai_natives
 
 const DEFAULT_COMMAND = "repl"
 const COMMANDS = @[DEFAULT_COMMAND, "r"]
@@ -39,6 +40,7 @@ proc parse_options(args: seq[string]): Options =
 proc start_repl(debugging: bool) =
   setup_logger(debugging)
   init_app_and_vm()
+  register_ai_natives(VM)
   
   echo "Gene REPL - Interactive Gene Language Shell"
   echo "Type 'exit' or 'quit' to exit, 'help' for help"

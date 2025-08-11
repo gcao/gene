@@ -11,6 +11,8 @@ import ./vm/tensor
 import ./vm/ffi
 import ./vm/python_bridge
 
+import ./ai/ai_bindings
+
 when not defined(noExtensions):
   import ./vm/extension
 
@@ -839,7 +841,8 @@ proc exec*(self: VirtualMachine): Value =
               # Return current exception
               self.frame.push(self.current_exception)
             else:
-              self.frame.push(value.ref.ns[name])
+              let member = value.ref.ns[name]
+              self.frame.push(member)
           of VkClass:
             self.frame.push(value.ref.class.ns[name])
           of VkEnum:
@@ -1594,7 +1597,8 @@ proc exec*(self: VirtualMachine): Value =
             case frame.kind:
               of NfFunction:
                 let f = frame.target.ref.native_fn
-                self.frame.replace(f(self, frame.args))
+                let native_result = f(self, frame.args)
+                self.frame.replace(native_result)
               else:
                 todo($frame.kind)
 

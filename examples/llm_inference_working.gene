@@ -1,0 +1,162 @@
+#!/usr/bin/env gene
+
+# Working LLM Inference Example using actual AI functions
+# Works around the namespace/division parser bug
+
+(println "=== Gene LLM Inference Demo ===")
+(println)
+
+# Model configuration
+(var model_name "gene_gpt_small")
+(var vocab_size 50000)
+(var hidden_size 768)
+(var num_layers 12)
+(var num_heads 12)
+(var max_seq_length 512)
+(var device_type "cpu")
+
+(println "Model:" model_name)
+(println "Parameters: 37 million (approx)")
+(println)
+
+# Wrapper functions to access AI namespaces without triggering parser bug
+# Get the namespace and then access its members
+(var tokenizer_ns (@ tokenizer))
+(var tensor_ns (@ tensor))
+(var model_ns (@ model))
+(var device_ns (@ device))
+(var embedding_ns (@ embedding))
+
+# Extract functions from namespaces
+(var tokenizer_create (tokenizer_ns :create))
+(var tensor_create (tensor_ns :create))
+(var tensor_zeros (tensor_ns :zeros))
+(var tensor_add (tensor_ns :add))
+(var tensor_matmul (tensor_ns :matmul))
+(var model_create (model_ns :create))
+(var device_create (device_ns :create))
+(var embedding_create (embedding_ns :create))
+
+# 1. Initialize Model Components
+(println "Loading model components...")
+
+(var tokenizer_obj (tokenizer_create vocab_size))
+(println "  Tokenizer loaded")
+
+(var embeddings (embedding_create hidden_size))
+(println "  Embeddings initialized")
+
+(var model_obj (model_create model_name "gene"))
+(println "  Model loaded")
+
+(var device_obj (device_create device_type))
+(println "  Device:" device_obj)
+
+(println "  Inference session ready")
+(println)
+
+# 2. Initialize tensors
+(println "Initializing tensors...")
+
+# Create input tensor
+(var input_shape [1 10])
+(var input_tensor (tensor_zeros input_shape))
+(println "  Input tensor shape:" input_shape)
+
+# Create weight tensors for each layer
+(var weight_shape [hidden_size hidden_size])
+(var weights (tensor_zeros weight_shape))
+(println "  Weight tensor shape:" weight_shape)
+
+# Create output tensor
+(var output_shape [1 vocab_size])
+(var output_tensor (tensor_zeros output_shape))
+(println "  Output tensor shape:" output_shape)
+
+(println)
+
+# 3. Tokenization function
+(fn tokenize [text tokenizer]
+  (println "Tokenizing:" text)
+  # For now return mock tokens
+  [101 2023 2003 1037 6291 102])
+
+# 4. Transformer layer processing
+(fn transformer_layer [hidden weights layer_idx]
+  (println "    Layer" layer_idx "processing...")
+  # Simplified transformer: just multiply by weights
+  (tensor_matmul hidden weights))
+
+# 5. Model forward pass
+(fn model_forward [input_ids]
+  (println "  Running forward pass...")
+  
+  # Create hidden states tensor
+  (var hidden_shape [1 (len input_ids) hidden_size])
+  (var hidden_states (tensor_zeros hidden_shape))
+  
+  # Process through transformer layers
+  (for i in (range 0 num_layers)
+    (var hidden_states (transformer_layer hidden_states weights i)))
+  
+  (println "  Forward pass complete")
+  output_tensor)
+
+# 6. Generate tokens
+(fn generate_text [prompt max_tokens temperature]
+  (println "Generating text...")
+  (println "Prompt:" prompt)
+  (println "Max tokens:" max_tokens)
+  (println "Temperature:" temperature)
+  (println)
+  
+  # Tokenize input
+  (var input_ids (tokenize prompt tokenizer_obj))
+  (println "Input tokens:" input_ids)
+  
+  (println "Generation:")
+  (print "  \"" prompt)
+  
+  # Generate tokens one by one
+  (var generated_tokens [])
+  (for step in (range 0 max_tokens)
+    (var logits (model_forward input_ids))
+    
+    # Simple token selection (would normally use temperature sampling)
+    (var next_token (+ 1000 (* step 100)))
+    (var generated_tokens (append generated_tokens next_token))
+    (var input_ids (append input_ids next_token))
+    
+    (print ".")
+    
+    # Stop if we generate enough
+    (if (>= step 5)
+      (break)))
+  
+  (println "\"")
+  (println)
+  (println "Generated tokens:" generated_tokens)
+  
+  generated_tokens)
+
+# 7. Main Demo
+(println "=== DEMO SCENARIOS ===")
+(println)
+
+(println "1. Text Completion")
+(println "-------------------")
+(var result (generate_text "The future of AI is" 10 0.8))
+
+(println)
+(println "2. Question Answering")
+(println "--------------------")
+(var result2 (generate_text "What is Gene language?" 15 0.7))
+
+(println)
+(println "=== Summary ===")
+(println "Gene LLM Inference Demonstration Complete!")
+(println "Generated" (len result) "tokens for first prompt")
+(println "Generated" (len result2) "tokens for second prompt")
+(println)
+
+true
