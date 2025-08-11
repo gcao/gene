@@ -1,9 +1,9 @@
 import ../types
 import ./ffi
-import std/[tables, strformat, os]
+import std/strformat
 
 # Helper for runtime errors
-proc runtime_error(msg: string) =
+proc runtime_error(msg: string) {.noreturn.} =
   raise new_exception(types.Exception, msg)
 
 type
@@ -178,8 +178,8 @@ proc python_eval*(code: string): Value =
     FFISignature(return_type: FtInt32, param_types: @[FtString], calling_convention: CcCdecl)).fn_ptr)
   
   if run_string != nil:
-    let result = run_string(code.cstring)
-    if result == 0:
+    let exec_result = run_string(code.cstring)
+    if exec_result == 0:
       return TRUE
     else:
       return FALSE
@@ -205,8 +205,8 @@ proc python_call*(callable: Value, args: seq[Value]): Value =
     for i, arg in args:
       discard set_item(py_args, i.cint, value_to_pyobject(arg))
     
-    let result = call_object(cast[pointer](callable.int64), py_args)
-    return pyobject_to_value(result)
+    let call_result = call_object(cast[pointer](callable.int64), py_args)
+    return pyobject_to_value(call_result)
   
   runtime_error("Failed to call Python function")
 

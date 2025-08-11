@@ -1,5 +1,4 @@
 import ../types
-import std/[math, sequtils, tables]
 
 # Helper for runtime errors
 proc runtime_error(msg: string) =

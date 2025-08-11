@@ -1,4 +1,4 @@
-import tables, strutils, strformat
+import tables, strutils
 
 import ./types
 import "./compiler/if"
