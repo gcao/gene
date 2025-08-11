@@ -18,6 +18,10 @@ task speedy, "Optimized build for maximum performance":
 task bench, "Build and run benchmarks":
   exec "nim c -d:release --mm:orc --opt:speed --passC:\"-march=native\" -r bench/run_benchmarks.nim"
 
+task buildext, "Build extension modules":
+  exec "mkdir -p build"
+  exec "nim c --app:lib -d:release --mm:orc -o:build/libhttp.dylib src/genex/http.nim"
+
 task test, "Runs the test suite":
   exec "nim c -r tests/test_types.nim"
   exec "nim c -r tests/test_parser.nim"
