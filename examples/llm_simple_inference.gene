@@ -1,97 +1,28 @@
 #!/usr/bin/env gene
 
-# Simplified LLM Inference Example - Working Version
+# Simple LLM Inference Example
+# A minimal demonstration of AI functions in Gene
 
-(println "=== Gene LLM Inference Demo ===")
+(println "=== Simple LLM Demo ===")
 (println)
 
-# Model configuration
-(var model_name "gene_gpt_small")
-(var vocab_size 50000)
-(var hidden_size 768)
-(var num_layers 12)
-(var device_type "cpu")
+# Create AI components
+(var tok (tokenizer/create 50000))
+(println "Tokenizer:" tok)
 
-(println "Model:" model_name)
-(println)
+(var embed (embedding/create 768))
+(println "Embeddings:" embed)
 
-# 1. Initialize Model Components
-(println "Loading model components...")
+(var mdl (model/create "simple_model" "gene"))
+(println "Model:" mdl)
 
-# Create tokenizer
-(var tokenizer_obj (tokenizer/create vocab_size))
-(println "  Tokenizer loaded")
+# Create tensors
+(var input (tensor/zeros [1 10]))
+(println "Input tensor:" input)
 
-# Create embeddings
-(var embeddings_obj (embedding/create hidden_size))
-(println "  Embeddings initialized")
-
-# Create model
-(var model_obj (model/create model_name "gene"))
-(println "  Model loaded")
-
-# Create device
-(var device_obj (device/create device_type))
-(println "  Device:" device_obj)
-
-(println "  Ready for inference")
-(println)
-
-# 2. Tokenization (simulated)
-(fn tokenize [text]
-  (println "Tokenizing:" text)
-  [101 2023 2003 1037 6291 102])
-
-# 3. Simple forward pass
-(fn model_forward [input_ids]
-  (println "  Running forward pass...")
-  
-  # Create tensors
-  (var seq_len 6)  # Hardcoded for now
-  (println "    Sequence length:" seq_len)
-  (var input_tensor (tensor/create [1 6] :float32))
-  (var output_tensor (tensor/zeros [1 50000]))
-  
-  # Simulate transformer layers
-  (for i in (range 0 12)
-    (println "    Layer" (+ i 1)))
-  
-  (println "  Forward pass complete")
-  output_tensor)
-
-# 4. Generate text
-(fn generate_text [prompt max_tokens]
-  (println "Generating text...")
-  (println "Prompt:" prompt)
-  (println)
-  
-  # Tokenize input
-  (var input_ids (tokenize prompt))
-  
-  (println "Generation:")
-  (print "  \"" prompt)
-  
-  # Generate tokens  
-  (for step in (range 0 3)
-    (var logits (model_forward input_ids))
-    (print "."))
-  
-  (println "\"")
-  (println)
-  
-  input_ids)
-
-# 5. Main Demo
-(println "=== DEMO ===")
-(println)
-
-(println "Text Completion")
-(println "---------------")
-(var result (generate_text "The future of AI is" 10))
+(var output (tensor/create [1 50000] :float32))
+(println "Output tensor:" output)
 
 (println)
-(println "Generated" (- (len result) 6) "new tokens")
-(println)
-
 (println "=== Demo Complete ===")
 true

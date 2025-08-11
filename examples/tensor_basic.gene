@@ -1,54 +1,54 @@
-# Basic tensor operations example
+#!/usr/bin/env gene
 
-# Create tensors with shape
-(var tensor1 (tensor/create [2 3]))  # 2x3 tensor
-(var tensor2 (tensor/create [2 3]))  # 2x3 tensor
+# Basic Tensor Operations
+# Demonstrates Gene's tensor capabilities for numerical computing
 
-# Display tensor info
-(println "Tensor 1 shape: [2 3]")
-(println "Tensor 2 shape: [2 3]")
+(println "=== Tensor Operations Demo ===")
+(println)
 
-# Element-wise operations
-(var sum (tensor/add tensor1 tensor2))
-(println "Sum tensor created")
+# Create tensors with different shapes
+(println "1. Creating tensors:")
 
-(var diff (tensor/sub tensor1 tensor2))
-(println "Difference tensor created")
+(var vec (tensor/create [10] :float32))
+(println "  Vector (1D):" vec)
 
-(var product (tensor/mul tensor1 tensor2))
-(println "Product tensor created")
+(var mat (tensor/zeros [3 4]))
+(println "  Matrix (2D):" mat)
 
-(var quotient (tensor/div tensor1 tensor2))
-(println "Quotient tensor created")
+(var tensor3d (tensor/create [2 3 4] :float32))
+(println "  3D Tensor:" tensor3d)
 
-# Matrix multiplication (2x3 * 3x2 = 2x2)
-(var tensor3 (tensor/create [3 2]))
-(var matmul_result (tensor/matmul tensor1 tensor3))
-(println "Matrix multiplication result: 2x2 tensor")
+(println)
 
-# Reshape operations
-(var reshaped (tensor/reshape tensor1 [3 2]))
-(println "Reshaped 2x3 to 3x2")
+# Tensor operations
+(println "2. Tensor operations:")
 
-(var flat (tensor/reshape tensor1 [6]))
-(println "Flattened to 1D tensor with 6 elements")
+(var a (tensor/create [2 3] :float32))
+(var b (tensor/create [2 3] :float32))
 
-# Transpose (only for 2D tensors)
-(var transposed (tensor/transpose tensor1))
-(println "Transposed 2x3 to 3x2")
+(var sum (tensor/add a b))
+(println "  Addition result:" sum)
 
-# Slicing
-(var slice (tensor/slice tensor1 [0 0] [1 2]))
-(println "Sliced tensor: subset of original")
+(var transposed (tensor/transpose a))
+(println "  Transposed:" transposed)
 
-# Special tensor creation
-(var zeros (tensor/zeros [3 3]))
-(println "Created 3x3 zero tensor")
+# Matrix multiplication
+(var x (tensor/create [3 4] :float32))
+(var y (tensor/create [4 5] :float32))
+(var product (tensor/matmul x y))
+(println "  Matrix multiply (3x4 @ 4x5):" product)
 
-(var ones (tensor/ones [3 3]))
-(println "Created 3x3 ones tensor")
+(println)
 
-(var random (tensor/random [3 3]))
-(println "Created 3x3 random tensor")
+# Tensor properties
+(println "3. Tensor properties:")
+(var t (tensor/create [2 3 4] :float32))
+(var shape (tensor/shape t))
+(println "  Shape of tensor:" shape)
 
-(println "Tensor operations test completed!")
+(var reshaped (tensor/reshape t [6 4]))
+(println "  Reshaped to [6 4]:" reshaped)
+
+(println)
+(println "=== Demo Complete ===")
+true

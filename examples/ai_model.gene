@@ -1,76 +1,62 @@
-# AI/ML model example
+#!/usr/bin/env gene
 
-# Create a simple neural network layer simulation
-(fn linear-layer [input weights bias]
-  # Perform: output = input @ weights + bias
-  (var output (tensor/matmul input weights))
-  (tensor/add output bias))
+# AI Model Example
+# Building a simple neural network layer in Gene
 
-# Create a ReLU activation function
-(fn relu [tensor]
-  # In real implementation, would apply max(0, x) element-wise
-  tensor)
+(println "=== Neural Network Model Example ===")
+(println)
 
-# Simple forward pass through a network
-(fn forward-pass [input]
-  # Layer 1: 784 -> 128
-  (var w1 (tensor/random [784 128]))
-  (var b1 (tensor/zeros [128]))
-  (var h1 (linear-layer input w1 b1))
-  (var h1-activated (relu h1))
+# Model architecture parameters
+(var input_dim 784)   # MNIST image size (28x28)
+(var hidden_dim 256)
+(var output_dim 10)   # 10 digit classes
+
+(println "Architecture:")
+(println "  Input:" input_dim "neurons")
+(println "  Hidden:" hidden_dim "neurons")
+(println "  Output:" output_dim "neurons")
+(println)
+
+# Initialize model weights
+(println "Initializing model...")
+
+(var W1 (tensor/random [input_dim hidden_dim]))
+(var b1 (tensor/zeros [hidden_dim]))
+(println "  Layer 1: W=" [input_dim hidden_dim] "b=" [hidden_dim])
+
+(var W2 (tensor/random [hidden_dim output_dim]))
+(var b2 (tensor/zeros [output_dim]))
+(println "  Layer 2: W=" [hidden_dim output_dim] "b=" [output_dim])
+
+# Define activation functions
+(fn sigmoid [x] x)  # Placeholder
+(fn softmax [x] x)  # Placeholder
+
+# Forward pass function
+(fn forward [input]
+  (println "  Forward pass...")
   
-  # Layer 2: 128 -> 10
-  (var w2 (tensor/random [128 10]))
-  (var b2 (tensor/zeros [10]))
-  (var output (linear-layer h1-activated w2 b2))
+  # Layer 1: z1 = input @ W1 + b1
+  (var z1 (tensor/add (tensor/matmul input W1) b1))
+  (var a1 (sigmoid z1))
+  
+  # Layer 2: z2 = a1 @ W2 + b2
+  (var z2 (tensor/add (tensor/matmul a1 W2) b2))
+  (var output (softmax z2))
   
   output)
 
-# Create model metadata
-(var model (model/create "simple-mlp" "gene"))
+# Run inference on a batch
+(println)
+(println "Running inference...")
 
-# Create a tokenizer (for NLP tasks)
-(var tokenizer (tokenizer/create 10000))  # 10k vocab size
+(var batch_size 32)
+(var input_batch (tensor/random [batch_size input_dim]))
+(println "  Input batch shape:" [batch_size input_dim])
 
-# Create an embedding layer
-(var embeddings (embedding/create 512))  # 512-dimensional embeddings
+(var predictions (forward input_batch))
+(println "  Output shape:" (tensor/shape predictions))
 
-# Device management
-(var cpu-device (device/create :cpu))
-(var gpu-device (device/create :cuda 0))
-
-# Create a model session
-(var session (model/session model cpu-device))
-
-# Gradient tape for automatic differentiation
-(var tape (gradient/tape))
-
-# DataLoader for batch processing
-(var dataset [1 2 3 4 5 6 7 8 9 10])
-(var loader (dataloader/create dataset 2 true))  # batch_size=2, shuffle=true
-
-# Simulate training loop structure
-(fn train-step [batch]
-  # Forward pass
-  (var predictions (forward-pass batch))
-  
-  # In real implementation:
-  # - Calculate loss
-  # - Backward pass (gradients)
-  # - Update weights
-  
-  predictions)
-
-# Example inference
-(println "Model created: simple-mlp")
-(println "Tokenizer vocabulary size: 10000")
-(println "Embedding dimensions: 512")
-(println "Device: CPU")
-(println "DataLoader batch size: 2")
-
-# Simulate batch processing
-(var input-batch (tensor/random [2 784]))  # Batch of 2 samples, 784 features each
-(var output (train-step input-batch))
-(println "Forward pass completed")
-
-(println "AI model example completed!")
+(println)
+(println "=== Model Example Complete ===")
+true

@@ -1,312 +1,91 @@
 #!/usr/bin/env gene
 
-# Small LLM Inference Example
-# Demonstrates how Gene would run a language model for text generation
-# Note: This is a simulation - actual model weights and computation are placeholders
+# LLM Inference Example
+# Demonstrates Gene's AI capabilities for language model inference
 
 (println "=== Gene LLM Inference Demo ===")
 (println)
 
-# Model configuration (simulating a small GPT-like model)
+# Model configuration
 (var model_name "gene_gpt_small")
 (var vocab_size 50000)
 (var hidden_size 768)
 (var num_layers 12)
-(var num_heads 12)
-(var max_seq_length 512)
-(var device_type "cpu")  # Use "cuda" for GPU
 
 (println "Model:" model_name)
-(println "Parameters: 37 million (approx)")  # Approximate parameter count
+(println "Vocabulary Size:" vocab_size)
+(println "Hidden Size:" hidden_size)
+(println "Layers:" num_layers)
 (println)
 
-# 1. Initialize Model Components
-(println "Loading model components...")
+# Initialize AI components
+(println "Initializing AI components...")
 
 # Create tokenizer
-(var tokenizer_obj (tokenizer/create vocab_size))
-(println "  Tokenizer loaded")
+(var tok (tokenizer/create vocab_size))
+(println "  ✓ Tokenizer created")
 
 # Create embeddings
-(var embeddings (embedding/create hidden_size))
-(println "  Embeddings initialized")
+(var embed (embedding/create hidden_size))
+(println "  ✓ Embeddings initialized")
 
-# Create model (in real implementation, would load weights)
-(var model_obj (model/create model_name "gene"))
-(println "  Model loaded")
+# Create model
+(var mdl (model/create model_name "gene"))
+(println "  ✓ Model loaded")
 
 # Create device
-(var device_obj (device/create device_type))
-(println "  Device:" device_obj)
+(var dev (device/create "cpu"))
+(println "  ✓ Device configured")
 
-# Create model session
-(var session (model/session model_obj device_obj))
-(println "  Inference session ready")
 (println)
 
-# 2. Tokenization Functions (simulated)
+# Tokenization (simulated for demo)
 (fn tokenize [text]
-  # Simulate tokenization - in reality would use actual tokenizer
-  (println "Tokenizing:" text)
-  # Return mock token IDs
-  [101 2023 2003 1037 6291 102])  # [CLS] this is a test [SEP]
+  (println "  Tokenizing:" text)
+  [101 2023 2003 1037 6291 102])
 
-(fn decode_tokens [tokens]
-  # Simulate decoding tokens back to text
-  # In reality would use tokenizer vocabulary
-  (case (tokens @ 0)
-    198 "\n"
-    13 "."
-    30 "?"
-    0 ""
-    "I"))
-
-# 3. Attention Mechanism (simplified structure)
-(fn multi_head_attention [query key value num_heads]
-  # Simplified attention calculation
-  # Q, K, V would be [batch_size, seq_len, hidden_size]
-  (var head_dim (/ (tensor/shape query @ 2) num_heads))
-  
-  # Split into heads (simplified)
-  # In reality: reshape and transpose for multi-head
-  
-  # Compute attention scores: Q @ K^T / sqrt(d_k)
-  (var scores (tensor/matmul query (tensor/transpose key)))
-  # (var scores (/ scores (sqrt head_dim)))  # Scale
-  
-  # Apply softmax (placeholder)
-  # (var attn-weights (softmax scores))
-  
-  # Apply attention to values
-  (var output (tensor/matmul scores value))
-  
-  output)
-
-# 4. Transformer Layer
-(fn transformer_layer [input layer_idx]
-  (println "    Layer" layer_idx "processing...")
-  
-  # Self-attention
-  (var attn_output (multi_head_attention 
-                     input input input 
-                     num_heads))
-  
-  # Add & Norm (residual connection)
-  (var hidden (tensor/add input attn_output))
-  
-  # Feed-forward network (simplified)
-  (var ff_output hidden)  # Placeholder for FFN
-  
-  # Add & Norm again
-  (var output (tensor/add hidden ff_output))
-  
-  output)
-
-# 5. Model Forward Pass
-(fn model_forward [input_ids]
+# Simple forward pass
+(fn forward_pass [tokens]
   (println "  Running forward pass...")
   
-  # Convert tokens to embeddings
-  # Shape: [batch_size, seq_len] -> [batch_size, seq_len, hidden_size]
-  (var hidden_states (tensor/create 
-                       [1 (len input_ids) hidden_size]
-                       :float32))
+  # Create input tensor
+  (var input_tensor (tensor/create [1 6] :float32))
   
-  # Pass through transformer layers
-  (for layer in (range 0 num_layers)
-    (var hidden_states (transformer_layer hidden_states layer)))
-  
-  # Final layer norm and projection to vocabulary
-  # Output shape: [batch_size, seq_len, vocab_size]
-  (var logits (tensor/create 
-                [1 (len input_ids) vocab_size]
-                :float32))
+  # Simulate transformer layers
+  (for i in (range 0 num_layers)
+    (if (< i 3)  # Only print first few layers
+      (println "    Processing layer" (+ i 1))))
   
   (println "  Forward pass complete")
-  logits)
-
-# 6. Sampling Strategy
-(fn sample-next-token [logits temperature]
-  # Get logits for last position
-  # In reality: apply temperature, top-k, top-p sampling
   
-  # Simplified: return a mock token
-  (if (> temperature 0.7)
-    198  # Newline for variety
-    13)) # Period for conservative sampling
+  # Return output tensor
+  (tensor/zeros [1 vocab_size]))
 
-# 7. Text Generation Loop
-(fn generate-text [prompt max-tokens temperature]
-  (println "Generating text...")
-  (println "Prompt:" prompt)
-  (println "Max tokens:" max-tokens)
-  (println "Temperature:" temperature)
+# Text generation
+(fn generate [prompt max_tokens]
+  (println "Generating text from prompt:" prompt)
   (println)
   
   # Tokenize input
-  (var input_ids (tokenize prompt))
-  (var generated-tokens [])
+  (var tokens (tokenize prompt))
   
-  # Generation loop
-  (println "Generation:")
-  (print "  \"" prompt)
-  
-  (loop [step 0 .. max-tokens]
-    # Forward pass
-    (var logits (model_forward input_ids))
-    
-    # Sample next token
-    (var next-token (sample-next-token logits temperature))
-    
-    # Decode and print
-    (var next-text (decode_tokens [next-token]))
-    (print next-text)
-    
-    # Add to sequence
-    (var input_ids (append input_ids next-token))
-    (var generated-tokens (append generated-tokens next-token))
-    
-    # Stop if end-of-sequence token
-    (if (= next-token 0)
-      (break)))
-  
+  # Generate tokens
+  (print "Output: \"" prompt)
+  (for i in (range 0 (min max_tokens 5))
+    (var logits (forward_pass tokens))
+    (print " ..."))
   (println "\"")
   (println)
   
-  generated-tokens)
+  tokens)
 
-# 8. Question-Answering Function
-(fn answer-question [question context]
-  (println "=== Question Answering ===")
-  (println "Question:" question)
-  (println "Context:" context)
-  (println)
-  
-  # Format as QA prompt
-  (var prompt (str "Context: " context "\n"
-                   "Question: " question "\n"
-                   "Answer:"))
-  
-  # Generate answer
-  (var answer-tokens (generate-text prompt 50 0.7))
-  
-  (println "Answer generated with" (len answer-tokens) "tokens"))
-
-# 9. Chat Function
-(fn chat [message history]
-  (println "=== Chat Mode ===")
-  (println "User:" message)
-  
-  # Format chat history
-  (var prompt (str "Assistant: I'm a helpful AI assistant.\n"
-                   "User: " message "\n"
-                   "Assistant:"))
-  
-  # Generate response
-  (var response (generate-text prompt 100 0.8))
-  
-  (println "Response generated"))
-
-# 10. Main Demo
-(println "=== DEMO SCENARIOS ===")
+# Demo
+(println "=== Running Inference ===")
 (println)
 
-# Scenario 1: Simple text completion
-(println "1. Text Completion")
-(println "-------------------")
-(generate-text "The future of AI is" 20 0.8)
+(var result (generate "The future of AI is" 10))
+(println "Generated" (- (len result) 6) "new tokens")
 
-# Scenario 2: Question answering
-(println "2. Question Answering")
-(println "---------------------")
-(answer-question 
-  "What is Gene?"
-  "Gene is a programming language with Lisp-like syntax and native AI support.")
-
-# Scenario 3: Chat
-(println "3. Chat Interface")
-(println "-----------------")
-(chat "Tell me about tensors" [])
-
-# 11. Performance Metrics
-(println "=== Performance Metrics ===")
-(println "Model size:" (/ (* hidden_size num_layers 4 4) 
-                        1024) "MB (estimated)")
-(println "Inference device:" device)
-(println "Max sequence length:" max_seq_length)
-(println "Vocabulary size:" vocab_size)
 (println)
-
-# 12. Advanced Features (Conceptual)
-(println "=== Advanced Features (Future) ===")
-(println "Planned capabilities:")
-(println "  • Beam search for better generation")
-(println "  • KV-cache for faster inference")
-(println "  • Quantization (int8/int4) for efficiency")
-(println "  • Batch inference for multiple requests")
-(println "  • Streaming generation with yield")
-(println "  • Fine-tuning with gradient tape")
-(println)
-
-# Example of how streaming would work
-(fn stream-generate [prompt callback]
-  (println "Streaming generation (conceptual):")
-  (var tokens (tokenize prompt))
-  
-  (loop [i 0 .. 10]
-    # Generate one token
-    (var next-token (sample-next-token nil 0.8))
-    (var text (decode_tokens [next-token]))
-    
-    # Stream to callback
-    (callback text)
-    
-    # Add to context
-    (var tokens (append tokens next-token))))
-
-# Example callback
-(fn print-token [token]
-  (print token))
-
-(println "Streaming example:")
-(print "  Output: ")
-(stream-generate "Hello" print-token)
-(println)
-(println)
-
-# 13. Model Management
-(println "=== Model Management ===")
-
-# Show how to load different models
-(fn load-model [model-path]
-  (println "Loading model from:" model-path)
-  # In reality: (model/load model-path)
-  (model/create "custom-model" "gguf"))
-
-# Show model variants
-(println "Available models:")
-(println "  • gene-gpt-tiny - 100M parameters, 512 context")
-(println "  • gene-gpt-small - 300M parameters, 2048 context")
-(println "  • gene-gpt-medium - 1B parameters, 4096 context")
-(println "  • gene-gpt-large - 7B parameters, 8192 context")
-(println)
-
-# 14. Conclusion
-(println "=== Summary ===")
-(println "Gene LLM Inference Demonstration Complete!")
-(println)
-(println "This example demonstrates:")
-(println "  Model loading and initialization")
-(println "  Tokenization pipeline")
-(println "  Transformer architecture structure")
-(println "  Text generation loop")
-(println "  Question answering")
-(println "  Chat interface")
-(println "  Performance considerations")
-(println)
-(println "With actual model weights and computation, Gene could run")
-(println "real LLMs efficiently using its native tensor operations!")
-(println)
-
-# Return success
+(println "=== Demo Complete ===")
 true
