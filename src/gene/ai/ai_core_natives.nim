@@ -25,7 +25,7 @@ proc native_ai_load_model(vm: VirtualMachine, args: Value): Value {.gcsafe, nimc
   if args.gene.children.len > 2 and args.gene.children[2].kind == VkMap:
     # Copy config from Gene map
     for key, val in args.gene.children[2].ref.map:
-      config[key.to_s] = val
+      config[$key.int64] = val  # Convert key to string via int64
   
   try:
     let provider = get_ai_provider(provider_name)

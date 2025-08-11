@@ -52,16 +52,16 @@ type
 
 # Virtual methods for AI providers (to be overridden)
 method load_model*(provider: AIProvider, path: string, config: Table[string, Value]): AIModel {.base, gcsafe.} =
-  raise newException(NotImplementedError, "load_model not implemented")
+  raise newException(CatchableError, "load_model not implemented")
 
 method generate*(provider: AIProvider, model: AIModel, request: CompletionRequest): CompletionResponse {.base, gcsafe.} =
-  raise newException(NotImplementedError, "generate not implemented")
+  raise newException(CatchableError, "generate not implemented")
 
 method get_embeddings*(provider: AIProvider, model: AIModel, request: EmbeddingRequest): EmbeddingResponse {.base, gcsafe.} =
-  raise newException(NotImplementedError, "get_embeddings not implemented")
+  raise newException(CatchableError, "get_embeddings not implemented")
 
 method tokenize*(provider: AIProvider, model: AIModel, text: string): seq[int] {.base, gcsafe.} =
-  raise newException(NotImplementedError, "tokenize not implemented")
+  raise newException(CatchableError, "tokenize not implemented")
 
 method free_model*(provider: AIProvider, model: AIModel) {.base, gcsafe.} =
   # Default implementation - can be overridden
@@ -70,23 +70,26 @@ method free_model*(provider: AIProvider, model: AIModel) {.base, gcsafe.} =
 # Global registry of AI providers
 var ai_providers* {.global.}: Table[string, AIProvider]
 
-proc register_ai_provider*(name: string, provider: AIProvider) =
+proc register_ai_provider*(name: string, provider: AIProvider) {.gcsafe.} =
   ## Register an AI provider
-  ai_providers[name] = provider
-  provider.name = name
+  {.gcsafe.}:
+    ai_providers[name] = provider
+    provider.name = name
 
-proc get_ai_provider*(name: string): AIProvider =
+proc get_ai_provider*(name: string): AIProvider {.gcsafe.} =
   ## Get a registered AI provider
-  if name in ai_providers:
-    return ai_providers[name]
-  else:
-    raise newException(ValueError, "AI provider not found: " & name)
+  {.gcsafe.}:
+    if name in ai_providers:
+      return ai_providers[name]
+    else:
+      raise newException(ValueError, "AI provider not found: " & name)
 
-proc list_ai_providers*(): seq[string] =
+proc list_ai_providers*(): seq[string] {.gcsafe.} =
   ## List all registered AI providers
-  result = @[]
-  for key in ai_providers.keys:
-    result.add(key)
+  {.gcsafe.}:
+    result = @[]
+    for key in ai_providers.keys:
+      result.add(key)
 
 # Helper to convert Gene values to/from generic types
 proc to_completion_request*(value: Value): CompletionRequest =
