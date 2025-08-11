@@ -36,3 +36,4 @@ tests/test_*
 # Nim cache
 nimcache/
 *.exe
+models/

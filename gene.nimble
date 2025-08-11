@@ -21,6 +21,8 @@ task bench, "Build and run benchmarks":
 task buildext, "Build extension modules":
   exec "mkdir -p build"
   exec "nim c --app:lib -d:release --mm:orc -o:build/libhttp.dylib src/genex/http.nim"
+  # exec "nim c --app:lib -d:release --mm:orc -o:build/libai_mock.dylib src/genex/ai_mock.nim"
+  # exec "nim c --app:lib -d:release --mm:orc -o:build/libai_llama.dylib src/genex/ai_llama.nim"
 
 task test, "Runs the test suite":
   exec "nim c -r tests/test_types.nim"
