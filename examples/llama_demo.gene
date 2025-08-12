@@ -26,6 +26,11 @@
 (println "  (var text (llama/generate \"Once upon a time\" 50))")
 (println "  (println text)")
 
+($load_extension "build/libllama_real.dylib")
+(var model (llama/load "models/tinyllama.gguf"))
+(var text (llama/generate "Once upon a time" 50))
+(println text)
+
 (println "\n🚀 Ready for Production!")
 (println "  The Gene language now has full LLM inference capabilities")
 (println "  through the integrated llama.cpp extension.\n")

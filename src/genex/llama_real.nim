@@ -38,7 +38,7 @@ proc init_backend() =
     initialized = res == 0
 
 # Gene native functions
-proc llama_load(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+proc llama_load(vm_param: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   if args.kind != VkGene or args.gene.children.len < 1:
     return NIL
   
@@ -72,7 +72,7 @@ proc llama_load(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   r.map["info".to_key()] = ($cast[cstring](addr buffer[0])).to_value
   return r.to_ref_value()
 
-proc llama_generate(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+proc llama_generate(vm_param: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   if args.kind != VkGene or args.gene.children.len < 1:
     return NIL
   
@@ -93,7 +93,7 @@ proc llama_generate(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} 
   # Note: In production, should free the C string
   return result.to_value
 
-proc llama_tokenize(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+proc llama_tokenize(vm_param: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   if args.kind != VkGene or args.gene.children.len < 1:
     return NIL
   
@@ -116,7 +116,7 @@ proc llama_tokenize(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} 
   # Note: In production, should free the tokens array
   return arr.to_ref_value()
 
-proc llama_info(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+proc llama_info(vm_param: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   let r = new_ref(VkMap)
   r.map["initialized".to_key()] = initialized.to_value
   r.map["model_loaded".to_key()] = (current_model != nil).to_value
@@ -145,15 +145,25 @@ proc cleanup_at_exit() {.noconv.} =
 addQuitProc(cleanup_at_exit)
 
 # Extension initialization
-proc gene_init*(): ptr Table[string, NativeFn] {.dynlib, exportc.} =
-  result = cast[ptr Table[string, NativeFn]](alloc(sizeof(Table[string, NativeFn])))
-  result[] = initTable[string, NativeFn]()
+proc init*(vm: ptr VirtualMachine): Namespace {.dynlib, exportc.} =
+  result = new_namespace("llama")
   
   # Initialize backend
   init_backend()
   
   # Register functions
-  result[]["llama/load"] = llama_load
-  result[]["llama/generate"] = llama_generate
-  result[]["llama/tokenize"] = llama_tokenize
-  result[]["llama/info"] = llama_info
+  var fn = new_ref(VkNativeFn)
+  fn.native_fn = llama_load
+  result["load".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = llama_generate
+  result["generate".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = llama_tokenize
+  result["tokenize".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = llama_info
+  result["info".to_key()] = fn.to_ref_value()
