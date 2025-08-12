@@ -657,6 +657,11 @@ proc exec*(self: VirtualMachine): Value =
                     value = App.app.gene_ns.ref.ns[name]
                     if value != NIL:
                       found_ns = App.app.gene_ns.ref.ns
+                    else:
+                      # Try genex namespace
+                      value = App.app.genex_ns.ref.ns[name]
+                      if value != NIL:
+                        found_ns = App.app.genex_ns.ref.ns
                 
                 # Update cache if we found the value
                 if value != NIL:
@@ -683,6 +688,11 @@ proc exec*(self: VirtualMachine): Value =
                   value = App.app.gene_ns.ref.ns[name]
                   if value != NIL:
                     found_ns = App.app.gene_ns.ref.ns
+                  else:
+                    # Try genex namespace
+                    value = App.app.genex_ns.ref.ns[name]
+                    if value != NIL:
+                      found_ns = App.app.genex_ns.ref.ns
               
               # Initialize cache if we found the value
               if value != NIL:
@@ -795,6 +805,14 @@ proc exec*(self: VirtualMachine): Value =
         var target: Value
         self.frame.pop2(target)
         case target.kind:
+          of VkNil:
+            # Trying to set member on nil - likely namespace doesn't exist
+            let symbol_index = cast[uint64](name) and PAYLOAD_MASK
+            let symbol_name = try:
+              get_symbol(symbol_index.int)
+            except:
+              "<invalid key>"
+            not_allowed("Cannot set member '" & symbol_name & "' on nil (namespace or object doesn't exist)")
           of VkMap:
             target.ref.map[name] = value
           of VkGene:
@@ -807,24 +825,27 @@ proc exec*(self: VirtualMachine): Value =
             target.ref.instance_props[name] = value
           of VkArray:
             # Arrays don't support named members, this is likely an error
+            let symbol_index = cast[uint64](name) and PAYLOAD_MASK
             let symbol_name = try:
-              get_symbol(name.int)
+              get_symbol(symbol_index.int)
             except:
-              "<invalid key: " & $name.int & ">"
+              "<invalid key>"
             not_allowed("Cannot set named member '" & symbol_name & "' on array")
           else:
             todo($target.kind)
         self.frame.push(value)
 
       of IkGetMember:
-        let name = inst.arg0.Key
+        # arg0 contains a symbol Value - use it directly as Key
+        let symbol_value = inst.arg0
+        let name = cast[Key](symbol_value)
         var value: Value
         self.frame.pop2(value)
-        # echo "IkGetMember " & $value & " " & $name
         
         # Check for NIL first to give better error message
         if value.kind == VkNil:
-          let symbol_name = get_symbol(name.int)
+          let symbol_index = cast[uint64](name) and PAYLOAD_MASK
+          let symbol_name = get_symbol(symbol_index.int)
           not_allowed("Cannot access member '" & symbol_name & "' on nil value")
         
         case value.kind:
@@ -840,6 +861,23 @@ proc exec*(self: VirtualMachine): Value =
             if name == "ex".to_key() and value == App.app.gene_ns:
               # Return current exception
               self.frame.push(self.current_exception)
+            elif value.ref.ns == App.app.genex_ns.ref.ns:
+              # Auto-load extensions when accessing genex/name
+              var member = value.ref.ns[name]
+              if member == NIL:
+                # Try to load the extension
+                let symbol_index = cast[uint64](name) and PAYLOAD_MASK
+                let ext_name = get_symbol(symbol_index.int)
+                let ext_path = "build/lib" & ext_name & ".dylib"
+                when not defined(noExtensions):
+                  try:
+                    let ext_ns = load_extension(self, ext_path)
+                    value.ref.ns[name] = ext_ns.to_value()
+                    member = ext_ns.to_value()
+                  except CatchableError:
+                    # Extension not found or failed to load
+                    discard
+              self.frame.push(member)
             else:
               let member = value.ref.ns[name]
               self.frame.push(member)
@@ -1323,6 +1361,7 @@ proc exec*(self: VirtualMachine): Value =
               args: new_gene_value(),
             )
             self.frame.replace(r.to_ref_value())
+            # Jump to collect arguments (same as regular functions)
             pc = inst.arg0.int64.int
             inst = self.cu.instructions[pc].addr
             continue

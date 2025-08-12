@@ -1,4 +1,4 @@
-import dynlib, strutils, tables
+import dynlib, strutils
 
 import ../types
 
