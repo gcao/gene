@@ -108,15 +108,18 @@ proc http_delete*(url: string, headers: Table[string, string] = initTable[string
 # Native function wrappers for VM
 proc vm_http_get(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    # Args is a Gene with children as the arguments
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "http_get: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "http_get requires at least 1 argument (url)")
     
-    let url = args_ref.arr[0].str
+    let url = args.gene.children[0].str
     var headers = initTable[string, string]()
     
-    if args_ref.arr.len > 1 and args_ref.arr[1].kind == VkMap:
-      let r = args_ref.arr[1].ref
+    if args.gene.children.len > 1 and args.gene.children[1].kind == VkMap:
+      let r = args.gene.children[1].ref
       for k, v in r.map:
         if v.kind == VkString:
           headers[get_symbol(cast[int](k))] = v.str
@@ -126,15 +129,17 @@ proc vm_http_get(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
 
 proc vm_http_get_json(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "http_get_json: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "http_get_json requires at least 1 argument (url)")
     
-    let url = args_ref.arr[0].str
+    let url = args.gene.children[0].str
     var headers = initTable[string, string]()
     
-    if args_ref.arr.len > 1 and args_ref.arr[1].kind == VkMap:
-      let r = args_ref.arr[1].ref
+    if args.gene.children.len > 1 and args.gene.children[1].kind == VkMap:
+      let r = args.gene.children[1].ref
       for k, v in r.map:
         if v.kind == VkString:
           headers[get_symbol(cast[int](k))] = v.str
@@ -143,23 +148,25 @@ proc vm_http_get_json(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.
 
 proc vm_http_post(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "http_post: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "http_post requires at least 1 argument (url)")
     
-    let url = args_ref.arr[0].str
+    let url = args.gene.children[0].str
     var body = ""
     var headers = initTable[string, string]()
     
-    if args_ref.arr.len > 1:
-      if args_ref.arr[1].kind == VkString:
-        body = args_ref.arr[1].str
-      elif args_ref.arr[1].kind in {VkMap, VkVector, VkArray}:
-        body = to_json(args_ref.arr[1])
+    if args.gene.children.len > 1:
+      if args.gene.children[1].kind == VkString:
+        body = args.gene.children[1].str
+      elif args.gene.children[1].kind in {VkMap, VkVector, VkArray}:
+        body = to_json(args.gene.children[1])
         headers["Content-Type"] = "application/json"
     
-    if args_ref.arr.len > 2 and args_ref.arr[2].kind == VkMap:
-      let r = args_ref.arr[2].ref
+    if args.gene.children.len > 2 and args.gene.children[2].kind == VkMap:
+      let r = args.gene.children[2].ref
       for k, v in r.map:
         if v.kind == VkString:
           headers[get_symbol(cast[int](k))] = v.str
@@ -169,16 +176,18 @@ proc vm_http_post(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
 
 proc vm_http_post_json(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 2:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "http_post_json: args is not a Gene")
+    
+    if args.gene.children.len < 2:
       raise new_exception(types.Exception, "http_post_json requires at least 2 arguments (url, body)")
     
-    let url = args_ref.arr[0].str
-    let body = args_ref.arr[1]
+    let url = args.gene.children[0].str
+    let body = args.gene.children[1]
     var headers = initTable[string, string]()
     
-    if args_ref.arr.len > 2 and args_ref.arr[2].kind == VkMap:
-      let r = args_ref.arr[2].ref
+    if args.gene.children.len > 2 and args.gene.children[2].kind == VkMap:
+      let r = args.gene.children[2].ref
       for k, v in r.map:
         if v.kind == VkString:
           headers[get_symbol(cast[int](k))] = v.str
@@ -187,19 +196,21 @@ proc vm_http_post_json(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall
 
 proc vm_http_put(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "http_put: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "http_put requires at least 1 argument (url)")
     
-    let url = args_ref.arr[0].str
+    let url = args.gene.children[0].str
     var body = ""
     var headers = initTable[string, string]()
     
-    if args_ref.arr.len > 1 and args_ref.arr[1].kind == VkString:
-      body = args_ref.arr[1].str
+    if args.gene.children.len > 1 and args.gene.children[1].kind == VkString:
+      body = args.gene.children[1].str
     
-    if args_ref.arr.len > 2 and args_ref.arr[2].kind == VkMap:
-      let r = args_ref.arr[2].ref
+    if args.gene.children.len > 2 and args.gene.children[2].kind == VkMap:
+      let r = args.gene.children[2].ref
       for k, v in r.map:
         if v.kind == VkString:
           headers[get_symbol(cast[int](k))] = v.str
@@ -209,15 +220,17 @@ proc vm_http_put(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
 
 proc vm_http_delete(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "http_delete: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "http_delete requires at least 1 argument (url)")
     
-    let url = args_ref.arr[0].str
+    let url = args.gene.children[0].str
     var headers = initTable[string, string]()
     
-    if args_ref.arr.len > 1 and args_ref.arr[1].kind == VkMap:
-      let r = args_ref.arr[1].ref
+    if args.gene.children.len > 1 and args.gene.children[1].kind == VkMap:
+      let r = args.gene.children[1].ref
       for k, v in r.map:
         if v.kind == VkString:
           headers[get_symbol(cast[int](k))] = v.str
@@ -227,25 +240,33 @@ proc vm_http_delete(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} 
 
 proc vm_json_parse(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "json_parse: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "json_parse requires 1 argument (json_string)")
     
-    if args_ref.arr[0].kind != VkString:
+    if args.gene.children[0].kind != VkString:
       raise new_exception(types.Exception, "json_parse requires a string argument")
     
-    return parse_json(args_ref.arr[0].str)
+    return parse_json(args.gene.children[0].str)
 
 proc vm_json_stringify(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
   {.cast(gcsafe).}:
-    let args_ref = args.ref
-    if args_ref.arr.len < 1:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "json_stringify: args is not a Gene")
+    
+    if args.gene.children.len < 1:
       raise new_exception(types.Exception, "json_stringify requires 1 argument")
     
-    let json_str = to_json(args_ref.arr[0])
+    let json_str = to_json(args.gene.children[0])
     return new_str_value(json_str)
 
 {.push dynlib, exportc.}
+
+proc http_get_wrapper(vm: VirtualMachine, args: Value): Value {.gcsafe.} =
+  # Wrapper that can be called directly
+  vm_http_get(vm, args)
 
 proc init*(vm: ptr VirtualMachine): Namespace =
   result = new_namespace("http")

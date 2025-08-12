@@ -86,7 +86,8 @@ proc compile_complex_symbol(self: Compiler, input: Value) =
         # Handle spread operator for variables like "a..."
         self.output.instructions.add(Instruction(kind: IkSpread))
       else:
-        self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
+        let key = s.to_key()
+        self.output.instructions.add(Instruction(kind: IkGetMember, arg0: cast[Value](key)))
 
 proc compile_symbol(self: Compiler, input: Value) =
   if self.quote_level > 0:
@@ -378,7 +379,8 @@ proc compile_assignment(self: Compiler, gene: ptr Gene) =
         elif s.starts_with("."):
           self.output.instructions.add(Instruction(kind: IkCallMethodNoArgs, arg0: s[1..^1]))
         else:
-          self.output.instructions.add(Instruction(kind: IkGetMember, arg0: s.to_key()))
+          let key = s.to_key()
+          self.output.instructions.add(Instruction(kind: IkGetMember, arg0: cast[Value](key)))
     
     if operator != "=":
       # For compound assignment, duplicate the target object on the stack

@@ -3014,7 +3014,7 @@ proc init_app_and_vm*() =
   r.app = new_app()
   r.app.global_ns = new_namespace("global").to_value()
   r.app.gene_ns   = new_namespace("gene"  ).to_value()
-  r.app.genex_ns  = new_namespace("gene"  ).to_value()
+  r.app.genex_ns  = new_namespace("genex" ).to_value()
   App = r.to_ref_value()
 
   # Create built-in GeneException class
@@ -3024,6 +3024,13 @@ proc init_app_and_vm*() =
   exception_ref.class = exception_class
   # Add to global namespace so it's accessible everywhere
   App.app.global_ns.ref.ns["GeneException".to_key()] = exception_ref.to_ref_value()
+  
+  # Add genex to global namespace (similar to gene-new)
+  App.app.global_ns.ref.ns["genex".to_key()] = App.app.genex_ns
+  
+  # Pre-populate genex with commonly used extensions
+  # This creates the namespace entry but doesn't load the extension yet
+  App.app.genex_ns.ref.ns["http".to_key()] = NIL
   
   # Add time namespace stub to prevent errors
   let time_ns = new_namespace("time")

@@ -1,13 +1,5 @@
 #!/usr/bin/env gene run
 
-#< USAGE:
-examples/http.gene | json_pp
-#>#
-
-# See https://mediastack.com/quickstart
-(var base_url "http://api.mediastack.com/v1")
-(var token ((gene/File/read #"#($env "HOME")/temp/mediastack.txt") .trim))
-
-(println
-  (genex/http/get #"#{base_url}/news?symbols=AAPL&access_key=#{token}")
-)
+# Test with httpbin
+(var response (genex/http/get "https://httpbin.org/get"))
+(println response)
