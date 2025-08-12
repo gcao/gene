@@ -37,3 +37,4 @@ tests/test_*
 nimcache/
 *.exe
 models/
+test_*.gene
