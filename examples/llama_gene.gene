@@ -1,0 +1,32 @@
+# LLaMA Integration Test in Gene
+# ==============================
+
+(println "🤖 Testing LLaMA.cpp from Gene")
+(println "==============================\n")
+
+# Check if llama namespace is available
+(println "Loading model...")
+(var result (llama/load "models/tinyllama.gguf"))
+(println "Load result: " result)
+
+(if (result ^status == "loaded")
+  (do
+    (println "\n✅ Model loaded successfully!")
+    
+    # Get info
+    (var info (llama/info))
+    (println "System info: " info)
+    
+    # Generate text
+    (println "\n📝 Generating text...")
+    (var prompt "The future of artificial intelligence")
+    (var generated (llama/generate prompt 50))
+    (println "Prompt: " prompt)
+    (println "Generated: " generated)
+    
+    # Unload model
+    (llama/unload)
+    (println "\n✅ Model unloaded")
+  )
+  (println "❌ Failed to load model: " (result ^message))
+)

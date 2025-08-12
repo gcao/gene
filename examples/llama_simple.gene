@@ -1,0 +1,30 @@
+# Simple LLaMA Test
+# ================
+
+(println "Testing simplified llama integration...")
+
+# Try using the built-in AI natives instead
+(var t1 (tensor/create [2 3] ^float32 "cpu"))
+(println "Created tensor: " t1)
+
+(var t2 (tensor/random [2 3]))
+(println "Random tensor: " t2)
+
+(var shape (tensor/shape t1))
+(println "Tensor shape: " shape)
+
+(println "\n✅ Tensor operations work!")
+
+# Try tokenizer
+(var tok (tokenizer/create 1000))
+(println "\nTokenizer created: " tok)
+
+# Try model
+(var model (model/create "test-model" "llama"))
+(println "Model created: " model)
+
+# Try device
+(var dev (device/create "cpu"))
+(println "Device created: " dev)
+
+(println "\n✅ AI natives work!")

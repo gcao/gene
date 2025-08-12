@@ -1,0 +1,60 @@
+# Gene Extension: LLaMA.cpp Demo
+# ==============================
+
+(println "🚀 Gene Extension System Demo")
+(println "Using genex/llamacpp for AI text generation")
+(println "=" 45)
+(println)
+
+# Check info before loading
+(println "📊 System Info:")
+(var info (genex/llamacpp/info))
+(println "  • Initialized: " (info ^initialized))
+(println "  • Model loaded: " (info ^model_loaded))
+(println "  • Backend: " (info ^backend))
+(println)
+
+# Load the model
+(println "📚 Loading model...")
+(var load_result (genex/llamacpp/load "models/tinyllama.gguf"))
+(println "  Status: " (load_result ^status))
+(println "  Path: " (load_result ^path))
+(println)
+
+# Generate multiple completions
+(println "✨ Generating text completions:")
+(println)
+
+(var prompts [
+  "The future of artificial intelligence"
+  "Once upon a time in a galaxy"
+  "The secret to happiness is"
+])
+
+(var i 0)
+(loop (< i (prompts .length))
+  (do
+    (var prompt (prompts @ i))
+    (println "Prompt " (+ i 1) ": \"" prompt "\"")
+    (var generated (genex/llamacpp/generate prompt 25))
+    (println "→ " generated)
+    (println)
+    (set i (+ i 1))
+  )
+)
+
+# Get updated info
+(println "📊 Updated System Info:")
+(var final_info (genex/llamacpp/info))
+(println "  • Model loaded: " (final_info ^model_loaded))
+(println "  • Context ready: " (final_info ^context_ready))
+(println)
+
+# Cleanup
+(println "🧹 Cleaning up...")
+(genex/llamacpp/unload)
+(println "✅ Model unloaded")
+(println)
+
+(println "🎉 Demo complete!")
+(println "The genex/llamacpp extension provides native LLM inference in Gene!")

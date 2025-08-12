@@ -1,0 +1,21 @@
+# Simple LLaMA Test
+# =================
+
+(println "🤖 LLaMA.cpp Integration Test")
+(println "============================\n")
+
+# Load model
+(println "Loading TinyLlama model...")
+(var model_result (genex/llamacpp/load "models/tinyllama.gguf"))
+(println "Result: " model_result)
+
+# Generate text
+(println "\nGenerating text...")
+(var prompt "Once upon a time")
+(var generated (genex/llamacpp/generate prompt 30))
+(println "\nPrompt: " prompt)
+(println "Generated: " generated)
+
+# Cleanup
+(genex/llamacpp/unload)
+(println "\n✅ Test complete!")

@@ -4,6 +4,7 @@ import ../types
 import ./ai_bindings
 import ./ai_interface
 import ./ai_core_natives
+import ./llama_natives
 from ./ai_bindings import tokenizer_create, model_create, device_create,
   tensor_create, tensor_random, tensor_zeros, tensor_add, tensor_matmul,
   tensor_transpose, embedding_create, model_session_create
@@ -340,6 +341,9 @@ proc native_tensor_transform(vm: VirtualMachine, args: Value): Value {.gcsafe, n
 proc register_ai_natives*(vm: VirtualMachine) =
   # Register the generic AI interface first
   register_ai_core_natives(vm)
+  
+  # Register llama natives
+  register_llama_natives(vm)
   
   # Get the global namespace from App
   let global_ns = App.app.global_ns.ref.ns

@@ -13,10 +13,10 @@ bin           = @["gene"]
 requires "nim >= 1.4.0"
 
 task speedy, "Optimized build for maximum performance":
-  exec "nim c -d:release --mm:orc --opt:speed --passC:\"-march=native -O3\" -o:gene src/gene.nim"
+  exec "nim c -d:release --mm:orc --opt:speed --passC:\"-O3\" -o:gene src/gene.nim"
 
 task bench, "Build and run benchmarks":
-  exec "nim c -d:release --mm:orc --opt:speed --passC:\"-march=native\" -r bench/run_benchmarks.nim"
+  exec "nim c -d:release --mm:orc --opt:speed --passC:\"-O3\" -r bench/run_benchmarks.nim"
 
 task buildext, "Build extension modules":
   exec "mkdir -p build"

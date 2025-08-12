@@ -1,0 +1,35 @@
+# Complete AI Demo in Gene
+# =========================
+
+(println "🤖 Gene AI/ML Complete Demo")
+(println "===========================\n")
+
+# Tensor Operations
+(println "📊 Creating Tensors...")
+(var t1 (tensor/create [3 4] ^float32 "cpu"))
+(var t2 (tensor/random [3 4]))
+(println "✅ Tensors created")
+
+# Get tensor shape
+(var shape (tensor/shape t1))
+(println "   Shape: " shape)
+
+# AI Components
+(println "\n🧠 Initializing AI Components...")
+(var tokenizer (tokenizer/create 32000))
+(println "✅ Tokenizer ready (vocab: 32000)")
+
+(var device (device/create "cpu"))
+(println "✅ Device initialized: CPU")
+
+(var model (model/create "gpt-mini" "transformer"))
+(println "✅ Model created: gpt-mini")
+
+(var embeddings (embedding/create 768))
+(println "✅ Embeddings: 768 dimensions")
+
+(println "\n🎯 AI System Ready!")
+(println "==================")
+(println "All AI components initialized successfully.")
+(println "\nFor text generation, run:")
+(println "  ./examples/llama_inference models/tinyllama.gguf")

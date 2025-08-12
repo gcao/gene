@@ -1,0 +1,32 @@
+# Test LLaMA.cpp Integration
+# =========================
+
+(println "🤖 Testing LLaMA.cpp Integration")
+(println "================================\n")
+
+# Test with the mock extension first
+($load_extension "build/libllama.dylib")
+(println "✅ Mock extension loaded\n")
+
+# Get info
+(var info (llama/info))
+(println "Extension info:")
+(println info)
+(println)
+
+# Try to load a model
+(println "Loading model...")
+(var model (llama/load "models/tinyllama.gguf"))
+(println "Model load result:")
+(println model)
+(println)
+
+# Try to generate text
+(println "Generating text...")
+(var prompt "The future of AI")
+(var text (llama/generate prompt 30))
+(println "Prompt: " prompt)
+(println "Generated: " text)
+(println)
+
+(println "✅ Test complete!")
