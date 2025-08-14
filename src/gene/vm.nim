@@ -310,6 +310,14 @@ proc exec*(self: VirtualMachine): Value =
           if self.trace:
             echo fmt"{indent}     [Noop at PC {pc:04X}, label: {inst.label.int:04X}]"
         discard
+      
+      of IkData:
+        # IkData provides data for the previous instruction
+        # It should not be executed directly - the previous instruction should consume it
+        when not defined(release):
+          if self.trace:
+            echo fmt"{indent}     [Data at PC {pc:04X}, skipping]"
+        discard
 
       of IkStart:
         when not defined(release):
@@ -2363,6 +2371,9 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        when not defined(release):
+          if inst.kind != IkData:
+            raise new_exception(types.Exception, fmt"Expected IkData after IkFunction, got {inst.kind}")
         f.parent_scope.update(self.frame.scope)
         
         f.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
@@ -2409,6 +2420,9 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        when not defined(release):
+          if inst.kind != IkData:
+            raise new_exception(types.Exception, fmt"Expected IkData after IkMacro, got {inst.kind}")
         m.parent_scope.update(self.frame.scope)
         m.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
         
@@ -2426,6 +2440,9 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        when not defined(release):
+          if inst.kind != IkData:
+            raise new_exception(types.Exception, fmt"Expected IkData after IkBlock, got {inst.kind}")
         b.frame.update(self.frame)
         b.scope_tracker = new_scope_tracker(inst.arg0.ref.scope_tracker)
 
@@ -2446,6 +2463,9 @@ proc exec*(self: VirtualMachine): Value =
         # More data are stored in the next instruction slot
         pc.inc()
         inst = cast[ptr Instruction](cast[int64](inst) + INST_SIZE)
+        when not defined(release):
+          if inst.kind != IkData:
+            raise new_exception(types.Exception, fmt"Expected IkData after IkCompileFn, got {inst.kind}")
         # Initialize parent_scope if it doesn't exist
         if f.parent_scope == nil:
           f.parent_scope = new_scope(new_scope_tracker())

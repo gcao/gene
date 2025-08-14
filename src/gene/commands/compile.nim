@@ -131,7 +131,7 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
        IkGeneStartDefault, IkSubValue, IkAddValue, IkLtValue, IkFunction,
        IkMacro, IkBlock, IkCompileFn, IkNamespace, IkNamespaceStore,
        IkClass, IkSubClass, IkDefineMethod, IkResolveMethod, IkCallMethodNoArgs,
-       IkCallMethod, IkAssign:
+       IkCallMethod, IkAssign, IkData:
       result &= " " & $inst.arg0
     of IkSetMember, IkGetMember:
       let key = inst.arg0.Key
@@ -185,6 +185,8 @@ proc formatInstruction(inst: Instruction, index: int, format: string, show_addre
       discard
     
     # Instructions with only arg0
+    of IkData:
+      result &= formatValue(inst.arg0)
     of IkPushValue:
       result &= formatValue(inst.arg0)
     of IkScopeStart:

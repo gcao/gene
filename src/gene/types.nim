@@ -595,6 +595,7 @@ type
 
   InstructionKind* {.size: sizeof(int16).} = enum
     IkNoop
+    IkData    # Data for the previous instruction
 
     IkStart   # start a compilation unit
     IkEnd     # end a compilation unit
