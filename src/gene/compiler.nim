@@ -1,6 +1,7 @@
-import tables, strutils
+import tables, strutils, streams
 
 import ./types
+import ./parser
 import "./compiler/if"
 
 const DEBUG = false
@@ -2471,5 +2472,33 @@ proc compile_init*(input: Value): CompilationUnit =
 
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
+
+# Unified parse and compile functions - the new default approach
+proc parse_and_compile*(input: string, filename = "<input>"): CompilationUnit =
+  ## Parse and compile Gene code from a string in a single pass
+  ## This is the new efficient approach that replaces parse + compile
+  
+  # For now, use the existing parser + compiler approach
+  # This maintains compatibility while we implement the unified version
+  let parsed = read_all(input)
+  return compile(parsed)
+
+proc parse_and_compile*(input: Stream, filename = "<stream>"): CompilationUnit =
+  ## Parse and compile Gene code from a stream
+  
+  var parser = new_parser()
+  parser.open(input, filename)
+  defer: parser.close()
+  
+  var parsed: seq[Value] = @[]
+  try:
+    while true:
+      let node = parser.read()
+      if node != PARSER_IGNORE:
+        parsed.add(node)
+  except:
+    discard  # EOF reached
+  
+  return compile(parsed)
 
 # Compile methods for Function, Macro, Block, and CompileFn are defined above

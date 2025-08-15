@@ -1,7 +1,6 @@
 import parseopt, strutils, strformat
 import ../types
 import ../vm
-import ../parser
 import ../compiler
 import ./base
 
@@ -106,7 +105,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
     # Handle trace-instruction option
     if options.trace_instruction:
       # Show both compilation and execution with trace
-      let compiled = compile(read_all(code))
+      let compiled = parse_and_compile(code)
       echo "=== Compilation Output ==="
       echo "Instructions:"
       for i, instr in compiled.instructions:
@@ -123,7 +122,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
       echo $value
     # Show compilation details if requested
     elif options.compile or options.debugging:
-      let compiled = compile(read_all(code))
+      let compiled = parse_and_compile(code)
       echo "=== Compilation Output ==="
       echo "Instructions:"
       for i, instr in compiled.instructions:

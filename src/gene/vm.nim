@@ -3544,7 +3544,7 @@ proc exec*(self: VirtualMachine): Value =
   {.pop.}  # End of hot VM execution loop pragma push
 
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
-  let compiled = compile(read_all(code))
+  let compiled = parse_and_compile(code, module_name)
 
   let ns = new_namespace(module_name)
   

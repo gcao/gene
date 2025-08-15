@@ -2,7 +2,6 @@ import parseopt, times, strformat, terminal, os, strutils
 
 import ../types
 import ../vm
-import ../parser
 import ../compiler
 import ../gir
 import ./base
@@ -229,7 +228,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
   if options.trace_instruction:
     # Show both compilation and execution with trace
     echo "=== Compilation Output ==="
-    let compiled = compile(read_all(code))
+    let compiled = parse_and_compile(code, file)
     echo "Instructions:"
     for i, instr in compiled.instructions:
       echo fmt"{i:04X} {instr}"
@@ -243,7 +242,7 @@ proc handle*(cmd: string, args: seq[string]): CommandResult =
     value = VM.exec()
   elif options.compile or options.debugging:
     echo "=== Compilation Output ==="
-    let compiled = compile(read_all(code))
+    let compiled = parse_and_compile(code, file)
     echo "Instructions:"
     for i, instr in compiled.instructions:
       echo fmt"{i:03d}: {instr}"
