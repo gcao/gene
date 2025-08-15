@@ -2478,10 +2478,9 @@ proc parse_and_compile*(input: string, filename = "<input>"): CompilationUnit =
   ## Parse and compile Gene code from a string in a single pass
   ## This is the new efficient approach that replaces parse + compile
   
-  # For now, use the existing parser + compiler approach
-  # This maintains compatibility while we implement the unified version
-  let parsed = read_all(input)
-  return compile(parsed)
+  # Convert string to stream and use the same approach as stream version
+  var stream = new_string_stream(input)
+  return parse_and_compile(stream, filename)
 
 proc parse_and_compile*(input: Stream, filename = "<stream>"): CompilationUnit =
   ## Parse and compile Gene code from a stream
