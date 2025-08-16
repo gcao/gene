@@ -350,8 +350,7 @@ proc read_string(self: var Parser, start: char): Value =
   result = self.str
   self.str = ""
 
-proc read_string1(self: var Parser): Value =
-  self.read_string('\'')
+# read_string1 removed - ' is now used for character literals, not strings
 
 proc read_string2(self: var Parser): Value =
   self.read_string('"')
@@ -517,43 +516,57 @@ proc read_token(self: var Parser, lead_constituent: bool): string =
   return self.read_token(lead_constituent, [':'])
 
 proc read_character(self: var Parser): Value =
-  var pos = self.bufpos
-  let ch = self.buf[pos]
-  case ch:
-  of EndOfFile:
-    raise new_exception(ParseError, "EOF while reading character")
-  of '\'', '"':
-    self.bufpos.inc()
-    discard self.parse_string(ch)
-    if self.error != ErrNone:
-      raise new_exception(ParseError, "read_string failure: " & $self.error)
-    return self.str.to_symbol_value()
-  else:
-    let token = self.read_token(false)
-    if token.len == 1:
-      return token[0]
-
-    case token:
-    of "newline":
-      result = '\n'
-    of "space":
-      result = ' '
-    of "tab":
-      result = '\t'
-    of "backspace":
-      result = '\b'
-    of "formfeed":
-      result = '\f'
-    of "return":
-      result = '\r'
+  # New character literal syntax: 'a' or '\n' 
+  # Note: bufpos is already positioned after the opening ' by the macro system
+  
+  if self.buf[self.bufpos] == EndOfFile:
+    raise new_exception(ParseError, "EOF while reading character literal")
+  
+  var ch = self.buf[self.bufpos]
+  var result_char: char
+  
+  if ch == '\\':
+    # Escape sequence: '\n', '\t', etc.
+    inc(self.bufpos)
+    if self.buf[self.bufpos] == EndOfFile:
+      raise new_exception(ParseError, "EOF after backslash in character literal")
+    
+    let escaped = self.buf[self.bufpos] 
+    case escaped:
+    of 'n':
+      result_char = '\n'
+    of 't':
+      result_char = '\t'
+    of 'r':
+      result_char = '\r'
+    of 'b':
+      result_char = '\b'
+    of 'f':
+      result_char = '\f'
+    of '\\':
+      result_char = '\\'
+    of '\'':
+      result_char = '\''
+    of '"':
+      result_char = '"'
     else:
-      if token.startsWith("\\u"):
-        # TODO: impl unicode char reading
-        raise new_exception(ParseError, "Not implemented: reading unicode chars")
-      elif token.runeLen == 1:
-        result = token.runeAt(0)
-      else:
-        raise new_exception(ParseError, "Unknown character: " & token)
+      # For other characters, use them literally (e.g., '\a' -> 'a')
+      result_char = escaped
+    inc(self.bufpos)
+  else:
+    # Single character: 'a', 'b', etc.
+    result_char = ch
+    inc(self.bufpos)
+  
+  # Expect closing '
+  let closing_char = self.buf[self.bufpos]
+  if closing_char != '\'':
+    raise new_exception(ParseError, "Expected closing ' in character literal, got: " & $closing_char & " (ord: " & $closing_char.ord & ")")
+  inc(self.bufpos)  # Skip closing '
+  
+  return result_char
+
+# Character parsing removed - use 'a' syntax instead
 
 proc skip_ws(self: var Parser) {.gcsafe.} =
   # Optimized: fast path for common whitespace characters
@@ -964,10 +977,10 @@ proc read_dispatch(self: var Parser): Value =
     result = m(self)
 
 proc init_macro_array() =
-  macros['\''] = read_string1
-  macros['"'] = read_string2
+  macros['\''] = read_character  # ' for character literals like 'a' or '\n'
+  macros['"'] = read_string2     # " for strings
   macros[':'] = read_quoted
-  macros['\\'] = read_character
+  # macros['\\'] removed - no longer support \a syntax
   macros['%'] = read_unquoted
   macros['#'] = read_dispatch
   macros['('] = read_gene
