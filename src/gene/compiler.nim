@@ -2473,31 +2473,46 @@ proc compile_init*(input: Value): CompilationUnit =
 proc replace_chunk*(self: var CompilationUnit, start_pos: int, end_pos: int, replacement: sink seq[Instruction]) =
   self.instructions[start_pos..end_pos] = replacement
 
-# Unified parse and compile functions - the new default approach
+# Parse and compile functions - unified interface for future streaming implementation
 proc parse_and_compile*(input: string, filename = "<input>"): CompilationUnit =
-  ## Parse and compile Gene code from a string in a single pass
-  ## This is the new efficient approach that replaces parse + compile
-  
-  # Convert string to stream and use the same approach as stream version
-  var stream = new_string_stream(input)
-  return parse_and_compile(stream, filename)
-
-proc parse_and_compile*(input: Stream, filename = "<stream>"): CompilationUnit =
-  ## Parse and compile Gene code from a stream
+  ## Parse and compile Gene code from a string with streaming compilation
+  ## Parse one item -> compile immediately -> repeat
   
   var parser = new_parser()
-  parser.open(input, filename)
+  var stream = new_string_stream(input)
+  parser.open(stream, filename)
   defer: parser.close()
   
-  var parsed: seq[Value] = @[]
+  # Initialize compilation
+  let self = Compiler(output: new_compilation_unit(), tail_position: false)
+  self.output.instructions.add(Instruction(kind: IkStart))
+  self.start_scope()
+  
+  var is_first = true
+  
+  # Streaming compilation: parse one -> compile one -> repeat
   try:
     while true:
       let node = parser.read()
       if node != PARSER_IGNORE:
-        parsed.add(node)
-  except:
-    discard  # EOF reached
+        # Pop previous result before compiling next item (except for first)
+        if not is_first:
+          self.output.instructions.add(Instruction(kind: IkPop))
+        
+        # Compile current item
+        self.compile(node)
+        is_first = false
+  except ParseEofError:
+    # Expected end of input
+    discard
   
-  return compile(parsed)
+  # Finalize compilation
+  self.end_scope()
+  self.output.instructions.add(Instruction(kind: IkEnd))
+  self.output.optimize_noops()
+  self.output.update_jumps()
+  
+  return self.output
+
 
 # Compile methods for Function, Macro, Block, and CompileFn are defined above
