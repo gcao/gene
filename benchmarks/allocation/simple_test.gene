@@ -1,6 +1,7 @@
 # Very simple test
 (var count 0)
-(for i in (range 0 200)
+(var i 0)
+(while (< i 200)
   (count = (+ count 1))
-)
+  (i = (+ i 1)))
 (println "Count: " count)

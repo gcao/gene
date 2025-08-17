@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# Usage:
+# bench_parser
+
+echo "=== Gene Parser Benchmark ==="
+echo "Date: $(date '+%Y-%m-%d %H:%M:%S %A')"
+echo "Git commit: $(git rev-parse HEAD)"
+echo "Nim version: $(nim --version 2>&1 | head -1)"
+echo ""
+
+# Clean up old binary
+rm -f bin/benchmark_parser 2>/dev/null
+
+# Compile with modern memory management and suppress warnings
+echo "Compiling parser benchmark..."
+CMD="nim c --hints:off --mm:orc -d:release -d:ssl --out:bin/benchmark_parser benchmarks/parser/benchmark.nim"
+$CMD 2>&1 | grep -v "Warning:" | grep -v "ignoring duplicate libraries" || true
+
+# Run benchmark
+echo ""
+echo "Running parser benchmark..."
+./bin/benchmark_parser "$@"

@@ -1,10 +1,10 @@
 when isMainModule:
   import times, os, strformat
 
-  import ../gene/types
-  import ../gene/parser
-  import ../gene/compiler
-  import ../gene/vm
+  import ../../src/gene/types
+  import ../../src/gene/parser
+  import ../../src/gene/compiler
+  import ../../src/gene/vm
 
   var n = "24"
   var args = command_line_params()
@@ -15,12 +15,9 @@ when isMainModule:
 
   let code = fmt"""
     (fn fib n
-      (if (n < 2)
+      (if (< n 2)
         n
-      else
-        ((fib (n - 1)) + (fib (n - 2)))
-      )
-    )
+        (+ (fib (- n 1)) (fib (- n 2)))))
     (fib {n})
   """
 

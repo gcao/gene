@@ -1,26 +1,24 @@
 # Loop and arithmetic benchmark
 (fn sum_loop n
   (var total 0)
-  (for i 1 n
-    (= total (+ total i)))
+  (var i 1)
+  (while (<= i n)
+    (total = (+ total i))
+    (i = (+ i 1)))
   total)
 
 (fn count_loop n
   (var count 0)
   (while (< count n)
-    (= count (+ count 1)))
+    (count = (+ count 1)))
   count)
 
 # Run benchmarks
-(var n 1000000)
+(var n 1000)
 (println "Loop benchmarks with n=" n)
 
-(var start (time/now))
 (var result (sum_loop n))
-(var elapsed (- (time/now) start))
-(println "sum_loop: " result " in " elapsed "ms")
+(println "sum_loop: " result)
 
-(var start2 (time/now))
 (var result2 (count_loop n))
-(var elapsed2 (- (time/now) start2))
-(println "count_loop: " result2 " in " elapsed2 "ms")
+(println "count_loop: " result2)

@@ -1,10 +1,10 @@
 when isMainModule:
   import times, os, strformat, tables
   
-  import ../gene/types
-  import ../gene/parser
-  import ../gene/compiler
-  import ../gene/vm
+  import ../../src/gene/types
+  import ../../src/gene/parser
+  import ../../src/gene/compiler
+  import ../../src/gene/vm
 
   # Simple trace capture
   var instruction_trace = newSeq[InstructionKind]()

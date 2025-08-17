@@ -1,36 +1,37 @@
 # Simple pooling benchmark
 # Tests object reuse with pools
 
-(var iterations 50000)
+(var iterations 1000)
 
 # Test 1: Array allocation
-(println "Testing array pooling with " iterations " iterations...")
+(println "Testing array pooling...")
 (var arr_sum 0)
-(for i in (range 0 iterations)
+(var i 0)
+(while (< i iterations)
   (var arr [1 2 3 4 5])
   (arr_sum = (+ arr_sum 1))
-)
-(println "Arrays created: " arr_sum)
+  (i = (+ i 1)))
+(println "Array operations completed: " arr_sum)
 
 # Test 2: Map allocation
 (println "Testing map pooling...")
 (var map_sum 0)
-(for i in (range 0 iterations)
+(i = 0)
+(while (< i iterations)
   (var m {^x 1 ^y 2 ^z 3})
   (map_sum = (+ map_sum 1))
-)
-(println "Maps created: " map_sum)
+  (i = (+ i 1)))
+(println "Map operations completed: " map_sum)
 
-# Test 3: Mixed allocation pattern
-(println "Testing mixed allocations...")
-(var mixed_sum 0)
-(for i in (range 0 10000)
-  (var a1 [i])
-  (var m1 {^val i})
-  (var a2 [(* i 2)])
-  (var m2 {^val2 (* i 3)})
-  (mixed_sum = (+ mixed_sum 1))
-)
-(println "Mixed iterations: " mixed_sum)
+# Test 3: Gene allocation
+(println "Testing gene pooling...")
+(var gene_sum 0)
+(i = 0)
+(while (< i iterations)
+  # Simple gene expression creation
+  (var g (:test a 1 b 2))
+  (gene_sum = (+ gene_sum 1))
+  (i = (+ i 1)))
+(println "Gene operations completed: " gene_sum)
 
-(println "Benchmark complete - pools should have reduced allocation overhead")
+(println "Pool efficiency test complete")

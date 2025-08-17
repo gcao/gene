@@ -1,10 +1,10 @@
 when isMainModule:
   import times, os, strformat, strutils
 
-  import ../gene/types
-  import ../gene/parser
-  import ../gene/compiler
-  import ../gene/vm
+  import ../../src/gene/types
+  import ../../src/gene/parser
+  import ../../src/gene/compiler
+  import ../../src/gene/vm
 
   var iterations = "1000000"
   var args = command_line_params()
@@ -17,10 +17,9 @@ when isMainModule:
   let code = fmt"""
     (var sum 0)
     (var i 0)
-    (while (i < {iterations})
-      (sum = (sum + i))
-      (i = (i + 1))
-    )
+    (while (< i {iterations})
+      (sum = (+ sum i))
+      (i = (+ i 1)))
     sum
   """
 

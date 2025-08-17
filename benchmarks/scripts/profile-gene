@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Profile Gene with valgrind/callgrind
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <gene-file> [args...]"
+    echo "Example: $0 examples/fibonacci.gene"
+    exit 1
+fi
+
+GENE_FILE=$1
+shift  # Remove first argument, pass the rest to gene
+
+# Check if gene binary exists
+if [ ! -f ./gene ]; then
+    echo "Error: ./gene binary not found. Run 'nimble build' first."
+    exit 1
+fi
+
+# Clean up old callgrind output files
+rm -f callgrind.out.*
+
+echo "=== Profiling Gene with callgrind ==="
+echo "Running: valgrind --tool=callgrind ./gene run $GENE_FILE $@"
+echo ""
+
+# Run valgrind with callgrind
+valgrind --tool=callgrind \
+         --callgrind-out-file=callgrind.out.gene \
+         --collect-jumps=yes \
+         --simulate-cache=yes \
+         ./gene run "$GENE_FILE" "$@"
+
+echo ""
+echo "=== Profiling complete ==="
+echo ""
+echo "Output written to: callgrind.out.gene"
+echo ""
+echo "To view results:"
+echo "  - GUI mode: kcachegrind callgrind.out.gene"
+echo "  - Text mode: callgrind_annotate callgrind.out.gene"
+echo ""
+echo "For function-level summary:"
+echo "  callgrind_annotate --auto=yes callgrind.out.gene | head -50"

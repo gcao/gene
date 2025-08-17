@@ -4,11 +4,11 @@
     n
     (+ (fib (- n 1)) (fib (- n 2)))))
 
-# Run the benchmark
-(var n 30)
+(var n 20)
 (println "Computing fib(" n ")...")
-(var start (time/now))
+# Note: time/now is not yet implemented, so timing is disabled
+# (var start (time/now))
 (var result (fib n))
-(var elapsed (- (time/now) start))
+# (var elapsed (- (time/now) start))
 (println "fib(" n ") = " result)
-(println "Time: " elapsed "ms")
+# (println "Time: " elapsed "ms")

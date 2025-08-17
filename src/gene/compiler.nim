@@ -1332,7 +1332,7 @@ proc compile_gene(self: Compiler, input: Value) =
   # This handles cases like (6 / 2) or (i + 1)
   if gene.children.len >= 1:
     let first_child = gene.children[0]
-    if (first_child.kind == VkSymbol and first_child.str in ["+", "-", "*", "/", "%", "**", "./"]) or
+    if (first_child.kind == VkSymbol and first_child.str in ["+", "-", "*", "/", "%", "**", "./", "<", "<=", ">", ">=", "==", "!="]) or
        (first_child.kind == VkComplexSymbol and first_child.ref.csymbol.len >= 2 and first_child.ref.csymbol[0] == "." and first_child.ref.csymbol[1] == ""):
       # Don't convert if the type is already an operator or special form
       if `type`.kind != VkSymbol or `type`.str notin ["var", "if", "fn", "fnx", "fnxx", "macro", "do", "loop", "while", "for", "ns", "class", "try", "throw", "$", "."]:
@@ -1487,6 +1487,54 @@ proc compile_gene(self: Compiler, input: Value) =
           self.compile(gene.children[i])
           self.output.instructions.add(Instruction(kind: IkDiv))
         return
+      of "<":
+        # Binary less than
+        if gene.children.len != 2:
+          not_allowed("< requires exactly 2 arguments")
+        self.compile(gene.children[0])
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkLt))
+        return
+      of "<=":
+        # Binary less than or equal
+        if gene.children.len != 2:
+          not_allowed("<= requires exactly 2 arguments")
+        self.compile(gene.children[0])
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkLe))
+        return
+      of ">":
+        # Binary greater than
+        if gene.children.len != 2:
+          not_allowed("> requires exactly 2 arguments")
+        self.compile(gene.children[0])
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkGt))
+        return
+      of ">=":
+        # Binary greater than or equal
+        if gene.children.len != 2:
+          not_allowed(">= requires exactly 2 arguments")
+        self.compile(gene.children[0])
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkGe))
+        return
+      of "==":
+        # Binary equality
+        if gene.children.len != 2:
+          not_allowed("== requires exactly 2 arguments")
+        self.compile(gene.children[0])
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkEq))
+        return
+      of "!=":
+        # Binary inequality
+        if gene.children.len != 2:
+          not_allowed("!= requires exactly 2 arguments")
+        self.compile(gene.children[0])
+        self.compile(gene.children[1])
+        self.output.instructions.add(Instruction(kind: IkNe))
+        return
       else:
         discard  # Not an arithmetic operator, continue with normal processing
   
@@ -1496,59 +1544,6 @@ proc compile_gene(self: Compiler, input: Value) =
       case first.str:
         of "=", "+=", "-=":
           self.compile_assignment(gene)
-          return
-        of "<":
-          # Check if left side is a simple variable and right side is a literal
-          if `type`.kind == VkSymbol and gene.children[1].is_literal():
-            let key = `type`.str.to_key()
-            let found = self.scope_tracker.locate(key)
-            if found.local_index >= 0:
-              # Generate single VarLtValue instruction
-              # arg0: variable index, arg1: parent index (packed with literal value in VM)
-              self.output.instructions.add(Instruction(
-                kind: IkVarLtValue,
-                arg0: found.local_index.to_value(),
-                arg1: found.parent_index.int32
-              ))
-              # Add the literal value as a separate instruction for now
-              self.output.instructions.add(Instruction(
-                kind: IkNoop,
-                arg0: gene.children[1]
-              ))
-              return
-          
-          # Fall back to regular compilation
-          self.compile(`type`)
-          if gene.children[1].is_literal():
-            self.output.instructions.add(Instruction(kind: IkLtValue, arg0: gene.children[1]))
-          else:
-            self.compile(gene.children[1])
-            self.output.instructions.add(Instruction(kind: IkLt))
-          return
-        of "<=":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkLe))
-          return
-        of ">":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkGt))
-          return
-        of ">=":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkGe))
-          return
-        of "==":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkEq))
-          return
-        of "!=":
-          self.compile(`type`)
-          self.compile(gene.children[1])
-          self.output.instructions.add(Instruction(kind: IkNe))
           return
         of "&&":
           self.compile(`type`)

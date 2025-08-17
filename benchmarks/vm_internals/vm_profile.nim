@@ -1,10 +1,10 @@
 when isMainModule:
-  import times, os, strformat, tables, strutils, sequtils
+  import times, os, strformat, tables, strutils, sequtils, algorithm
   
-  import ../gene/types
-  import ../gene/parser
-  import ../gene/compiler
-  import ../gene/vm
+  import ../../src/gene/types
+  import ../../src/gene/parser
+  import ../../src/gene/compiler
+  import ../../src/gene/vm
 
   # Instruction counters
   var instruction_counts = initCountTable[InstructionKind]()
@@ -116,8 +116,11 @@ when isMainModule:
     let pair = (compiled.instructions[i].kind, compiled.instructions[i+1].kind)
     pairs.inc(pair)
   
-  var sorted_pairs = toSeq(pairs.pairs)
-  sorted_pairs.sort(proc(a, b: tuple[key: (InstructionKind, InstructionKind), val: int]): int = b.val - a.val)
+  type PairCount = tuple[pair: (InstructionKind, InstructionKind), count: int]
+  var sorted_pairs: seq[PairCount] = @[]
+  for pair, count in pairs:
+    sorted_pairs.add((pair, count))
+  sorted_pairs.sort(proc(a, b: PairCount): int = b.count - a.count)
   
   for i, (pair, count) in sorted_pairs:
     if i >= 5: break

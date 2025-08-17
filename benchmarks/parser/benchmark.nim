@@ -1,6 +1,6 @@
 import times, strformat, os, stats, algorithm
-import ../src/gene/parser
-import ../src/gene/types
+import ../../src/gene/parser
+import ../../src/gene/types
 
 # Benchmark data for different parsing scenarios
 const SIMPLE_EXPRESSIONS = @[

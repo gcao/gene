@@ -1,10 +1,10 @@
 when isMainModule:
   import tables, os, times, strformat
 
-  import ../gene/types
-  import ../gene/parser
-  import ../gene/compiler
-  import ../gene/vm
+  import ../../src/gene/types
+  import ../../src/gene/parser
+  import ../../src/gene/compiler
+  import ../../src/gene/vm
 
   var n = "1000"
   var args = command_line_params()

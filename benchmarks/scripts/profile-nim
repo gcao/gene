@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# Profile Gene using Nim's built-in profiler
+
+echo "=== Building Gene with Nim profiler ==="
+echo ""
+
+# Build with profiler enabled
+nim c --hints:off --mm:orc -d:release -d:ssl --profiler:on --stacktrace:on -o:gene_profiled src/gene.nim
+
+if [ $? -ne 0 ]; then
+    echo "Error: Build failed"
+    exit 1
+fi
+
+echo ""
+echo "=== Running profiled Gene ==="
+echo ""
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <gene-file> [args...]"
+    echo "Example: $0 examples/fibonacci.gene"
+    echo ""
+    echo "Using default: src/benchmark/fibonacci.nim"
+    ./gene_profiled run src/benchmark/fibonacci.nim 25
+else
+    ./gene_profiled run "$@"
+fi
+
+echo ""
+echo "=== Profile Results ==="
+echo ""
+
+# The Nim profiler outputs to profile_results.txt
+if [ -f profile_results.txt ]; then
+    cat profile_results.txt
+    echo ""
+    echo "Profile saved to: profile_results.txt"
+else
+    echo "Note: Nim profiler output location may vary"
+    echo "Check for files like:"
+    echo "  - profile_results.txt"
+    echo "  - gene_profiled.profile"
+    echo "  - Look for output above"
+fi
+
+echo ""
+echo "=== Alternative: Use nimprof ==="
+echo "nim c --hints:off --mm:orc -d:release --profiler:on --profiler:off -o:gene_nimprof src/gene.nim"
+echo "./gene_nimprof run examples/fibonacci.gene"
+echo ""
+echo "=== Alternative: Use hotspot profiler (Linux perf) ==="
+echo "sudo perf record -g ./gene run examples/fibonacci.gene"
+echo "sudo perf report"
