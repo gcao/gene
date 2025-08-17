@@ -1189,23 +1189,6 @@ proc compile_gene_unknown(self: Compiler, gene: ptr Gene) {.inline.} =
         self.output.instructions.add(Instruction(kind: IkGetMemberOrNil))
       return
   
-  # Optimization: Check for single-argument function calls
-  # This is a common pattern in recursive functions like fibonacci
-  # Disabled for now - needs more testing
-  # if gene.children.len == 1 and gene.props.len == 0:
-  #   # Check if the type resolves to a function at compile time
-  #   # For now, we'll generate optimized bytecode for all single-arg calls
-  #   let start_pos = self.output.instructions.len
-  #   self.compile(gene.type)
-  #   
-  #   # Check if we just pushed a function value
-  #   if self.output.instructions.len > start_pos:
-  #     let last_inst = self.output.instructions[^1]
-  #     # Generate optimized single-argument call
-  #     self.compile(gene.children[0])  # Compile the single argument
-  #     self.output.instructions.add(Instruction(kind: IkCallDirect1))
-  #     return
-  
   let start_pos = self.output.instructions.len
   self.compile(gene.type)
 

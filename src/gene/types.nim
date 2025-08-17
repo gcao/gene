@@ -759,8 +759,6 @@ type
     IkAddLocal         # GETLOCAL x; ADD; SETLOCAL y
     IkIncLocal         # Increment local variable
     IkDecLocal         # Decrement local variable
-    IkCallDirect1      # Direct call with 1 arg (specialized)
-    IkCallDirect2      # Direct call with 2 args (specialized)
     IkReturnNil        # Common pattern: return nil
     IkReturnTrue       # Common pattern: return true
     IkReturnFalse      # Common pattern: return false
@@ -1027,7 +1025,7 @@ randomize()
 
 #################### Definitions #################
 
-proc kind*(v: Value): ValueKind
+proc kind*(v: Value): ValueKind {.inline.}
 proc `==`*(a, b: Value): bool {.no_side_effect.}
 converter to_bool*(v: Value): bool {.inline.}
 
@@ -1238,51 +1236,58 @@ proc is_small_int*(v: Value): bool {.inline, noSideEffect.} =
 # Forward declaration
 converter to_int*(v: Value): int64 {.inline, noSideEffect.}
 
-proc kind*(v: Value): ValueKind =
+proc kind_slow(v: Value, u: uint64, tag: uint64): ValueKind {.noinline.} =
+  case tag:
+    of POINTER_TAG:
+      return VkPointer
+    of SPECIAL_TAG:
+      # Special values
+      case u:
+        of cast[uint64](NIL):
+          return VkNil
+        of cast[uint64](TRUE), cast[uint64](FALSE):
+          return VkBool
+        of cast[uint64](VOID):
+          return VkVoid
+        of cast[uint64](PLACEHOLDER):
+          return VkPlaceholder
+        else:
+          # Check for character values
+          let char_type = u and 0xFFFF_FFFF_0000_0000u64
+          if char_type == (CHAR_MASK and 0xFFFF_FFFF_0000_0000u64) or
+             char_type == (CHAR2_MASK and 0xFFFF_FFFF_0000_0000u64) or
+             char_type == (CHAR3_MASK and 0xFFFF_FFFF_0000_0000u64) or
+             char_type == (CHAR4_MASK and 0xFFFF_FFFF_0000_0000u64):
+            return VkChar
+          else:
+            todo($u)
+    else:
+      todo($u)
+
+proc kind*(v: Value): ValueKind {.inline.} =
   {.cast(gcsafe).}:
     let u = cast[uint64](v)
     
-    # First check if it's a float (most common case)
-    if is_float(v):
+    # Fast path: Check if it's a float first (most common case)
+    if (u and NAN_MASK) != NAN_MASK:
       return VkFloat
     
-    # It's in NaN space, check the tag
-    case u and 0xFFFF_0000_0000_0000u64:
+    # Fast path: Check most common NaN-boxed types with single comparisons
+    let tag = u and 0xFFFF_0000_0000_0000u64
+    case tag:
       of SMALL_INT_TAG:
         return VkInt
-      of POINTER_TAG:
-        return VkPointer
       of REF_TAG:
-        return v.ref.kind
-      of GENE_TAG:
-        return VkGene
+        return v.ref.kind  # Single pointer dereference
       of SYMBOL_TAG:
         return VkSymbol
       of SHORT_STR_TAG, LONG_STR_TAG:
         return VkString
-      of SPECIAL_TAG:
-        # Special values
-        case u:
-          of cast[uint64](NIL):
-            return VkNil
-          of cast[uint64](TRUE), cast[uint64](FALSE):
-            return VkBool
-          of cast[uint64](VOID):
-            return VkVoid
-          of cast[uint64](PLACEHOLDER):
-            return VkPlaceholder
-          else:
-            # Check for character values - check the high 32 bits for the character type
-            let char_type = u and 0xFFFF_FFFF_0000_0000u64
-            if char_type == (CHAR_MASK and 0xFFFF_FFFF_0000_0000u64) or
-               char_type == (CHAR2_MASK and 0xFFFF_FFFF_0000_0000u64) or
-               char_type == (CHAR3_MASK and 0xFFFF_FFFF_0000_0000u64) or
-               char_type == (CHAR4_MASK and 0xFFFF_FFFF_0000_0000u64):
-              return VkChar
-            else:
-              todo($u)
+      of GENE_TAG:
+        return VkGene
       else:
-        todo($u)
+        # Uncommon cases - delegate to separate function
+        return kind_slow(v, u, tag)
 
 proc is_literal*(self: Value): bool =
   {.cast(gcsafe).}:
