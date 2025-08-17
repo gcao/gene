@@ -154,21 +154,7 @@ test_vm """
 #   (f)
 # """, 1
 
-test_vm """
-  (fn f _
-    (return 1)
-    2
-  )
-  (f)
-""", 1
 
-test_vm """
-  (fn f _
-    (return)
-    2
-  )
-  (f)
-""", Value(nil)
 
 test_vm """
   (fn fib n
@@ -396,3 +382,90 @@ test_vm """
 #   )
 #   (f1 2)
 # """, 3
+
+
+# ---- Migrated unique tests from test_vm_fp.nim ----
+
+
+
+
+test_vm """
+  (fn f [a]
+    (a + 2)
+  )
+  (f 1)
+""", 3
+
+
+# Keep one explicit return test to validate return semantics
+# (no-arg function returning 1 explicitly)
+test_vm """
+  (fn f []
+    (return 1)
+    2
+  )
+  (f)
+""", 1
+
+# And one test for return without value (should return nil)
+test_vm """
+  (fn f []
+    (return)
+    2
+  )
+  (f)
+""", Value(nil)
+
+
+
+# Note: Duplicate function primitive tests removed (covered earlier):
+# - empty body fn name extraction
+# - simple fn that returns 1
+# - fn returns an array and we inspect element
+# - positional param forms (parameter list vs. unbracketed)
+# - binary add with two params
+# - explicit return vs implicit result
+# - fnx anonymous function trivial returns
+# - default arg + computation returning 3
+
+
+test_vm """
+  (fn f []
+    (g)
+  )
+  (fn g []
+    1
+  )
+  (f)
+""", 1
+
+test_vm """
+  (var a 1)
+  (fn f b
+    (a + b)
+  )
+  (f 2)
+""", 3
+
+test_vm """
+  (var a 1)
+  (fn f b
+    (a = 2)
+    (a + b)
+  )
+  (f 2)
+""", 4
+
+test_vm """
+  (var a 1)
+  (fn f []
+    (var b 2)
+    (fn g []
+      (a + b)
+    )
+  )
+  ((f))
+""", 3
+
+
+

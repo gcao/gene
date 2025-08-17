@@ -4,8 +4,9 @@ import ./helpers
 
 # Tests for arithmetic operations
 # Basic arithmetic operations are implemented in our VM
+# Note: basic arithmetic cases like (1 + 2) are covered in tests/test_vm.nim; keeping the rest here for broader coverage
 
-test_vm "(1 + 2)", 3
+
 test_vm "(5 - 3)", 2
 test_vm "(4 * 2)", 8
 test_vm "(8 / 2)", 4.0

@@ -26,14 +26,10 @@ import ./helpers
 
 # Handling of arguments, optional arguments:
 # Compilation:
+# Note: basic scope shadowing/if-block tests exist in tests/test_scope.nim; keep only FP-related scope here
+
 # Execution:
 
-test_vm """
-  (var a 1)
-  # Should produce a warning about shadowing
-  (var a 2)
-  a
-""", 2
 
 # test_vm """
 #   (var a 1)
@@ -42,30 +38,8 @@ test_vm """
 #   a
 # """, 2
 
-test_vm """
-  (var a 1)
-  (if true
-    (var a 2)
-  )
-  a
-""", 1
 
-test_vm """
-  (var a 1)
-  (if true
-    (var a 2)
-    a
-  )
-""", 2
 
-test_vm """
-  (var a 1)
-  (if false
-    (var a 2)
-  else
-    a
-  )
-""", 1
 
 test_vm """
   (fn f [a]

@@ -18,6 +18,8 @@ test_vm """
 # Test that macro arguments are not evaluated
 test_vm """
   (macro m a
+# Migrated from test_vm_macro: keep only smoke test there, main behavior here already covers identity and add
+
     :macro_result
   )
   (m (this_would_fail_if_evaluated))

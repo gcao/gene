@@ -4,6 +4,11 @@ import ./helpers
 
 # NOTE: Exception handling is not yet implemented in the VM
 # All tests below use test_interpreter which is not defined
+# Basic VM throw test (merged from test_vm_exception.nim)
+test_vm_error """
+  (throw "test error")
+"""
+
 # These tests serve as documentation for future implementation
 
 # Native Nim exception vs Gene exception:

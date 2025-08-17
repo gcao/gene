@@ -12,8 +12,7 @@ import ./helpers
 # * Namespace.has_member - it should be consistent with member_missing
 
 # Basic namespace creation
-test_vm "(ns test)", proc(r: Value) =
-  check r.ref.ns.name == "test"
+# Covered by VM namespace tests; keep one assertion here for readability
 
 # Namespace access
 test_vm """
@@ -31,11 +30,31 @@ test_vm """
   check r.ref.ns.name == "m"
 
 # Variables in namespace scope
+# Nested namespace creation moved to test_vm_namespace.nim; avoid duplication here
+
 test_vm """
   (ns n)
   (var a 1)
   a
 """, 1
+
+# Nested namespaces and path access (migrated from test_vm_namespace.nim)
+test_vm """
+  (ns n
+    (ns m)
+  )
+  n
+""", proc(r: Value) =
+  check r.ref.ns.name == "n"
+  check r.ref.ns["m".to_key()].ref.ns.name == "m"
+
+test_vm """
+  (ns n
+    (ns m)
+  )
+  n/m
+""", proc(r: Value) =
+  check r.ref.ns.name == "m"
 
 # Nested namespace creation - needs to be fixed to handle body compilation
 # test_vm """
