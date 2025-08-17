@@ -1,0 +1,36 @@
+# Simple pooling benchmark
+# Tests object reuse with pools
+
+(var iterations 50000)
+
+# Test 1: Array allocation
+(println "Testing array pooling with " iterations " iterations...")
+(var arr_sum 0)
+(for i in (range 0 iterations)
+  (var arr [1 2 3 4 5])
+  (arr_sum = (+ arr_sum 1))
+)
+(println "Arrays created: " arr_sum)
+
+# Test 2: Map allocation
+(println "Testing map pooling...")
+(var map_sum 0)
+(for i in (range 0 iterations)
+  (var m {^x 1 ^y 2 ^z 3})
+  (map_sum = (+ map_sum 1))
+)
+(println "Maps created: " map_sum)
+
+# Test 3: Mixed allocation pattern
+(println "Testing mixed allocations...")
+(var mixed_sum 0)
+(for i in (range 0 10000)
+  (var a1 [i])
+  (var m1 {^val i})
+  (var a2 [(* i 2)])
+  (var m2 {^val2 (* i 3)})
+  (mixed_sum = (+ mixed_sum 1))
+)
+(println "Mixed iterations: " mixed_sum)
+
+(println "Benchmark complete - pools should have reduced allocation overhead")

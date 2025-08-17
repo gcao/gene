@@ -1,0 +1,26 @@
+# Allocation timing test
+# Compare time to allocate many objects
+
+# Test creating many arrays in a loop
+(var start_time 0)
+(var end_time 0)
+(var total 0)
+
+(println "Creating 10000 arrays...")
+(for i in (range 0 10000)
+  (var arr [1 2 3])
+  (total = (+ total 1))
+)
+(println "Created " total " arrays")
+
+# Reset for next test
+(total = 0)
+
+(println "Creating 10000 maps...")
+(for i in (range 0 10000)
+  (var m {^a 1 ^b 2})
+  (total = (+ total 1))
+)
+(println "Created " total " maps")
+
+(println "Done - pooling should make this faster")

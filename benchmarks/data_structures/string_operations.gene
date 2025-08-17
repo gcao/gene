@@ -1,0 +1,99 @@
+# String Operations Benchmark
+# Tests string creation, manipulation, and processing performance
+
+(fn string_creation_bench n
+  "Test string creation performance"
+  (var strings [])
+  (for i (range n)
+    (var s (str "test_string_" i))
+    (strings .add s))
+  (strings .size))
+
+(fn string_concatenation_bench n
+  "Test string concatenation performance"
+  (var result "")
+  (for i (range n)
+    (result = (+ result "item_" (str i) "_")))
+  (result .length))
+
+(fn string_search_bench text pattern n
+  "Test string search performance"
+  (var found 0)
+  (for i (range n)
+    (if (text .contains pattern)
+      (found = (+ found 1))))
+  found)
+
+(fn string_substring_bench text n
+  "Test substring operations"
+  (var len (text .length))
+  (var substrings [])
+  (for i (range n)
+    (var start (% i (- len 5)))
+    (var sub (text .substring start (+ start 5)))
+    (substrings .add sub))
+  (substrings .size))
+
+(fn string_replace_bench text old new n
+  "Test string replacement performance"
+  (var result text)
+  (for i (range n)
+    (result = (result .replace old new)))
+  (result .length))
+
+(fn string_split_bench text delimiter n
+  "Test string splitting performance"
+  (var total_parts 0)
+  (for i (range n)
+    (var parts (text .split delimiter))
+    (total_parts = (+ total_parts (parts .size))))
+  total_parts)
+
+# Run benchmarks
+(import time)
+
+(println "=== String Operations Benchmarks ===")
+
+# Test data setup
+(var test_text "The quick brown fox jumps over the lazy dog. This is a test string for benchmarking string operations in the Gene programming language.")
+(var large_text "")
+(for i (range 100)
+  (large_text = (+ large_text test_text " ")))
+
+# String creation benchmark
+(var start (time/now))
+(var result (string_creation_bench 5000))
+(var elapsed (- (time/now) start))
+(println "String creation (5000 strings): " elapsed "ms, count: " result)
+
+# String concatenation benchmark
+(start = (time/now))
+(result = (string_concatenation_bench 1000))
+(elapsed = (- (time/now) start))
+(println "String concatenation (1000 ops): " elapsed "ms, final length: " result)
+
+# String search benchmark
+(start = (time/now))
+(result = (string_search_bench large_text "fox" 1000))
+(elapsed = (- (time/now) start))
+(println "String search (1000 searches): " elapsed "ms, found: " result)
+
+# String substring benchmark
+(start = (time/now))
+(result = (string_substring_bench large_text 2000))
+(elapsed = (- (time/now) start))
+(println "String substring (2000 ops): " elapsed "ms, count: " result)
+
+# String replace benchmark
+(start = (time/now))
+(result = (string_replace_bench test_text "the" "THE" 500))
+(elapsed = (- (time/now) start))
+(println "String replace (500 ops): " elapsed "ms, final length: " result)
+
+# String split benchmark
+(start = (time/now))
+(result = (string_split_bench large_text " " 200))
+(elapsed = (- (time/now) start))
+(println "String split (200 ops): " elapsed "ms, total parts: " result)
+
+(println "\nString benchmarks complete")

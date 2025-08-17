@@ -1,0 +1,64 @@
+# Object pooling benchmark
+# This creates and destroys many objects in a pattern that maximizes pool reuse
+
+# Warm up the pools
+(for i in (range 0 100)
+  (var dummy [1 2 3])
+  (var dummy2 {^a 1})
+  (var dummy3 (gene test))
+)
+
+(var iterations 100000)
+
+# Test array allocation/deallocation patterns
+(println "Testing array pooling...")
+(var count 0)
+(for i in (range 0 iterations)
+  # Create array, use it, let it be freed
+  (var arr [i (* i 2) (* i 3)])
+  (count = (+ count (arr .get 0)))
+  # arr goes out of scope and should return to pool
+)
+(println "Array sum: " count)
+
+# Test map allocation/deallocation patterns  
+(println "Testing map pooling...")
+(count = 0)
+(for i in (range 0 iterations)
+  # Create map, use it, let it be freed
+  (var m {^key i ^value (* i 2)})
+  (count = (+ count m/key))
+  # m goes out of scope and should return to pool
+)
+(println "Map sum: " count)
+
+# Test gene allocation/deallocation patterns
+(println "Testing gene pooling...")
+(count = 0)
+(for i in (range 0 iterations)
+  # Create gene, use it, let it be freed
+  (var g (gene test i ^prop (* i 2)))
+  (if g/prop
+    (count = (+ count 1))
+  )
+  # g goes out of scope and should return to pool
+)
+(println "Gene count: " count)
+
+# Test string allocation patterns
+(println "Testing string pooling...")
+(var str_count 0)
+(for i in (range 0 (/ iterations 10))  # Fewer iterations for strings
+  # Create various length strings
+  (var s1 "short")
+  (var s2 "medium_length_string")
+  (var s3 "this_is_a_longer_string_for_testing")
+  (if (== s1 "short")
+    (str_count = (+ str_count 1))
+  )
+  # strings go out of scope and should return to pool
+)
+(println "String operations: " str_count)
+
+(println "\nPooling benchmark complete")
+(println "With pooling, this should run faster due to object reuse")

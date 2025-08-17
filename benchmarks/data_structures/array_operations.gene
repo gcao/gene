@@ -1,0 +1,85 @@
+# Array Operations Benchmark
+# Tests array creation, access, and manipulation performance
+
+(fn array_creation_bench n
+  "Test array creation performance"
+  (var arrays [])
+  (for i (range n)
+    (var arr [])
+    (for j (range 10)
+      (arr .add j))
+    (arrays .add arr))
+  (arrays .size))
+
+(fn array_access_bench arr n
+  "Test array random access performance"
+  (var sum 0)
+  (var len (arr .size))
+  (for i (range n)
+    (var idx (% i len))
+    (sum = (+ sum (arr .get idx))))
+  sum)
+
+(fn array_iteration_bench arr
+  "Test array iteration performance"
+  (var sum 0)
+  (for item arr
+    (sum = (+ sum item)))
+  sum)
+
+(fn array_modification_bench arr n
+  "Test array modification performance"
+  (var len (arr .size))
+  (for i (range n)
+    (var idx (% i len))
+    (arr .set idx (* (arr .get idx) 2))))
+
+(fn array_resize_bench n
+  "Test array dynamic resizing"
+  (var arr [])
+  (for i (range n)
+    (arr .add i))
+  (arr .size))
+
+# Run benchmarks
+(import time)
+
+(println "=== Array Operations Benchmarks ===")
+
+# Test data setup
+(var test_size 10000)
+(var test_array [])
+(for i (range 1000)
+  (test_array .add i))
+
+# Array creation benchmark
+(var start (time/now))
+(var result (array_creation_bench 1000))
+(var elapsed (- (time/now) start))
+(println "Array creation (1000 arrays x 10 items): " elapsed "ms, result: " result)
+
+# Array access benchmark
+(start = (time/now))
+(result = (array_access_bench test_array test_size))
+(elapsed = (- (time/now) start))
+(println "Array random access (" test_size " accesses): " elapsed "ms, sum: " result)
+
+# Array iteration benchmark
+(start = (time/now))
+(result = (array_iteration_bench test_array))
+(elapsed = (- (time/now) start))
+(println "Array iteration (1000 items): " elapsed "ms, sum: " result)
+
+# Array modification benchmark
+(start = (time/now))
+(array_modification_bench test_array 5000)
+(elapsed = (- (time/now) start))
+(println "Array modification (5000 modifications): " elapsed "ms")
+
+# Array resize benchmark
+(start = (time/now))
+(result = (array_resize_bench test_size))
+(elapsed = (- (time/now) start))
+(println "Array dynamic resize (" test_size " additions): " elapsed "ms, final size: " result)
+
+(println "\nArray benchmarks complete")

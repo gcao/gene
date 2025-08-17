@@ -1,0 +1,36 @@
+# Recursive allocation benchmark
+# Creates nested structures recursively to stress allocation
+
+(fn create_nested depth
+  (if (== depth 0)
+    {^leaf true}
+    {
+      ^depth depth
+      ^array [depth (* depth 2) (* depth 3)]
+      ^map {^x depth ^y (* depth 10)}
+      ^string "level"
+      ^left (create_nested (- depth 1))
+      ^right (create_nested (- depth 1))
+    }
+  )
+)
+
+(println "Creating nested structure depth 3...")
+(var tree1 (create_nested 3))
+(println "Created first tree")
+
+(println "Creating nested structure depth 4...")
+(var tree2 (create_nested 4))
+(println "Created second tree")
+
+(println "Creating nested structure depth 3 again...")
+(var tree3 (create_nested 3))
+(println "Created third tree")
+
+# Access some values to ensure structures are built
+(println "Tree1 depth: " tree1/depth)
+(println "Tree2 depth: " tree2/depth)
+(println "Tree3 depth: " tree3/depth)
+
+(println "\nRecursive allocation complete")
+(println "With pooling, subsequent trees should allocate faster")

@@ -1,0 +1,60 @@
+# Manual allocation test - unrolled loops to avoid range issues
+# Tests object pooling effectiveness
+
+(println "Manual allocation benchmark")
+
+# Create many arrays manually (unrolled)
+(var a1 [1 2 3])
+(var a2 [4 5 6])
+(var a3 [7 8 9])
+(var a4 [10 11 12])
+(var a5 [13 14 15])
+(var a6 [16 17 18])
+(var a7 [19 20 21])
+(var a8 [22 23 24])
+(var a9 [25 26 27])
+(var a10 [28 29 30])
+
+(println "Created 10 arrays")
+
+# Create many maps manually
+(var m1 {^x 1 ^y 2})
+(var m2 {^x 3 ^y 4})
+(var m3 {^x 5 ^y 6})
+(var m4 {^x 7 ^y 8})
+(var m5 {^x 9 ^y 10})
+(var m6 {^x 11 ^y 12})
+(var m7 {^x 13 ^y 14})
+(var m8 {^x 15 ^y 16})
+(var m9 {^x 17 ^y 18})
+(var m10 {^x 19 ^y 20})
+
+(println "Created 10 maps")
+
+# Create many strings
+(var s1 "string_1")
+(var s2 "string_2")
+(var s3 "string_3")
+(var s4 "string_4")
+(var s5 "string_5")
+(var s6 "string_6")
+(var s7 "string_7")
+(var s8 "string_8")
+(var s9 "string_9")
+(var s10 "string_10")
+
+(println "Created 10 strings")
+
+# Now create more to test pool reuse
+(var a11 [31 32 33])
+(var a12 [34 35 36])
+(var a13 [37 38 39])
+(var m11 {^x 21 ^y 22})
+(var m12 {^x 23 ^y 24})
+(var m13 {^x 25 ^y 26})
+(var s11 "string_11")
+(var s12 "string_12")
+(var s13 "string_13")
+
+(println "Created additional objects - should reuse from pools")
+(println "Benchmark complete")

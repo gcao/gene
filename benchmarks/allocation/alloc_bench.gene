@@ -1,0 +1,59 @@
+# Simple allocation benchmark
+# Tests object pooling effectiveness
+
+# Test 1: Create many small arrays
+(var arrays [])
+(for i in (range 0 10000)
+  (var arr [1 2 3 4 5])
+  # Force the array to be used
+  (if (== (arr .get 0) 1)
+    nil
+  )
+)
+(println "Created 10000 small arrays")
+
+# Test 2: Create many maps
+(var maps [])
+(for i in (range 0 5000)
+  (var m {^a 1 ^b 2 ^c 3})
+  # Force the map to be used
+  (if (== m/a 1)
+    nil
+  )
+)
+(println "Created 5000 small maps")
+
+# Test 3: Create many gene expressions
+(for i in (range 0 10000)
+  (var g (gene test ^prop1 1 ^prop2 2))
+  # Force the gene to be used
+  (if g/prop1
+    nil
+  )
+)
+(println "Created 10000 gene expressions")
+
+# Test 4: String allocations
+(var strings [])
+(for i in (range 0 10000)
+  (var s "test_string_allocation")
+  (strings .add s)
+)
+(println "Created 10000 strings, total: " (strings .size))
+
+# Test 5: Nested structure creation/destruction
+(for i in (range 0 1000)
+  (var nested {
+    ^arr [1 2 3 4 5]
+    ^map {^x 10 ^y 20}
+    ^gene (gene inner ^data "test")
+    ^str "nested_string"
+  })
+  # Use it to prevent optimization
+  (if nested/arr
+    nil
+  )
+)
+(println "Created 1000 nested structures")
+
+(println "Allocation benchmark complete")
