@@ -86,20 +86,6 @@ import ./helpers
 # * Update
 # * Remove
 
-# TODO: Selector functionality is not yet implemented in the VM
-# These tests are commented out until the following features are added:
-# - ./ operator for property/index access
-# - @ operator for selector expressions
-# - @test shorthand for (@ "test")
-# - $set and $with operators
-# - Range selectors
-# - Instance property access syntax (/property = value)
-
-# All tests below are commented out until selector support is implemented
-
-# Basic property access using / syntax works, but ./ selector syntax is not implemented
-# Let's test the basic / syntax that is already supported:
-
 test_vm """
   (var x {^a 1})
   x/a
