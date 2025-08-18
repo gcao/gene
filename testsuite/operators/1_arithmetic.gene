@@ -1,0 +1,28 @@
+# Arithmetic operator tests
+
+# Addition
+(println "5 + 3 =" (5 + 3))
+# Expected: 5 + 3 = 8
+
+# Subtraction
+(println "10 - 4 =" (10 - 4))
+# Expected: 10 - 4 = 6
+
+# Multiplication
+(println "6 * 7 =" (6 * 7))
+# Expected: 6 * 7 = 42
+
+# Division
+(println "15 / 3 =" (15 / 3))
+# Expected: 15 / 3 = 5.0
+
+# Mixed operations
+(println "2 + 3 * 4 =" (2 + (3 * 4)))
+# Expected: 2 + 3 * 4 = 14
+
+# Negative numbers
+(println "-5 + 3 =" (-5 + 3))
+# Expected: -5 + 3 = -2
+
+(println "All arithmetic tests completed")
+# Expected: All arithmetic tests completed

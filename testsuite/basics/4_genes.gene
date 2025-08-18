@@ -1,0 +1,20 @@
+# Working gene (S-expression) tests
+
+# Basic quoted gene
+(var g1 :(+ 1 2))
+(print "Quoted gene: " g1)
+
+# Gene with underscore
+(var g2 (_ 1 2 3))
+(print "Gene with _: " g2)
+(print "First element: " g2/0)
+
+# Gene with symbol type
+(var g3 (:add 10 20))
+(print "Gene with symbol type: " g3)
+
+# Parse string to gene
+(var parsed ($parse "123"))
+(print "Parsed number: " parsed)
+
+(print "All gene tests completed")

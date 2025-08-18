@@ -1,0 +1,28 @@
+# Simple map tests
+
+# Basic map creation
+(var m {^a 1 ^b 2 ^c 3})
+(print "Map: " m)
+(print "m/a = " m/a)
+(print "m/b = " m/b)
+
+# Map modification
+(m/a = 10)
+(print "After modification: " m)
+
+# Mixed value types
+(var mixed {^num 42 ^str "hello" ^bool true})
+(print "Mixed map: " mixed)
+
+# Nested maps
+(var nested {^outer {^inner 123}})
+(print "Nested map: " nested)
+(print "nested/outer/inner = " nested/outer/inner)
+
+# Empty map
+(var empty {})
+(print "Empty map: " empty)
+(empty/new = "value")
+(print "After adding: " empty)
+
+(print "All map tests completed")

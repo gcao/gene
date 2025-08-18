@@ -1,0 +1,54 @@
+# Simple function tests
+
+# Basic function
+(fn hello []
+  (print "Hello from function!")
+)
+(hello)
+
+# Function with parameters
+(fn add [a b]
+  (a + b)
+)
+(print "add(3, 4) = " (add 3 4))
+
+# Function with local variables
+(fn calculate [x y]
+  (var sum (x + y))
+  (var product (x * y))
+  (print "Sum: " sum " Product: " product)
+  sum
+)
+(print "calculate(5, 6) = " (calculate 5 6))
+
+# Nested function calls
+(fn double [x]
+  (x * 2)
+)
+(fn quadruple [x]
+  (double (double x))
+)
+(print "quadruple(3) = " (quadruple 3))
+
+# Function with conditional
+(fn max [a b]
+  (if (a > b)
+    a
+  else
+    b
+  )
+)
+(print "max(10, 5) = " (max 10 5))
+(print "max(3, 8) = " (max 3 8))
+
+# Recursive function (factorial)
+(fn factorial [n]
+  (if (n <= 1)
+    1
+  else
+    (n * (factorial (n - 1)))
+  )
+)
+(print "factorial(5) = " (factorial 5))
+
+(print "All function tests completed")

@@ -1,0 +1,36 @@
+# Simple loop tests that output results
+
+# Basic loop with break
+(var count 0)
+(loop
+  (count += 1)
+  (if (count >= 5)
+    (break)
+  )
+)
+(print "Loop with break: count = " count)
+
+# Loop with break value
+(var result (loop
+  (break 42)
+))
+(print "Loop with break value: result = " result)
+
+# While loop
+(var n 0)
+(while (n < 10)
+  (n += 1)
+)
+(print "While loop: n = " n)
+
+# While with break
+(var m 0)
+(while true
+  (m += 1)
+  (if (m >= 3)
+    (break)
+  )
+)
+(print "While with break: m = " m)
+
+(print "All loop tests completed")

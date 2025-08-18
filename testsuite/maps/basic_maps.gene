@@ -1,9 +1,0 @@
-#!/usr/bin/env gene run
-# TEST: Basic map operations - SIMPLIFIED DUE TO PARSER ISSUES
-
-# Map creation and access currently have parser issues
-# TODO: Fix map parsing
-
-# For now, just test that we can at least create empty maps
-(println "Map test simplified - parser issues with map syntax")
-# Expected: Map test simplified - parser issues with map syntax

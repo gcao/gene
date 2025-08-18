@@ -1,0 +1,72 @@
+# If-else tests
+
+# Basic if
+(if true
+  (println "If true works")
+)
+# Expected: If true works
+
+(if false
+  (println "Should not print")
+)
+
+# If-else
+(if true
+  (println "In true branch")
+else
+  (println "Should not be here")
+)
+# Expected: In true branch
+
+(if false
+  (println "Should not be here")
+else
+  (println "In else branch")
+)
+# Expected: In else branch
+
+# Nested if
+(var x 10)
+(if (x > 5)
+  (if (x < 15)
+    (println "x is between 5 and 15")
+  )
+)
+# Expected: x is between 5 and 15
+
+# If with variables
+(var age 25)
+(if (age >= 18)
+  (println "Adult")
+else
+  (println "Minor")
+)
+# Expected: Adult
+
+# Multiple conditions
+(var score 85)
+(if (score >= 90)
+  (println "Grade: A")
+else
+  (if (score >= 80)
+    (println "Grade: B")
+  else
+    (if (score >= 70)
+      (println "Grade: C")
+    else
+      (println "Grade: F")
+    )
+  )
+)
+# Expected: Grade: B
+
+# If with complex expression
+(var a 5)
+(var b 10)
+(if ((a < b) && (b > 0))
+  (println "Both conditions are true")
+)
+# Expected: Both conditions are true
+
+(println "All if-else tests completed")
+# Expected: All if-else tests completed

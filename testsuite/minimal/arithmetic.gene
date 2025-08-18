@@ -1,9 +1,0 @@
-# Minimal arithmetic test
-(println (+ 2 3))
-# Expected: 5
-(println (- 7 4))
-# Expected: 3
-(println (* 6 7))
-# Expected: 42
-(println (/ 15 3))
-# Expected: 5.0

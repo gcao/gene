@@ -1,0 +1,33 @@
+# Simple array tests
+
+# Array creation
+(var arr [1 2 3 4 5])
+(print "Array: " arr)
+(print "First element: " arr/0)
+(print "Last element: " arr/4)
+
+# Array modification
+(arr/0 = 10)
+(print "After modification: " arr)
+
+# Mixed type array
+(var mixed [1 "hello" true])
+(print "Mixed array: " mixed)
+
+# Nested arrays
+(var nested [[1 2] [3 4]])
+(print "Nested array: " nested)
+(print "nested/0/0 = " nested/0/0)
+(print "nested/1/1 = " nested/1/1)
+
+# Array spread
+(var a [1 2])
+(var b [3 4])
+(var combined [a... b...])
+(print "Combined with spread: " combined)
+
+# Empty array
+(var empty [])
+(print "Empty array: " empty)
+
+(print "All array tests completed")

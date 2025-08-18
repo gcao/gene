@@ -1,0 +1,39 @@
+# Variable tests
+
+# Variable declaration and access
+(var x 10)
+(println "x =" x)
+# Expected: x = 10
+
+# Variable reassignment
+(x = 20)
+(println "After reassignment: x =" x)
+# Expected: After reassignment: x = 20
+
+# Multiple variables
+(var a 1)
+(var b 2)
+(var c 3)
+(println "a =" a "b =" b "c =" c)
+# Expected: a = 1 b = 2 c = 3
+
+# Variables with different types
+(var num 42)
+(var str "hello")
+(var bool true)
+(println "Number:" num)
+# Expected: Number: 42
+(println "String:" str)
+# Expected: String: hello
+(println "Boolean:" bool)
+# Expected: Boolean: true
+
+# Variable in expressions
+(var x1 5)
+(var x2 10)
+(var sum (x1 + x2))
+(println "Sum of" x1 "and" x2 "=" sum)
+# Expected: Sum of 5 and 10 = 15
+
+(println "All variable tests completed")
+# Expected: All variable tests completed

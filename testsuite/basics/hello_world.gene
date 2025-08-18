@@ -1,5 +1,0 @@
-#!/usr/bin/env gene run
-
-# Test: Basic print statement
-(println "Hello, World!")
-# Expected: Hello, World!

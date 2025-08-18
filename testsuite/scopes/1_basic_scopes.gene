@@ -1,0 +1,46 @@
+# Simple scope tests
+
+# Basic scope with do block
+(var outer 10)
+(print "Outer: " outer)
+
+(do
+  (var inner 20)
+  (print "Inner: " inner)
+  (print "Can access outer: " outer)
+)
+
+# Variable shadowing
+(var x 100)
+(print "Original x: " x)
+
+(do
+  (var x 200)
+  (print "Shadowed x: " x)
+)
+(print "Back to original x: " x)
+
+# Scope with assignment
+(var mutable 10)
+(print "Before: " mutable)
+
+(do
+  (mutable = 20)
+  (print "Inside do: " mutable)
+)
+(print "After: " mutable)
+
+# Function scope
+(var global 42)
+
+(fn test_scope []
+  (var local 10)
+  (print "In function - global: " global)
+  (print "In function - local: " local)
+  local
+)
+
+(print "Function returns: " (test_scope))
+(print "Global still: " global)
+
+(print "All scope tests completed")

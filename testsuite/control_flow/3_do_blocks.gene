@@ -1,0 +1,63 @@
+# Simple do block tests
+
+# Basic do block
+(var result (do
+  (var x 10)
+  (var y 20)
+  (x + y)
+))
+(print "Do block result: " result)
+
+# Do block with multiple expressions
+(do
+  (print "First expression")
+  (print "Second expression")
+  (print "Third expression")
+)
+
+# Nested do blocks
+(var value (do
+  (var outer 5)
+  (do
+    (var inner 10)
+    (outer + inner)
+  )
+))
+(print "Nested do result: " value)
+
+# Do block returns last value
+(var last (do
+  1
+  2
+  3
+  "last"
+))
+(print "Last value: " last)
+
+# Do block with conditionals
+(var cond_result (do
+  (var x 10)
+  (if (x > 5)
+    "greater"
+  else
+    "less"
+  )
+))
+(print "Conditional in do: " cond_result)
+
+# Do block with loop
+(var loop_result (do
+  (var sum 0)
+  (var i 0)
+  (loop
+    (i += 1)
+    (sum += i)
+    (if (i >= 5)
+      (break)
+    )
+  )
+  sum
+))
+(print "Loop in do result: " loop_result)
+
+(print "All do block tests completed")

@@ -1,0 +1,30 @@
+# Test basic literal values
+
+# Numbers
+(println "Integer: " 42)
+# Expected: Integer: 42
+(println "Float: " 3.14)
+# Expected: Float: 3.14
+(println "Negative: " -10)
+# Expected: Negative: -10
+
+# Strings
+(println "String: " "Hello, Gene!")
+# Expected: String: Hello, Gene!
+
+# Booleans
+(println "True: " true)
+# Expected: True: true
+(println "False: " false)
+# Expected: False: false
+
+# Nil
+(println "Nil: " nil)
+# Expected: Nil: 
+
+# Symbols
+(println "Symbol: " :hello)
+# Expected: Symbol: hello
+
+(println "All literal tests completed")
+# Expected: All literal tests completed
