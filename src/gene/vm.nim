@@ -13,7 +13,7 @@ when not defined(noExtensions):
   import ./vm/extension
 
 const DEBUG_VM = false
-const ASYNC_POLL_INTERVAL = 10  # Poll async every N instructions
+const ASYNC_POLL_INTERVAL = 100  # Poll async every N instructions - increased for better performance
 
 proc enter_function(self: VirtualMachine, name: string) {.inline.} =
   if self.profiling:
@@ -290,13 +290,16 @@ proc exec*(self: VirtualMachine): Value =
   # Hot VM execution loop - disable checks for maximum performance
   {.push boundChecks: off, overflowChecks: off, nilChecks: off, assertions: off.}
   while true:
-    # Increment instruction counter and check for async polling
-    self.instruction_count.inc()
-    if self.instruction_count - self.last_poll_count >= ASYNC_POLL_INTERVAL:
-      # Only poll if there are pending operations
-      if hasPendingOperations():
-        poll(0)  # Non-blocking poll
-      self.last_poll_count = self.instruction_count
+    # Async polling with countdown (more efficient than modulo or comparison)
+    if self.async_countdown == 0:
+      self.async_countdown = ASYNC_POLL_INTERVAL
+      # Only check and poll if there might be pending operations
+      # This avoids the overhead of hasPendingOperations() call most of the time
+      when compiles(hasPendingOperations()):
+        if hasPendingOperations():
+          poll(0)  # Non-blocking poll
+    else:
+      self.async_countdown.dec()
     
     when not defined(release):
       if self.trace:
@@ -342,9 +345,8 @@ proc exec*(self: VirtualMachine): Value =
           if indent.len >= 2:
             indent.delete(indent.len-2..indent.len-1)
         # Poll async operations at function boundaries for better responsiveness
-        if hasPendingOperations():
-          poll(0)
-          self.last_poll_count = self.instruction_count
+        # Reset countdown to check at next opportunity
+        self.async_countdown = 0
         # TODO: validate that there is only one value on the stack
         let v = self.frame.current()
         if self.frame.caller_frame == nil:

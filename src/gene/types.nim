@@ -3,6 +3,9 @@ import random
 import dynlib
 import times
 
+# Async polling configuration
+const ASYNC_POLL_INTERVAL* = 100  # Poll async every N instructions
+
 # Forward declarations for new types
 type
   Value* {.bycopy, shallow.} = distinct int64  # No copy/destroy hooks needed for POD type
@@ -861,8 +864,7 @@ type
     instruction_profiling*: bool
     instruction_profile*: array[InstructionKind, InstructionProfile]
     # Async support
-    instruction_count*: int64  # Total instructions executed
-    last_poll_count*: int64   # Instruction count at last poll
+    async_countdown*: int  # Countdown to next async poll (more efficient than modulo)
 
   VmCallback* = proc() {.gcsafe.}
 
@@ -3004,6 +3006,7 @@ proc init_app_and_vm*() =
     exception_handlers: @[],
     current_exception: NIL,
     symbols: addr SYMBOLS,
+    async_countdown: ASYNC_POLL_INTERVAL,  # Initialize countdown
   )
   
   # Pre-allocate frame and scope pools
