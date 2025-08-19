@@ -860,6 +860,9 @@ type
     # Instruction profiling
     instruction_profiling*: bool
     instruction_profile*: array[InstructionKind, InstructionProfile]
+    # Async support
+    instruction_count*: int64  # Total instructions executed
+    last_poll_count*: int64   # Instruction count at last poll
 
   VmCallback* = proc() {.gcsafe.}
 

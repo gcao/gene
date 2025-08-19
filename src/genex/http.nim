@@ -1,8 +1,12 @@
-import tables, strutils
+import tables, strutils, strformat
 import httpclient, uri
 import std/json
+import asynchttpserver, asyncdispatch
+import std/os
 
 include ../gene/extension/boilerplate
+import ../gene/compiler
+import ../gene/vm
 
 proc parse_json_internal(node: json.JsonNode): Value
 
@@ -262,6 +266,293 @@ proc vm_json_stringify(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall
     let json_str = to_json(args.gene.children[0])
     return new_str_value(json_str)
 
+# ============= HTTP Server Support =============
+
+# Helper to decode URL query parameters
+proc decode_query(query: string): Table[string, string] =
+  result = initTable[string, string]()
+  if query.len == 0:
+    return
+  
+  for pair in query.split('&'):
+    let parts = pair.split('=', 1)
+    if parts.len == 2:
+      result[parts[0]] = parts[1].decodeUrl()
+    elif parts.len == 1 and parts[0].len > 0:
+      result[parts[0]] = ""
+
+# HTTP Request and Response custom classes
+type
+  HttpRequest* = ref object of CustomValue
+    path*: string
+    meth*: string
+    params*: Table[string, string]
+    headers*: Table[string, string]
+    body*: string
+    
+  HttpResponse* = ref object of CustomValue
+    status*: int
+    body*: string
+    headers*: Table[string, string]
+
+var RequestClass*: Class
+var ResponseClass*: Class
+
+# Create a request Value from async request
+proc create_request_value(req: asynchttpserver.Request): Value =
+  echo "Creating request value for: ", req.url
+  let parsed_url = parseUri($req.url)
+  
+  # Create HttpRequest custom object
+  var http_req = HttpRequest()
+  http_req.path = parsed_url.path
+  http_req.meth = $req.reqMethod
+  http_req.body = req.body
+  
+  # Add query params
+  http_req.params = initTable[string, string]()
+  for k, v in decode_query(parsed_url.query):
+    http_req.params[k] = v
+  
+  # Add headers
+  http_req.headers = initTable[string, string]()
+  for key, val in req.headers.pairs:
+    http_req.headers[key] = val
+  
+  # Return as custom value
+  var result_ref = new_ref(VkCustom)
+  result_ref.custom_data = http_req
+  result_ref.custom_class = RequestClass
+  return result_ref.to_ref_value()
+
+# Native function: respond helper
+proc vm_respond(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+  {.cast(gcsafe).}:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "respond: args is not a Gene")
+    
+    # Create HttpResponse custom object
+    var http_resp = HttpResponse()
+    http_resp.status = 200
+    http_resp.body = ""
+    http_resp.headers = initTable[string, string]()
+    
+    if args.gene.children.len >= 1:
+      let first = args.gene.children[0]
+      case first.kind:
+      of VkInt:
+        http_resp.status = first.to_int
+        if args.gene.children.len >= 2:
+          http_resp.body = args.gene.children[1].str
+      of VkString:
+        http_resp.body = first.str
+      else:
+        http_resp.body = $first
+    
+    if args.gene.children.len >= 3 and args.gene.children[2].kind == VkMap:
+      let r = args.gene.children[2].ref
+      for k, v in r.map:
+        if v.kind == VkString:
+          http_resp.headers[get_symbol(cast[int](k))] = v.str
+    
+    # Return as custom value
+    var result_ref = new_ref(VkCustom)
+    result_ref.custom_data = http_resp
+    result_ref.custom_class = ResponseClass
+    return result_ref.to_ref_value()
+
+# Native methods for Request class
+proc vm_request_path(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+  {.cast(gcsafe).}:
+    if args.kind != VkGene or args.gene.children.len < 1:
+      raise new_exception(types.Exception, "request_path: invalid arguments")
+    
+    let self = args.gene.children[0]
+    if self.kind != VkCustom:
+      raise new_exception(types.Exception, "request_path: self is not a custom value")
+    
+    let req = cast[HttpRequest](self.ref.custom_data)
+    return req.path.to_value
+
+proc vm_request_method(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+  {.cast(gcsafe).}:
+    if args.kind != VkGene or args.gene.children.len < 1:
+      raise new_exception(types.Exception, "request_method: invalid arguments")
+    
+    let self = args.gene.children[0]
+    if self.kind != VkCustom:
+      raise new_exception(types.Exception, "request_method: self is not a custom value")
+    
+    let req = cast[HttpRequest](self.ref.custom_data)
+    return req.meth.to_value
+
+proc vm_request_params(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+  {.cast(gcsafe).}:
+    if args.kind != VkGene or args.gene.children.len < 1:
+      raise new_exception(types.Exception, "request_params: invalid arguments")
+    
+    let self = args.gene.children[0]
+    if self.kind != VkCustom:
+      raise new_exception(types.Exception, "request_params: self is not a custom value")
+    
+    let req = cast[HttpRequest](self.ref.custom_data)
+    var params_map = initTable[Key, Value]()
+    for k, v in req.params:
+      params_map[to_key(k)] = v.to_value
+    return new_map_value(params_map)
+
+# Global handler storage (simple approach for now)
+var global_handler: Value
+var global_vm: VirtualMachine
+
+# Native function: start HTTP server
+proc vm_start_server(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+  {.cast(gcsafe).}:
+    if args.kind != VkGene:
+      raise new_exception(types.Exception, "start_server: args is not a Gene")
+    
+    if args.gene.children.len < 2:
+      raise new_exception(types.Exception, "start_server requires 2 arguments (port, handler)")
+    
+    let port = args.gene.children[0].to_int
+    global_handler = args.gene.children[1]
+    global_vm = vm  # Store ref
+    # Handler registered
+    
+    proc handle_request(req: asynchttpserver.Request) {.async.} =
+      echo "HTTP request received: ", req.url.path
+      {.cast(gcsafe).}:
+        # Create request value
+        echo "Creating request value..."
+        let gene_req = create_request_value(req)
+        echo "Request value created"
+        
+        try:
+          # Call the Gene handler function
+          var response_val: Value
+          echo "Global handler kind: ", global_handler.kind
+          echo "Global VM nil? ", global_vm == nil
+          if global_handler.kind == VkFunction:
+            # Create a gene with the request as argument
+            var args_gene = new_gene(NIL)
+            args_gene.children.add(gene_req)
+            let args_value = args_gene.to_gene_value()
+            
+            # Call the handler function through the VM
+            let f = global_handler.ref.fn
+            if f.body_compiled == nil:
+              f.compile()
+            
+            # Save current VM state
+            let saved_cu = global_vm.cu
+            let saved_frame = global_vm.frame
+            
+            # Set up for function execution
+            global_vm.cu = f.body_compiled
+            global_vm.frame = new_frame()
+            global_vm.frame.args = args_value
+            global_vm.frame.ns = f.ns
+            global_vm.frame.scope = new_scope(f.scope_tracker, f.parent_scope)
+            
+            # Execute the handler
+            response_val = global_vm.exec()
+            
+            # Restore VM state
+            global_vm.cu = saved_cu
+            global_vm.frame = saved_frame
+          else:
+            # Fallback to hardcoded responses
+            let parsed_url = parseUri(req.url.path)
+            var http_resp = HttpResponse()
+            
+            if parsed_url.path == "/hello":
+              http_resp.status = 200
+              http_resp.body = "Hello, World!"
+            elif parsed_url.path == "/api/status":
+              http_resp.status = 200
+              http_resp.body = """{"status": "ok"}"""
+              http_resp.headers["Content-Type"] = "application/json"
+            elif parsed_url.path == "/":
+              http_resp.status = 200
+              http_resp.body = "Welcome to Gene HTTP Server"
+            else:
+              http_resp.status = 404
+              http_resp.body = "Not Found"
+            
+            response_val = new_ref(VkCustom).to_ref_value()
+            response_val.ref.custom_data = http_resp
+            response_val.ref.custom_class = ResponseClass
+          
+          # Extract response data
+          if response_val.kind == VkCustom and response_val.ref.custom_class == ResponseClass:
+            let http_resp = cast[HttpResponse](response_val.ref.custom_data)
+            var resp_headers = newHttpHeaders()
+            for k, v in http_resp.headers:
+              resp_headers[k] = v
+            await req.respond(HttpCode(http_resp.status), http_resp.body, resp_headers)
+          else:
+            # Response is not a proper Response object
+            await req.respond(Http200, $response_val)
+        except CatchableError as e:
+          echo "Error in handler: ", e.msg
+          await req.respond(Http500, "Internal Server Error: " & e.msg)
+    
+    echo fmt"Starting HTTP server on port {port}..."
+    
+    # Start the async server
+    var server = newAsyncHttpServer()
+    echo "Creating async server..."
+    
+    # Start serving
+    echo "Server listening on port ", port
+    
+    try:
+      # Start the server and register it with async dispatcher
+      asyncCheck server.serve(Port(port), handle_request)
+      echo "Server registered with async dispatcher"
+      
+      # Return control to VM - VM will handle polling
+      return NIL
+      
+    except OSError as e:
+      echo "Error starting server: ", e.msg
+      raise new_exception(types.Exception, "Failed to start server: " & e.msg)
+    except CatchableError as e:
+      echo "Unexpected error: ", e.msg
+      raise new_exception(types.Exception, "Server error: " & e.msg)
+
+# Native function: run_event_loop (for keeping server running)
+proc vm_run_event_loop(vm: VirtualMachine, args: Value): Value {.gcsafe, nimcall.} =
+  {.cast(gcsafe).}:
+    echo "Starting event loop..."
+    echo "hasPendingOperations at start: ", hasPendingOperations()
+    
+    # The server needs to be running before we can poll
+    # If no operations yet, give it a moment
+    if not hasPendingOperations():
+      echo "No operations yet, waiting..."
+      os.sleep(100)
+    
+    var pollCount = 0
+    var emptyPolls = 0
+    while true:
+      if hasPendingOperations():
+        poll(0)
+        pollCount.inc
+        emptyPolls = 0
+        if pollCount mod 10000 == 0:
+          echo "Event loop: ", pollCount, " polls completed"
+      else:
+        # No operations, sleep briefly
+        emptyPolls.inc
+        os.sleep(10)
+        if emptyPolls > 100:  # Give up after 1 second of no operations
+          echo "Event loop: No pending operations for 1 second, exiting"
+          break
+    
+    echo "Event loop exited after ", pollCount, " polls"
+    return NIL
+
 {.push dynlib, exportc.}
 
 proc http_get_wrapper(vm: VirtualMachine, args: Value): Value {.gcsafe.} =
@@ -270,6 +561,14 @@ proc http_get_wrapper(vm: VirtualMachine, args: Value): Value {.gcsafe.} =
 
 proc init*(vm: ptr VirtualMachine): Namespace =
   result = new_namespace("http")
+  
+  # Initialize Request and Response classes
+  RequestClass = new_class("Request", nil)
+  ResponseClass = new_class("Response", nil)
+  
+  # Add Request class methods
+  # TODO: Add proper method registration once VM supports it
+  # For now, classes are initialized but methods aren't bound
   
   # HTTP functions
   var fn = new_ref(VkNativeFn)
@@ -304,5 +603,40 @@ proc init*(vm: ptr VirtualMachine): Namespace =
   fn = new_ref(VkNativeFn)
   fn.native_fn = vm_json_stringify
   result["json_stringify".to_key()] = fn.to_ref_value()
+  
+  # HTTP Server functions
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = vm_respond
+  result["respond".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = vm_start_server
+  result["start_server".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = vm_run_event_loop
+  result["run_event_loop".to_key()] = fn.to_ref_value()
+  
+  # Register request accessor functions
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = vm_request_path
+  result["request_path".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = vm_request_method
+  result["request_method".to_key()] = fn.to_ref_value()
+  
+  fn = new_ref(VkNativeFn)
+  fn.native_fn = vm_request_params
+  result["request_params".to_key()] = fn.to_ref_value()
+  
+  # Export Request and Response classes
+  var req_ref = new_ref(VkClass)
+  req_ref.class = RequestClass
+  result["Request".to_key()] = req_ref.to_ref_value()
+  
+  var resp_ref = new_ref(VkClass)
+  resp_ref.class = ResponseClass
+  result["Response".to_key()] = resp_ref.to_ref_value()
 
 {.pop.}

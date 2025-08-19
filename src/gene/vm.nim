@@ -1,5 +1,6 @@
 import tables, strutils, strformat, algorithm
 import times
+import asyncdispatch
 
 import ./types
 import ./parser
@@ -12,6 +13,7 @@ when not defined(noExtensions):
   import ./vm/extension
 
 const DEBUG_VM = false
+const ASYNC_POLL_INTERVAL = 10  # Poll async every N instructions
 
 proc enter_function(self: VirtualMachine, name: string) {.inline.} =
   if self.profiling:
@@ -288,6 +290,14 @@ proc exec*(self: VirtualMachine): Value =
   # Hot VM execution loop - disable checks for maximum performance
   {.push boundChecks: off, overflowChecks: off, nilChecks: off, assertions: off.}
   while true:
+    # Increment instruction counter and check for async polling
+    self.instruction_count.inc()
+    if self.instruction_count - self.last_poll_count >= ASYNC_POLL_INTERVAL:
+      # Only poll if there are pending operations
+      if hasPendingOperations():
+        poll(0)  # Non-blocking poll
+      self.last_poll_count = self.instruction_count
+    
     when not defined(release):
       if self.trace:
         if inst.kind == IkStart: # This is part of INDENT_LOGIC
@@ -331,6 +341,10 @@ proc exec*(self: VirtualMachine): Value =
         when not defined(release):
           if indent.len >= 2:
             indent.delete(indent.len-2..indent.len-1)
+        # Poll async operations at function boundaries for better responsiveness
+        if hasPendingOperations():
+          poll(0)
+          self.last_poll_count = self.instruction_count
         # TODO: validate that there is only one value on the stack
         let v = self.frame.current()
         if self.frame.caller_frame == nil:

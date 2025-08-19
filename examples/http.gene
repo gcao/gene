@@ -1,5 +1,0 @@
-#!/usr/bin/env gene run
-
-# Test with httpbin
-(var response (genex/http/get "https://httpbin.org/get"))
-(println response)
