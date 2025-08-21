@@ -1,31 +1,28 @@
-#!/usr/bin/env gene run
+#!/usr/bin/env gene
 
-(fn f a
-  (var future
-    (gene/sleep_async 2500)
-  )
-  (future .on_success (->
-    (println a)
-  ))
-  future
-)
+# Working async example without sleep_async
 
-(await (f "first"))
+(println "Testing async/await...")
 
-(f "second")
+# Test 1: Simple async with immediate value
+(var f1 (async 42))
+(println "Future 1:" f1)
+(println "Await 1:" (await f1))
 
-(println 1)
-(gene/sleep 1000)
+# Test 2: Async with computation
+(var f2 (async (+ 10 20)))
+(println "Future 2:" f2)
+(println "Await 2:" (await f2))
 
-(println 2)
-(gene/sleep 1000)
+# Test 3: Multiple awaits
+(var f3 (async "hello"))
+(var f4 (async "world"))
+(println "Await both:" (await f3) (await f4))
 
-(println 3)
+# Test 4: Async with function call
+(fn compute [x] (* x 2))
+(var f5 (async (compute 21)))
+(println "Computed:" (await f5))
 
-#< Output should look like below (futures are checked at least once every 10 evaluations)
-first
-1
-2
-second
-3
-#>#
+# Note: The current implementation is "pseudo-async" - futures complete immediately
+# Real async operations like sleep_async, file I/O, HTTP requests are not yet implemented

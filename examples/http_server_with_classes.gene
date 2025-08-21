@@ -1,0 +1,30 @@
+# HTTP Server example using Request and Response classes
+# Import HTTP functions from native extension
+(import start_server Request Response from "build/libhttp" ^^native)
+
+# Define a handler that uses Request object methods
+(fn handler [req]
+  (println "Received request:")
+  (println "  Method: " (.method req))
+  (println "  Path: " (.path req))
+  (println "  URL: " (.url req))
+  (println "  Params: " (.params req))
+  (println "  Headers: " (.headers req))
+  (println "  Body: " (.body req))
+  
+  # Return a Response object
+  (var resp_body (str "Hello from Gene! You requested: " (.path req)))
+  
+  # Create Response with status, body, and headers
+  (new Response 200 resp_body {
+    ^Content-Type "text/plain"
+    ^X-Custom-Header "Gene Server"
+  })
+)
+
+(println "Starting HTTP server on port 8090...")
+(start_server 8090 handler)
+
+# Keep server running
+(println "Server is running. Press Ctrl+C to stop.")
+(loop (var x 1))
