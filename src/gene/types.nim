@@ -2,6 +2,7 @@ import math, hashes, tables, sets, re, bitops, unicode, strutils, strformat
 import random
 import dynlib
 import times
+import os
 
 # Forward declarations for new types
 type
@@ -1020,6 +1021,9 @@ var VM* {.threadvar.}: VirtualMachine   # The current virtual machine
 var App* {.threadvar.}: Value
 
 var VmCreatedCallbacks*: seq[VmCallback] = @[]
+
+# Flag to track if gene namespace has been initialized
+var gene_namespace_initialized* = false
 
 randomize()
 
@@ -2092,6 +2096,8 @@ proc new_scope*(tracker: ScopeTracker): Scope =
   result = cast[Scope](alloc0(sizeof(ScopeObj)))
   result.ref_count = 1
   result.tracker = tracker
+  result.members = newSeq[Value]()  # Initialize members sequence explicitly
+  result.parent = nil  # Explicitly initialize parent
 
 proc max*(self: Scope): int16 {.inline.} =
   return self.members.len.int16
@@ -2565,7 +2571,10 @@ proc get_class*(val: Value): Class =
     of VkNamespace:
       return App.ref.app.namespace_class.ref.class
     of VkFuture:
-      return App.ref.app.future_class.ref.class
+      if App.ref.app.future_class.kind == VkClass:
+        return App.ref.app.future_class.ref.class
+      else:
+        return nil
     # of VkThread:
     #   return App.ref.app.thread_class.ref.class
     # of VkThreadMessage:
@@ -2997,6 +3006,7 @@ proc new_instr*(kind: InstructionKind, arg0: Value): Instruction =
 #################### VM ##########################
 
 proc init_app_and_vm*() =
+
   VM = VirtualMachine(
     exception_handlers: @[],
     current_exception: NIL,
@@ -3040,10 +3050,23 @@ proc init_app_and_vm*() =
   
   # Add time namespace stub to prevent errors
   let time_ns = new_namespace("time")
-  # For now, just return a dummy value for time/now
-  time_ns["now".to_key()] = 0.0.to_value()  # Placeholder
+  # Simple time function that returns current timestamp
+  proc time_now(self: VirtualMachine, args: Value): Value =
+    return epochTime().to_value()
+  
+  var time_now_fn = new_ref(VkNativeFn)
+  time_now_fn.native_fn = time_now
+  time_ns["now".to_key()] = time_now_fn.to_ref_value()
   App.app.global_ns.ref.ns["time".to_key()] = time_ns.to_value()
+  # Also add to gene namespace for gene/time/now access
+  App.app.gene_ns.ref.ns["time".to_key()] = time_ns.to_value()
 
+  # Initialize IO namespace directly here
+  # Functions will be registered later by register_io_functions
+  let io_ns = new_namespace("io")
+  App.app.gene_ns.ns["io".to_key()] = io_ns.to_value()
+  
+  
   for callback in VmCreatedCallbacks:
     callback()
 

@@ -215,7 +215,177 @@ proc vm_eval(self: VirtualMachine, args: Value): Value {.gcsafe.} =
 
 # TODO: Implement while loop properly - needs compiler-level support like loop/if
 
-VmCreatedCallbacks.add proc() =
+
+# Sleep functions
+proc gene_sleep(self: VirtualMachine, args: Value): Value =
+  if args.kind != VkGene or args.gene.children.len < 1:
+    raise new_exception(types.Exception, "sleep requires 1 argument")
+
+  let duration_arg = args.gene.children[0]
+  var duration_ms: int
+
+  case duration_arg.kind:
+    of VkInt:
+      duration_ms = duration_arg.int64.int
+    of VkFloat:
+      duration_ms = (duration_arg.float64 * 1000).int
+    else:
+      raise new_exception(types.Exception, "sleep requires a number (milliseconds)")
+
+  # Use Nim's sleep function (takes milliseconds)
+  sleep(duration_ms)
+  return NIL
+
+proc gene_sleep_async(self: VirtualMachine, args: Value): Value =
+  if args.kind != VkGene or args.gene.children.len < 1:
+    raise new_exception(types.Exception, "sleep_async requires 1 argument")
+
+  let duration_arg = args.gene.children[0]
+  var duration_ms: int
+
+  case duration_arg.kind:
+    of VkInt:
+      duration_ms = duration_arg.int64.int
+    of VkFloat:
+      duration_ms = (duration_arg.float64 * 1000).int
+    else:
+      raise new_exception(types.Exception, "sleep_async requires a number (milliseconds)")
+
+  # Create a Gene Future
+  let gene_future_val = new_future_value()
+  let gene_future = gene_future_val.ref.future
+
+  # For now, perform synchronous sleep and complete immediately
+  # In a real implementation, this would use async timers
+  sleep(duration_ms)
+  gene_future.complete(NIL)
+
+  return gene_future_val
+
+# I/O functions
+proc file_read(self: VirtualMachine, args: Value): Value =
+  if args.kind != VkGene or args.gene.children.len < 1:
+    raise new_exception(types.Exception, "File/read requires 1 argument")
+
+  let path_arg = args.gene.children[0]
+  if path_arg.kind != VkString:
+    raise new_exception(types.Exception, "File/read requires a string path")
+
+  let path = path_arg.str
+  try:
+    let content = readFile(path)
+    return content.to_value()
+  except IOError as e:
+    raise new_exception(types.Exception, "Failed to read file '" & path & "': " & e.msg)
+
+proc file_write(self: VirtualMachine, args: Value): Value =
+  if args.kind != VkGene or args.gene.children.len < 2:
+    raise new_exception(types.Exception, "File/write requires 2 arguments")
+
+  let path_arg = args.gene.children[0]
+  let content_arg = args.gene.children[1]
+
+  if path_arg.kind != VkString:
+    raise new_exception(types.Exception, "File/write requires a string path")
+  if content_arg.kind != VkString:
+    raise new_exception(types.Exception, "File/write requires string content")
+
+  let path = path_arg.str
+  let content = content_arg.str
+
+  try:
+    writeFile(path, content)
+    return NIL
+  except IOError as e:
+    raise new_exception(types.Exception, "Failed to write file '" & path & "': " & e.msg)
+
+proc file_read_async(self: VirtualMachine, args: Value): Value =
+  if args.kind != VkGene or args.gene.children.len < 1:
+    raise new_exception(types.Exception, "File/read_async requires 1 argument")
+
+  let path_arg = args.gene.children[0]
+  if path_arg.kind != VkString:
+    raise new_exception(types.Exception, "File/read_async requires a string path")
+
+  let path = path_arg.str
+
+  # Create a Gene Future
+  let gene_future_val = new_future_value()
+  let gene_future = gene_future_val.ref.future
+
+  # For now, perform synchronous read and complete immediately
+  try:
+    let content = readFile(path)
+    gene_future.complete(content.to_value())
+  except IOError as e:
+    let error_msg = "Failed to read file '" & path & "': " & e.msg
+    gene_future.fail(error_msg.to_value())
+
+  return gene_future_val
+
+proc file_write_async(self: VirtualMachine, args: Value): Value =
+  if args.kind != VkGene or args.gene.children.len < 2:
+    raise new_exception(types.Exception, "File/write_async requires 2 arguments")
+
+  let path_arg = args.gene.children[0]
+  let content_arg = args.gene.children[1]
+
+  if path_arg.kind != VkString:
+    raise new_exception(types.Exception, "File/write_async requires a string path")
+  if content_arg.kind != VkString:
+    raise new_exception(types.Exception, "File/write_async requires string content")
+
+  let path = path_arg.str
+  let content = content_arg.str
+
+  # Create a Gene Future
+  let gene_future_val = new_future_value()
+  let gene_future = gene_future_val.ref.future
+
+  # For now, perform synchronous write and complete immediately
+  try:
+    writeFile(path, content)
+    gene_future.complete(NIL)
+  except IOError as e:
+    let error_msg = "Failed to write file '" & path & "': " & e.msg
+    gene_future.fail(error_msg.to_value())
+
+  return gene_future_val
+
+proc register_io_functions*() =
+  # Get the io namespace that was created in init_app_and_vm
+  let io_key = "io".to_key()
+  if not App.app.gene_ns.ns.has_key(io_key):
+    return  # io namespace doesn't exist
+  
+  let io_val = App.app.gene_ns.ns[io_key]
+  if io_val.kind != VkNamespace:
+    return  # io is not a namespace
+  
+  let io_ns = io_val.ns
+  
+  # Add synchronous functions
+  var read_ref = new_ref(VkNativeFn)
+  read_ref.native_fn = file_read
+  io_ns["read".to_key()] = read_ref.to_ref_value()
+
+  var write_ref = new_ref(VkNativeFn)
+  write_ref.native_fn = file_write
+  io_ns["write".to_key()] = write_ref.to_ref_value()
+
+  # Add asynchronous functions
+  var read_async_ref = new_ref(VkNativeFn)
+  read_async_ref.native_fn = file_read_async
+  io_ns["read_async".to_key()] = read_async_ref.to_ref_value()
+
+  var write_async_ref = new_ref(VkNativeFn)
+  write_async_ref.native_fn = file_write_async
+  io_ns["write_async".to_key()] = write_async_ref.to_ref_value()
+
+proc init_gene_namespace*() =
+  if types.gene_namespace_initialized:
+    return
+  types.gene_namespace_initialized = true
   # Initialize basic classes needed by get_class
   var r: ptr Reference
   
@@ -239,6 +409,73 @@ VmCreatedCallbacks.add proc() =
   
   # string_class
   let string_class = new_class("String")
+  
+  # Add String methods
+  # append method
+  proc string_append(self: VirtualMachine, args: Value): Value =
+    if args.kind != VkGene or args.gene.children.len < 2:
+      raise new_exception(types.Exception, "String.append requires 2 arguments (self and string to append)")
+    
+    let self_arg = args.gene.children[0]
+    let append_arg = args.gene.children[1]
+    
+    if self_arg.kind != VkString:
+      raise new_exception(types.Exception, "append can only be called on a string")
+    if append_arg.kind != VkString:
+      raise new_exception(types.Exception, "append requires a string argument")
+    
+    let result = self_arg.str & append_arg.str
+    return result.to_value()
+  
+  var append_fn = new_ref(VkNativeFn)
+  append_fn.native_fn = string_append
+  string_class.def_native_method("append", append_fn.native_fn)
+  
+  # length method
+  proc string_length(self: VirtualMachine, args: Value): Value =
+    if args.kind != VkGene or args.gene.children.len < 1:
+      raise new_exception(types.Exception, "String.length requires self argument")
+    
+    let self_arg = args.gene.children[0]
+    if self_arg.kind != VkString:
+      raise new_exception(types.Exception, "length can only be called on a string")
+    
+    return self_arg.str.len.int64.to_value()
+  
+  var length_fn = new_ref(VkNativeFn)
+  length_fn.native_fn = string_length
+  string_class.def_native_method("length", length_fn.native_fn)
+  
+  # to_upper method
+  proc string_to_upper(self: VirtualMachine, args: Value): Value =
+    if args.kind != VkGene or args.gene.children.len < 1:
+      raise new_exception(types.Exception, "String.to_upper requires self argument")
+    
+    let self_arg = args.gene.children[0]
+    if self_arg.kind != VkString:
+      raise new_exception(types.Exception, "to_upper can only be called on a string")
+    
+    return self_arg.str.toUpperAscii().to_value()
+  
+  var to_upper_fn = new_ref(VkNativeFn)
+  to_upper_fn.native_fn = string_to_upper
+  string_class.def_native_method("to_upper", to_upper_fn.native_fn)
+  
+  # to_lower method
+  proc string_to_lower(self: VirtualMachine, args: Value): Value =
+    if args.kind != VkGene or args.gene.children.len < 1:
+      raise new_exception(types.Exception, "String.to_lower requires self argument")
+    
+    let self_arg = args.gene.children[0]
+    if self_arg.kind != VkString:
+      raise new_exception(types.Exception, "to_lower can only be called on a string")
+    
+    return self_arg.str.toLowerAscii().to_value()
+  
+  var to_lower_fn = new_ref(VkNativeFn)
+  to_lower_fn.native_fn = string_to_lower
+  string_class.def_native_method("to_lower", to_lower_fn.native_fn)
+  
   r = new_ref(VkClass)
   r.class = string_class
   App.app.string_class = r.to_ref_value()
@@ -323,6 +560,16 @@ VmCreatedCallbacks.add proc() =
   App.app.gene_ns.ns["with".to_key()] = vm_with    # $with translates to gene/with
   App.app.gene_ns.ns["tap".to_key()] = vm_tap      # $tap translates to gene/tap
   App.app.gene_ns.ns["eval".to_key()] = vm_eval    # eval function
+
+
+  # Add sleep functions directly to gene namespace
+  var sleep_ref = new_ref(VkNativeFn)
+  sleep_ref.native_fn = gene_sleep
+  App.app.gene_ns.ns["sleep".to_key()] = sleep_ref.to_ref_value()
+
+  var sleep_async_ref = new_ref(VkNativeFn)
+  sleep_async_ref.native_fn = gene_sleep_async
+  App.app.gene_ns.ns["sleep_async".to_key()] = sleep_async_ref.to_ref_value()
   
   # Also add to global namespace
   App.app.global_ns.ns["parse".to_key()] = vm_parse

@@ -1,4 +1,109 @@
 import ../types
+import std/strformat
+
+# Future methods
+proc future_on_success(self: VirtualMachine, args: Value): Value =
+  # Extract future and callback from args
+  if args.kind != VkGene or args.gene.children.len < 2:
+    raise new_exception(types.Exception, "Future.on_success requires 2 arguments (self and callback)")
+  
+  let future_arg = args.gene.children[0]
+  let callback_arg = args.gene.children[1]
+  
+  if future_arg.kind != VkFuture:
+    raise new_exception(types.Exception, "on_success can only be called on a Future")
+  
+  # Validate callback is callable
+  if callback_arg.kind notin {VkFunction, VkNativeFn, VkBlock}:
+    raise new_exception(types.Exception, "on_success callback must be a function or block")
+  
+  let future_obj = future_arg.ref.future
+  
+  # If future is already completed successfully, execute callback immediately
+  if future_obj.state == FsSuccess:
+    # TODO: Execute callback with value
+    # For now, just store it
+    future_obj.success_callbacks.add(callback_arg)
+  elif future_obj.state == FsPending:
+    # Store callback for later execution
+    future_obj.success_callbacks.add(callback_arg)
+  # If failed, don't add to success callbacks
+  
+  # Return the future for chaining
+  return future_arg
+
+proc future_on_failure(self: VirtualMachine, args: Value): Value =
+  # Extract future and callback from args
+  if args.kind != VkGene or args.gene.children.len < 2:
+    raise new_exception(types.Exception, "Future.on_failure requires 2 arguments (self and callback)")
+  
+  let future_arg = args.gene.children[0]
+  let callback_arg = args.gene.children[1]
+  
+  if future_arg.kind != VkFuture:
+    raise new_exception(types.Exception, "on_failure can only be called on a Future")
+  
+  # Validate callback is callable
+  if callback_arg.kind notin {VkFunction, VkNativeFn, VkBlock}:
+    raise new_exception(types.Exception, "on_failure callback must be a function or block")
+  
+  let future_obj = future_arg.ref.future
+  
+  # If future is already failed, execute callback immediately
+  if future_obj.state == FsFailure:
+    # TODO: Execute callback with error
+    # For now, just store it
+    future_obj.failure_callbacks.add(callback_arg)
+  elif future_obj.state == FsPending:
+    # Store callback for later execution
+    future_obj.failure_callbacks.add(callback_arg)
+  # If succeeded, don't add to failure callbacks
+  
+  # Return the future for chaining
+  return future_arg
+
+proc future_state(self: VirtualMachine, args: Value): Value =
+  # Get the state of a future
+  # When called as a method, args contains the future as the first child
+  if args.kind != VkGene:
+    raise new_exception(types.Exception, fmt"Future.state expects Gene args, got {args.kind}")
+  if args.gene.children.len == 0:
+    raise new_exception(types.Exception, "Future.state requires a future object")
+  
+  let future_arg = args.gene.children[0]
+  
+  if future_arg.kind != VkFuture:
+    raise new_exception(types.Exception, "state can only be called on a Future")
+  
+  let future_obj = future_arg.ref.future
+  
+  # Return state as a symbol
+  case future_obj.state:
+    of FsPending:
+      return "pending".to_symbol_value()
+    of FsSuccess:
+      return "success".to_symbol_value()
+    of FsFailure:
+      return "failure".to_symbol_value()
+
+proc future_value(self: VirtualMachine, args: Value): Value =
+  # Get the value of a completed future
+  # When called as a method, args contains the future as the first child
+  if args.kind != VkGene or args.gene.children.len == 0:
+    raise new_exception(types.Exception, "Future.value requires a future object")
+  
+  let future_arg = args.gene.children[0]
+  
+  if future_arg.kind != VkFuture:
+    raise new_exception(types.Exception, "value can only be called on a Future")
+  
+  let future_obj = future_arg.ref.future
+  
+  # Return value if completed, NIL if pending
+  if future_obj.state in {FsSuccess, FsFailure}:
+    return future_obj.value
+  else:
+    return NIL
 
 # Initialize async support
 proc init_async*() =
@@ -11,7 +116,11 @@ proc init_async*() =
     let future_class = new_class("Future")
     # Don't set parent yet - will be set later when object_class is available
     
-    # Methods table is already initialized by new_class
+    # Add Future methods
+    future_class.def_native_method("on_success", future_on_success)
+    future_class.def_native_method("on_failure", future_on_failure)
+    future_class.def_native_method("state", future_state)
+    future_class.def_native_method("value", future_value)
     
     # Store in Application
     let future_class_ref = new_ref(VkClass)

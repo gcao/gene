@@ -1,5 +1,5 @@
 import tables, strutils, strformat, algorithm
-import times
+import times, os
 
 import ./types
 import ./parser
@@ -12,6 +12,10 @@ when not defined(noExtensions):
   import ./vm/extension
 
 const DEBUG_VM = false
+
+# Forward declarations from vm/core
+proc init_gene_namespace*()
+proc register_io_functions*()
 
 proc enter_function(self: VirtualMachine, name: string) {.inline.} =
   if self.profiling:
@@ -277,6 +281,9 @@ proc render_template(self: VirtualMachine, tpl: Value): Value =
       return tpl
 
 proc exec*(self: VirtualMachine): Value =
+  # Initialize gene namespace if not already done
+  init_gene_namespace()
+  
   var pc = 0
   if pc >= self.cu.instructions.len:
     raise new_exception(types.Exception, "Empty compilation unit")
@@ -450,7 +457,12 @@ proc exec*(self: VirtualMachine): Value =
         # when not defined(release):
         #   if self.trace:
         #     echo fmt"IkVarResolve: arg0={inst.arg0}, arg0.int64.int={inst.arg0.int64.int}, scope.members.len={self.frame.scope.members.len}"
-        self.frame.push(self.frame.scope.members[inst.arg0.int64.int])
+        if self.frame.scope.isNil:
+          raise new_exception(types.Exception, "IkVarResolve: scope is nil")
+        let index = inst.arg0.int64.int
+        if index >= self.frame.scope.members.len:
+          raise new_exception(types.Exception, fmt"IkVarResolve: index {index} >= scope.members.len {self.frame.scope.members.len}")
+        self.frame.push(self.frame.scope.members[index])
         {.pop.}
 
       of IkVarResolveInherited:
@@ -1402,6 +1414,21 @@ proc exec*(self: VirtualMachine): Value =
                 pc = inst.arg0.int64.int
                 inst = self.cu.instructions[pc].addr
                 continue
+              of VkNativeFn:
+                # Handle native function methods
+                # Create a native frame for the method call
+                var nf = new_ref(VkNativeFrame)
+                nf.native_frame = NativeFrame(
+                  kind: NfMethod,
+                  target: target,
+                  args: new_gene(NIL).to_gene_value()
+                )
+                # Add self as first argument
+                nf.native_frame.args.gene.children.add(bm.self)
+                self.frame.replace(nf.to_ref_value())
+                pc = inst.arg0.int64.int
+                inst = self.cu.instructions[pc].addr
+                continue
               else:
                 not_allowed("Method must be a function, got " & $target.kind)
 
@@ -1694,6 +1721,10 @@ proc exec*(self: VirtualMachine): Value =
             let frame = self.frame.current().ref.native_frame
             case frame.kind:
               of NfFunction:
+                let f = frame.target.ref.native_fn
+                self.frame.replace(f(self, frame.args))
+              of NfMethod:
+                # Native method call - invoke the native function with self as first arg
                 let f = frame.target.ref.native_fn
                 self.frame.replace(f(self, frame.args))
               else:
@@ -3256,6 +3287,45 @@ proc exec*(self: VirtualMachine): Value =
                 not_allowed("Method must be a function")
             else:
               not_allowed("Method " & method_name & " not found on instance")
+        of VkString:
+          # Handle string methods
+          let string_class = App.app.string_class.ref.class
+          let method_key = method_name.to_key()
+          if string_class.methods.hasKey(method_key):
+            let meth = string_class.methods[method_key]
+            # Call the native method directly
+            case meth.callable.kind:
+            of VkNativeFn:
+              # Create a gene with the string as the first argument
+              var args_gene = new_gene()
+              args_gene.children.add(obj)  # Add self (the string) as first argument
+              let result = meth.callable.ref.native_fn(self, args_gene.to_gene_value())
+              self.frame.push(result)
+            else:
+              not_allowed("String method must be a native function")
+          else:
+            not_allowed("Method " & method_name & " not found on string")
+        of VkFuture:
+          # Handle future methods
+          if App.app.future_class.kind == VkClass:
+            let future_class = App.app.future_class.ref.class
+            let method_key = method_name.to_key()
+            if future_class.methods.hasKey(method_key):
+              let meth = future_class.methods[method_key]
+              # Call the native method directly
+              case meth.callable.kind:
+              of VkNativeFn:
+                # Create a gene with the future as the first argument
+                var args_gene = new_gene()
+                args_gene.children.add(obj)  # Add self (the future) as first argument
+                let result = meth.callable.ref.native_fn(self, args_gene.to_gene_value())
+                self.frame.push(result)
+              else:
+                not_allowed("Future method must be a native function")
+            else:
+              not_allowed("Method " & method_name & " not found on future")
+          else:
+            not_allowed("Future class not initialized")
         else:
           todo($obj.kind & " method: " & method_name)
       
@@ -3398,12 +3468,15 @@ proc exec*(self: VirtualMachine): Value =
   {.pop.}  # End of hot VM execution loop pragma push
 
 proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
+  # Initialize gene namespace if not already done
+  init_gene_namespace()
+  
   let compiled = parse_and_compile(code, module_name)
 
   let ns = new_namespace(module_name)
   
   # Add gene namespace to module namespace
-  # ns["gene".to_key()] = App.app.gene_ns
+  ns["gene".to_key()] = App.app.gene_ns
   
   # Add eval function to the module namespace
   # Add eval function to the namespace if it exists in global_ns
@@ -3425,3 +3498,4 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
   self.exec()
 
 include "./vm/core"
+import "./vm/async"

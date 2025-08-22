@@ -1,103 +1,157 @@
-# CLAUDE.md
+# CLAUDE.md - Gene Language Development Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## General Guidance
-
-- Don't prematurely stop the work unless you have run the command to validate the work (e.g. run unit tests or gene code).
-- Don't pause or stop in the middle, unless there are questions to be answered. If there are questions, add them to project/tmp/name.md file with context and the question and prompt the user to answer them.
+This file provides comprehensive guidance for AI assistants working with the Gene programming language codebase.
 
 ## Project Overview
 
-Gene is a general-purpose programming language written in Nim. This project is extending the current stack-based VM to support the comprehensive feature set found in the reference implementation.
+Gene is a Lisp-like programming language implemented in Nim with a bytecode VM for performance. The project consists of:
+- **Parser**: Converts Gene source code to AST (`src/gene/parser.nim`)
+- **Compiler**: Transforms AST to bytecode (`src/gene/compiler.nim`)  
+- **VM**: Stack-based virtual machine that executes bytecode (`src/gene/vm.nim`)
+- **Type System**: Rich type system with 100+ value types (`src/gene/types.nim`)
 
-- **Current implementation**: Root directory with basic parser, VM, and compiler (being enhanced)
-- **Reference implementation**: `gene-new/` directory with comprehensive feature set (tree-walking interpreter)
-- **Goal**: Achieve feature parity by extending VM architecture with full language features
+## Gene Language Syntax
 
-## Development Commands
+Gene uses S-expression syntax similar to Lisp/Clojure:
 
-### Build and Run
-```bash
-# Build the gene executable
-nimble build
-
-# Run Gene files
-./gene <file.gene>
-
-# Run interactive mode
-./gene
+```gene
+# Comments start with #
+(println "Hello")                    # Function call
+(var x 10)                           # Variable declaration
+(x = 20)                             # Variable assignment
+(fn add [a b] (+ a b))              # Function definition
+(if (> x 5) "big" "small")          # Conditional
+(while (< i 10) (i = (+ i 1)))     # Loop
+(do expr1 expr2 expr3)              # Sequence of expressions
+(try ... catch * ...)               # Exception handling (use * not variable)
+(async expr)                        # Create future
+(await future)                      # Wait for future
+[1 2 3]                             # Array literal
+{:a 1 :b 2}                         # Map literal
 ```
 
-### Testing
-```bash
-# Run all tests
-nimble test
+## Architecture & Memory Model
 
-# Run specific test file
-nim c -r tests/test_vm.nim
-nim c -r tests/test_parser.nim
-nim c -r tests/test_types.nim
+### Stack-Based VM
+- Instructions manipulate an operand stack
+- Each frame has its own stack (256 values)
+- Frames are allocated from a pool for efficiency
 
-# Run examples
-./scripts/run_examples
-```
+### Scope Management
+- **Scopes** hold local variables (`ScopeObj` with `members: seq[Value]`)
+- Scopes form a chain via `parent` pointers
+- **Critical Issue**: Scopes are freed immediately in `IkScopeEnd` which causes use-after-free bugs with async code
+- Scopes use manual memory management (`alloc0`/`dealloc`)
+- `new_scope` MUST initialize `members = newSeq[Value]()` or it will be nil
 
-## Core Architecture
+### Async Implementation
+- Futures complete synchronously (pseudo-async)
+- `IkAsyncStart`/`IkAsyncEnd` wrap expressions in futures
+- Exception handlers with `catch_pc = -2` mark async blocks
+- Async blocks don't capture scopes - they execute immediately
 
-### Execution Model
-The current implementation uses a stack-based virtual machine with:
-1. **Parser** (`src/gene/parser.nim`): Converts Gene source to AST
-2. **Compiler** (`src/gene/compiler.nim`): Compiles AST to VM bytecode
-3. **VM** (`src/gene/vm.nim`): Executes bytecode instructions
+## Critical Implementation Details
 
-### Key Components
-- **VirtualMachine**: Main execution engine with instruction pointer and stack
-- **CompiledUnit**: Contains bytecode instructions and metadata
-- **Instruction**: VM operation with opcode and arguments
-- **Value**: Discriminated union representing all Gene data types (100+ variants)
+### Known Issues
+
+1. **Scope Lifetime Bug**: When functions return async blocks that reference parameters, the scope gets freed causing crashes. The `old_scope.free()` in `IkScopeEnd` (vm.nim:419) is the culprit.
+
+2. **Exception Handling**: Use `catch *` with `$ex` to access exception. Using `catch e` crashes on macOS.
+
+3. **String Methods**: Implemented in `vm/core.nim` as native functions. Must handle in `IkCallMethodNoArgs` for VkString case.
 
 ### VM Instructions
-Located in `src/gene/vm/core.nim`, includes:
-- Stack operations (push, pop, load, store)
-- Control flow (jump, conditional branches)
-- Function calls and returns
-- Arithmetic and logical operations
+Located in `types.nim` starting around line 600:
+- Stack: `IkPushValue`, `IkPop`, `IkDup`
+- Variables: `IkVar`, `IkVarResolve`, `IkVarUpdate`  
+- Scope: `IkScopeStart`, `IkScopeEnd`
+- Control: `IkJump`, `IkJumpIf`, `IkReturn`
+- Async: `IkAsyncStart`, `IkAsyncEnd`, `IkAwait`
 
-### Data Types
-Core type system in `src/gene/types.nim`:
-- Basic types: nil, bool, int, float, char, string, symbol
-- Collections: array, set, map, gene (S-expressions)
-- Language constructs: function, macro, block, class, method
-- Runtime objects: application, package, module, namespace
+### Method Dispatch
+Methods are resolved in `vm.nim` `IkCallMethodNoArgs`:
+- VkInstance: Look up in class methods table
+- VkString: Use App.app.string_class methods
+- VkFuture: Use App.app.future_class methods
 
-## Testing Architecture
+## Testing
 
-Tests are organized by component:
-- `test_vm.nim`: Core VM functionality
-- `test_vm_*.nim`: Specific VM features (namespace, FP, scope, macro, block)
-- `test_parser.nim`: Parser functionality
-- `test_types.nim`: Type system tests
+### Test Suite Structure
+```
+testsuite/
+├── basics/           # Literals, variables, basic types
+├── control_flow/     # if, while, for, do
+├── operators/        # Arithmetic, comparison
+├── arrays/           # Array operations
+├── maps/            # Map operations  
+├── strings/         # String operations
+├── functions/       # Function definitions
+├── scopes/          # Variable scoping
+├── async/           # Async/await tests
+└── run_tests.sh     # Test runner
+```
 
-Individual tests can be run with `nim c -r tests/<test_file>.nim`
+### Test Format
+- Tests are numbered: `001_feature.gene`, `002_feature.gene`
+- Use `# Expected: output` comments for validation
+- Tests without expected output just verify successful execution
+- Use `assert` for inline validation
 
-## Implementation Plan
+### Running Tests
+```bash
+./testsuite/run_tests.sh           # Run all tests
+nim c -r tests/test_vm.nim         # Run VM unit tests
+nimble test                         # Run full test suite
+bin/gene run file.gene              # Run single file
+```
 
-See `docs/design.md` for the comprehensive plan to extend our VM architecture with full language features.
+## Development Workflow
 
-**Current Priority**: Phase 1 - VM Foundation Enhancement
-- Extend type system (20 → 100+ Value variants)
-- Enhance VM instruction set for advanced features
-- Implement VM scope stack and namespace management
-- Add garbage collection for complex types
+### Building
+```bash
+nimble build                        # Build gene executable to bin/
+nim c -d:release src/gene.nim      # Direct compilation
+```
 
-**Architecture**: Keep stack-based VM, extend with comprehensive instruction set and runtime features
+### Debugging
+- Add debug output in VM with `echo` statements
+- Check instruction generation in compiler
+- Use `when DEBUG_VM:` blocks for conditional debugging
+- VM crashes often indicate scope/memory issues
 
-## Development Notes
+### Common Patterns
 
-- The main executable is built to `./gene` (no bin/ directory in current implementation)
-- Examples are in `examples/` directory with `.gene` extension
-- Use `scripts/run_examples` to test all examples
-- VM tracing can be enabled for debugging instruction execution
-- Reference implementation in `gene-new/` has 40+ feature modules
-- Use `tmp/` directory for any temporary files during development
+**Adding a VM instruction:**
+1. Add to InstructionKind enum in types.nim
+2. Add compilation in compiler.nim
+3. Add execution case in vm.nim
+
+**Adding a native function:**
+1. Define proc in vm/core.nim or appropriate module
+2. Register in init functions
+3. Add to namespace (gene_ns, global_ns, etc.)
+
+**Adding a method to a class:**
+1. Define native function proc
+2. Use `add_method(class, "name", proc)` in init
+3. Handle in IkCallMethodNoArgs for the type
+
+## Important Files
+
+- `src/gene/types.nim`: All type definitions, Value discriminated union
+- `src/gene/vm.nim`: Main VM execution loop, instruction handlers
+- `src/gene/compiler.nim`: AST to bytecode compilation
+- `src/gene/parser.nim`: Source code parsing
+- `src/gene/vm/core.nim`: Core functions, class initialization
+- `src/gene/vm/async.nim`: Future class and async support
+- `src/gene/vm/io.nim`: I/O operations
+
+## Guidelines
+
+- Don't stop work prematurely - run tests to validate
+- Use `tmp/` directory for temporary test files
+- Keep test files in `testsuite/` organized by feature
+- Document known issues as comments in code
+- Initialize ALL fields when creating objects with alloc0
+- Be careful with manual memory management (ref counting)
+- Test async code carefully - scope lifetime is tricky

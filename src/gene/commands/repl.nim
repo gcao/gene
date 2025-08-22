@@ -39,6 +39,7 @@ proc parse_options(args: seq[string]): Options =
 proc start_repl(debugging: bool) =
   setup_logger(debugging)
   init_app_and_vm()
+  register_io_functions()  # Register IO functions after App is created
   
   echo "Gene REPL - Interactive Gene Language Shell"
   echo "Type 'exit' or 'quit' to exit, 'help' for help"

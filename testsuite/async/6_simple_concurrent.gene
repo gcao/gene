@@ -1,0 +1,22 @@
+#!/usr/bin/env gene run
+
+(println "=== Test 006: Simple Concurrent ===")
+
+(var test_file "../tests/fixtures/test.txt")
+
+(println "Starting concurrent reads...")
+(var future1 (gene/io/read_async test_file))
+(println "Future 1 created")
+
+(var future2 (gene/io/read_async test_file))
+(println "Future 2 created")
+
+(println "Awaiting future 1...")
+(var result1 (await future1))
+(println "Got result 1:" result1)
+
+(println "Awaiting future 2...")
+(var result2 (await future2))
+(println "Got result 2:" result2)
+
+(println "=== Test 006 PASSED ===")

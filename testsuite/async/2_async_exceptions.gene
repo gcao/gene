@@ -1,0 +1,37 @@
+#!/usr/bin/env gene run
+
+(println "=== Test 002: Async Exception Handling ===")
+
+(println "Test 1: Exception in async operation")
+(var nonexistent_file "../tests/fixtures/nonexistent.txt")
+
+(try
+  (var future1 (gene/io/read_async nonexistent_file))
+  (var content1 (await future1))
+  (println "ERROR: Should not reach here")
+catch *
+  (println "Caught exception:" $ex)
+  (println "Exception handling OK")
+)
+
+(println "Test 2: Multiple exception catches")
+(var count 0)
+
+(try
+  (var future2 (gene/io/read_async "does_not_exist1.txt"))
+  (await future2)
+catch *
+  (count = (count + 1))
+)
+
+(try
+  (var future3 (gene/io/read_async "does_not_exist2.txt"))
+  (await future3)
+catch *
+  (count = (count + 1))
+)
+
+(assert (count == 2))
+(println "Multiple exceptions caught:" count)
+
+(println "=== Test 002 PASSED ===")

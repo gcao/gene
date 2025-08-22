@@ -38,6 +38,16 @@ test_vm """
   (async 1)
 """, proc(r: Value) =
   check r.kind == VkFuture
+  check r.ref.future.state == FsSuccess
+  check r.ref.future.value.int64 == 1
+
+test_vm """
+  (await (async 1))
+""", 1
+
+test_vm """
+  (await (async "hello"))
+""", "hello"
 
 # Tests that require Future constructor - skipped for now
 # test_vm """

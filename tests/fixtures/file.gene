@@ -1,1 +1,12 @@
-(var $ns/file $file)
+# Sample Gene code file for testing async file operations
+# This file contains some sample Gene code that can be read asynchronously
+
+(println "This is a sample Gene file")
+(var message "Hello from async file reading!")
+(println message)
+
+(fn greet name
+  (println "Hello," name "from the file!")
+)
+
+(greet "World")

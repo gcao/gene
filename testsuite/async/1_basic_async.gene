@@ -1,0 +1,27 @@
+#!/usr/bin/env gene run
+
+(println "=== Test 001: Basic Async/Await ===")
+
+(var test_file "../tests/fixtures/test.txt")
+
+(println "Test 1: Basic async file reading")
+(var future1 (gene/io/read_async test_file))
+(var content1 (await future1))
+(println "Content:" content1)
+
+(println "Test 2: Multiple awaits on same future")
+(var future2 (gene/io/read_async test_file))
+(var result1 (await future2))
+(var result2 (await future2))
+(assert (result1 == result2))
+(println "Multiple awaits OK")
+
+(println "Test 3: Future state inspection")
+(var future3 (gene/io/read_async test_file))
+(var state_before (future3/.state))
+(println "State before await:" state_before)
+(var content3 (await future3))
+(var state_after (future3/.state))
+(println "State after await:" state_after)
+
+(println "=== Test 001 PASSED ===")

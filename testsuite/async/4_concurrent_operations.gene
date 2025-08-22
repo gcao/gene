@@ -1,0 +1,57 @@
+#!/usr/bin/env gene run
+
+(println "=== Test 004: Concurrent Operations ===")
+
+(var test_file "../tests/fixtures/test.txt")
+(var gene_file "../tests/fixtures/file.gene")
+(var output_file "/tmp/gene_concurrent_test.txt")
+
+(println "Test 1: Multiple concurrent reads")
+(var start_time (gene/time/now))
+
+(var future1 (gene/io/read_async test_file))
+(var future2 (gene/io/read_async gene_file))
+(var future3 (gene/io/read_async test_file))
+
+(var r1 (await future1))
+(var r2 (await future2))
+(var r3 (await future3))
+
+(var end_time (gene/time/now))
+(println "Concurrent reads completed in" (end_time - start_time) "seconds")
+(var len1 (r1/.length))
+(var len2 (r2/.length))
+(var len3 (r3/.length))
+(println "Result 1 length:" len1)
+(println "Result 2 length:" len2)
+(println "Result 3 length:" len3)
+
+(println "Test 2: Write then read")
+(var test_content "Test content for concurrent operations\nLine 2\nLine 3")
+(var write_future (gene/io/write_async output_file test_content))
+(await write_future)
+(println "Write completed")
+
+(var read_future (gene/io/read_async output_file))
+(var read_back (await read_future))
+(var rb_len (read_back/.length))
+(println "Read back content with length:" rb_len)
+(println "Write-then-read completed")
+
+(println "Test 3: Basic callback test")
+(println "Callbacks with arguments not yet fully implemented - skipping")
+
+(println "Test 4: Failed operation handling")
+(var error_caught false)
+
+(try
+  (var future5 (gene/io/read_async "nonexistent_file.txt"))
+  (await future5)
+catch *
+  (error_caught = true)
+  (println "Error properly caught in try/catch")
+)
+
+(assert error_caught)
+
+(println "=== Test 004 PASSED ===")

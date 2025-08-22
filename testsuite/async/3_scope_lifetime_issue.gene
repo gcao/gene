@@ -1,0 +1,53 @@
+#!/usr/bin/env gene run
+
+(println "=== Test 003: Scope Lifetime Issue (Known Bug) ===")
+(println "This test demonstrates the scope lifetime bug with futures")
+
+(var test_file "../tests/fixtures/test.txt")
+(var output_file "/tmp/gene_scope_test.txt")
+
+(fn create_future_in_scope
+  (var local_future (gene/io/read_async test_file))
+  local_future
+)
+
+(println "Test 1: Future created in different scope")
+(var future_from_scope (create_future_in_scope))
+(var content (await future_from_scope))
+(println "Content from scoped future:" content)
+
+(println "Test 2: Multiple scoped futures")
+(fn process_files
+  (var f1 (gene/io/read_async test_file))
+  (var f2 (gene/io/read_async test_file))
+  (var f3 (gene/io/read_async test_file))
+  [f1 f2 f3]
+)
+
+(var all_futures (process_files))
+(println "Created 3 futures in nested scope")
+
+(var r1 (await (all_futures/.get 0)))
+(println "Future 0 result length:" (r1/.length))
+(var r2 (await (all_futures/.get 1)))
+(println "Future 1 result length:" (r2/.length))
+(var r3 (await (all_futures/.get 2)))
+(println "Future 2 result length:" (r3/.length))
+
+(println "Test 3: Deep scope nesting (triggers bug)")
+(fn level1
+  (fn level2
+    (fn level3
+      (gene/io/read_async test_file)
+    )
+    (level3)
+  )
+  (level2)
+)
+
+(var deep_future (level1))
+(println "Deep future created")
+(var deep_result (await deep_future))
+(println "Deep result:" deep_result)
+
+(println "=== Test 003 COMPLETED (may crash due to known bug) ===")
