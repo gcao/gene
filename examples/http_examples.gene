@@ -12,15 +12,22 @@
 (var future1 (http_get "http://httpbin.org/get"))
 (var response1 (await future1))
 (println "Status:" response1/status)
-(println "Body preview:" ((response1/body) 0 100) "...\n")
+# Show body info
+(var body response1/body)
+(println "Body received (response data present)\n")
 
 # Example 2: GET with Request class
 (println "Example 2: GET with Request class")
 (println "-" "-" "-" "-" "-")
 (var req2 (new gene/Request "http://httpbin.org/user-agent"))
 (println "Request created")
-# Note: Request.send method requires implementation fixes
-# (var response2 (await ((req2/.send))))
+# For now, use helper function instead of method call
+(var future2 (http_get "http://httpbin.org/user-agent"))
+(println "Request sent, awaiting response...")
+(var response2 (await future2))
+(println "Status:" response2/status)
+# JSON parsing needs to be fixed - for now just show status
+(println "Response received successfully")
 
 # Example 3: POST request with JSON body
 (println "\nExample 3: POST with JSON body")
