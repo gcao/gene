@@ -2721,14 +2721,32 @@ proc exec*(self: VirtualMachine): Value =
         self.frame.push(v)
 
       of IkNew:
-        let v = self.frame.pop()
-        let instance = new_ref(VkInstance)
-        instance.instance_class = v.gene.type.ref.class
-        self.frame.push(instance.to_ref_value())
-
-        let class = instance.instance_class
+        # Stack: [class, args_gene] -> [instance]
+        let args = self.frame.pop()  # Gene containing constructor arguments
+        let class_val = self.frame.pop()  # Class to instantiate
+        
+        # Get the class
+        let class = if class_val.kind == VkClass:
+          class_val.ref.class
+        elif class_val.kind == VkGene and class_val.gene.type != NIL and class_val.gene.type.kind == VkClass:
+          # Legacy path for Gene with type set to class
+          class_val.gene.type.ref.class
+        else:
+          raise new_exception(types.Exception, "new requires a class, got " & $class_val.kind)
+        
+        # Check constructor type
         case class.constructor.kind:
+          of VkNativeFn:
+            # Call native constructor
+            let result = class.constructor.ref.native_fn(self, args)
+            self.frame.push(result)
+            
           of VkFunction:
+            # Regular function constructor
+            let instance = new_ref(VkInstance)
+            instance.instance_class = class
+            self.frame.push(instance.to_ref_value())
+            
             class.constructor.ref.fn.compile()
             let compiled = class.constructor.ref.fn.body_compiled
             compiled.skip_return = true
@@ -2738,14 +2756,23 @@ proc exec*(self: VirtualMachine): Value =
             # Pass instance as first argument for constructor
             let args_gene = new_gene(NIL)
             args_gene.children.add(instance.to_ref_value())
+            # Add other arguments if present
+            if args.kind == VkGene:
+              for child in args.gene.children:
+                args_gene.children.add(child)
             self.frame.args = args_gene.to_gene_value()
             self.frame.ns = class.constructor.ref.fn.ns
             self.cu = compiled
             pc = 0
             inst = self.cu.instructions[pc].addr
             continue
+            
           of VkNil:
-            discard
+            # No constructor - create empty instance
+            let instance = new_ref(VkInstance)
+            instance.instance_class = class
+            self.frame.push(instance.to_ref_value())
+            
           else:
             todo($class.constructor.kind)
 

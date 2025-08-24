@@ -2659,6 +2659,11 @@ proc def_native_method*(self: Class, name: string, f: NativeFn) =
     callable: r.to_ref_value(),
   )
 
+proc def_native_constructor*(self: Class, f: NativeFn) =
+  let r = new_ref(VkNativeFn)
+  r.native_fn = f
+  self.constructor = r.to_ref_value()
+
 # proc def_native_method*(self: Class, name: string, f: NativeFn2) =
 #   let r = new_ref(VkNativeFn2)
 #   r.native_fn2 = f
@@ -2677,11 +2682,6 @@ proc def_native_macro_method*(self: Class, name: string, f: NativeFn) =
     callable: r.to_ref_value(),
     is_macro: true,
   )
-
-proc def_native_constructor*(self: Class, f: NativeFn) =
-  let r = new_ref(VkNativeFn)
-  r.native_fn = f
-  self.constructor = r.to_ref_value()
 
 # proc def_native_constructor*(self: Class, f: NativeFn2) =
 #   let r = new_ref(VkNativeFn2)

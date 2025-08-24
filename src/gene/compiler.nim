@@ -987,12 +987,26 @@ proc compile_class(self: Compiler, gene: ptr Gene) =
 # Construct a Gene object whose type is the class
 # The Gene object will be used as the arguments to the constructor
 proc compile_new(self: Compiler, gene: ptr Gene) =
-  self.output.instructions.add(Instruction(kind: IkGeneStart))
+  if gene.children.len < 1:
+    raise new_exception(types.Exception, "new requires at least a class name")
+  
+  # Compile the class (first argument)
   self.compile(gene.children[0])
-  self.output.instructions.add(Instruction(kind: IkGeneSetType))
-  # TODO: compile the arguments
-  # IKGeneEnd is replaced by IkNew here
-  # self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  
+  # Compile the arguments as a Gene
+  if gene.children.len > 1:
+    # Create a Gene containing all arguments
+    self.output.instructions.add(Instruction(kind: IkGeneStart))
+    for i in 1..<gene.children.len:
+      self.compile(gene.children[i])
+      self.output.instructions.add(Instruction(kind: IkGeneAddChild))
+    self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  else:
+    # No arguments - push empty Gene
+    self.output.instructions.add(Instruction(kind: IkGeneStart))
+    self.output.instructions.add(Instruction(kind: IkGeneEnd))
+  
+  # Emit IkNew instruction
   self.output.instructions.add(Instruction(kind: IkNew))
 
 proc compile_super(self: Compiler, gene: ptr Gene) =
@@ -1953,6 +1967,7 @@ proc optimize_noops(self: CompilationUnit) =
     #     echo "  " & info
   
   self.instructions = new_instructions
+
 
 proc compile*(input: seq[Value]): CompilationUnit =
   let self = Compiler(output: new_compilation_unit(), tail_position: false)

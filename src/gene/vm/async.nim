@@ -112,11 +112,64 @@ proc init_async*() =
     if App == NIL or App.kind != VkApplication:
       return
     
+    # Native function to complete a future
+    proc complete_future_fn(self: VirtualMachine, args: Value): Value =
+      # complete_future(future, value) - completes the given future with the value
+      if args.kind != VkGene or args.gene.children.len != 2:
+        raise new_exception(types.Exception, "complete_future requires exactly 2 arguments (future and value)")
+      
+      let future_arg = args.gene.children[0]
+      let value_arg = args.gene.children[1]
+      
+      if future_arg.kind != VkFuture:
+        raise new_exception(types.Exception, "First argument must be a Future")
+      
+      let future_obj = future_arg.ref.future
+      future_obj.complete(value_arg)
+      return NIL
+    
+    # Add to global namespace
+    let complete_fn_ref = new_ref(VkNativeFn)
+    complete_fn_ref.native_fn = complete_future_fn
+    App.app.global_ns.ref.ns["complete_future".to_key()] = complete_fn_ref.to_ref_value()
+    
     # Create Future class
     let future_class = new_class("Future")
     # Don't set parent yet - will be set later when object_class is available
     
+    # Add Future constructor
+    proc future_constructor(self: VirtualMachine, args: Value): Value =
+      # Create a new Future instance
+      let future_val = new_future_value()
+      # If initial value is provided, complete the future immediately
+      if args.kind == VkGene and args.gene.children.len > 0:
+        let initial_value = args.gene.children[0]
+        future_val.ref.future.complete(initial_value)
+      return future_val
+    
+    future_class.def_native_constructor(future_constructor)
+    
+    # Add complete method  
+    proc future_complete(self: VirtualMachine, args: Value): Value =
+      # Complete the future with a value
+      # When called as a method, args contains [future, value]
+      if args.kind != VkGene:
+        raise new_exception(types.Exception, fmt"Future.complete expects Gene args, got {args.kind}")
+      if args.gene.children.len < 2:
+        raise new_exception(types.Exception, "Future.complete requires a future and a value")
+      
+      let future_arg = args.gene.children[0]
+      let value_arg = args.gene.children[1]
+      
+      if future_arg.kind != VkFuture:
+        raise new_exception(types.Exception, "complete can only be called on a Future")
+      
+      let future_obj = future_arg.ref.future
+      future_obj.complete(value_arg)
+      return NIL
+    
     # Add Future methods
+    future_class.def_native_method("complete", future_complete)
     future_class.def_native_method("on_success", future_on_success)
     future_class.def_native_method("on_failure", future_on_failure)
     future_class.def_native_method("state", future_state)
