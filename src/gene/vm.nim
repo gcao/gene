@@ -3526,3 +3526,4 @@ proc exec*(self: VirtualMachine, code: string, module_name: string): Value =
 
 include "./vm/core"
 import "./vm/async"
+import "./vm/http"

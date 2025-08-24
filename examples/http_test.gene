@@ -1,0 +1,46 @@
+#!/usr/bin/env gene run
+
+(println "=== HTTP Test Example ===")
+
+# Test 1: Simple GET request using helper function
+(println "\nTest 1: Simple GET request")
+(var future1 (http_get "https://httpbin.org/get"))
+(var response1 (await future1))
+(println "Status:" (response1/.status))
+(println "Body preview:" ((response1/.body)/.substring 0 100) "...")
+
+# Test 2: GET request with Request class
+(println "\nTest 2: GET with Request class")
+(var request2 (new gene/Request "https://httpbin.org/user-agent"))
+(var future2 ((request2/.send)))
+(var response2 (await future2))
+(println "Status:" (response2/.status))
+(var json2 ((response2/.json)))
+(println "User-Agent:" (json2/."user-agent"))
+
+# Test 3: POST request with JSON body
+(println "\nTest 3: POST with JSON body")
+(var body3 {
+  :name "Gene Test"
+  :version "1.0"
+  :test true
+})
+(var future3 (http_post "https://httpbin.org/post" body3))
+(var response3 (await future3))
+(println "Status:" (response3/.status))
+(var json3 ((response3/.json)))
+(println "Posted data:" (json3/.json))
+
+# Test 4: Custom Request with headers
+(println "\nTest 4: Custom Request with headers")
+(var headers4 {
+  :"X-Custom-Header" "Gene Language"
+  :"Accept" "application/json"
+})
+(var request4 (new gene/Request "https://httpbin.org/headers" "GET" headers4))
+(var future4 ((request4/.send)))
+(var response4 (await future4))
+(var json4 ((response4/.json)))
+(println "Received headers:" (json4/.headers))
+
+(println "\n=== HTTP Test Complete ===")
